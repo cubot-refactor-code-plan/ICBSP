@@ -40,7 +40,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
 
 `vscode/` 三个文件里的占位符由 `integrate.py` 填：`{{PRESET}}` 取 `--preset`，`{{PROJECT}}` 取根
 `CMakeLists.txt` 的 `CMAKE_PROJECT_NAME`，`{{MCU}}` / `{{DEVICE}}` / `{{OPENOCD_TARGET}}` 按 `.ioc` 的
-`Mcu.Name` 推出来（`STM32H723VGTx` → device `STM32H723VG`、target `stm32h7x.cfg`）。
+`Mcu.Name` 推出来：`STM32H723VGTx` → device `STM32H723VG`、`STM32H743VITx` → `STM32H743VI`、
+`STM32H750VBTx` → `STM32H750VB`；target 按 Flash 代号，2 MB 的 `I` 料用 `stm32h7x_dual_bank.cfg`，
+其余用 `stm32h7x.cfg`（H745/H747/H755/H757 双核还要加 `DUAL_CORE 1`）。
 
 宿主已经有这三个文件时，脚本按 `settings.json` 的键名、`tasks[].label`、`configurations[].name`
 补缺失项，原有的键、任务、调试配置以及注释都不动（JSONC 支持 `//`、`/* */` 与尾逗号）。
