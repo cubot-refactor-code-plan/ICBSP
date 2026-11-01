@@ -27,18 +27,38 @@ void board_init(void);
 
 /* ==================== 外设实例 ==================== */
 
-inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
+inline BspCanT<16, 16> bsp_can1(
+    {.hfdcan = &hfdcan1,
+     .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
 
 /// USART1：DMA 收发，115200；必须放 .dma_buffer
 inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
 
-inline BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
+inline BspPwm bsp_pwm_buzzer(
+    {.htim = &htim12,
+     .channel = TIM_CHANNEL_2,
+     .timer_clk_hz = 275000000UL,
+     .prescaler = 23U,
+     .period = 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
 
 // SPI / 片选：按需打开；SPI 实例也要放 .dma_buffer
-// inline __attribute__((section(".dma_buffer"))) BspSpi bsp_spi2({&hspi2, true, 16U});
-// inline BspSpiDevice bmi088_acc_spi(bsp_spi2, {GYRO_ACC_CS_GPIO_Port, GYRO_ACC_CS_Pin, 0x80U, 1U});
-// inline BspSpiDevice bmi088_gyro_spi(bsp_spi2, {GYRO_GYRO_CS_GPIO_Port, GYRO_GYRO_CS_Pin, 0x80U, 0U});
+// inline __attribute__((section(".dma_buffer"))) BspSpi bsp_spi2(
+//     {.hspi = &hspi2,
+//      .use_dma = true,
+//      .dma_threshold = 16U});
+// inline BspSpiDevice bmi088_acc_spi(
+//     bsp_spi2,
+//     {.cs_port = GYRO_ACC_CS_GPIO_Port,
+//      .cs_pin = GYRO_ACC_CS_Pin,
+//      .read_flag = 0x80U,
+//      .read_dummy = 1U});
+// inline BspSpiDevice bmi088_gyro_spi(
+//     bsp_spi2,
+//     {.cs_port = GYRO_GYRO_CS_GPIO_Port,
+//      .cs_pin = GYRO_GYRO_CS_Pin,
+//      .read_flag = 0x80U,
+//      .read_dummy = 0U});
 
 
 /* ==================== 设备实例 ==================== */
@@ -46,6 +66,10 @@ inline BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U});
 inline DeviceBuzzer buzzer(bsp_pwm_buzzer); ///< 无源蜂鸣器，PWM 由 board_init() 启动
 
 // BMI088：SPI 片选就绪后打开
-// inline DeviceBmi088 imu_bmi088(bmi088_acc_spi, bmi088_gyro_spi, {DeviceBmi088::AccRange::G24, DeviceBmi088::GyroRange::DPS2000});
+// inline DeviceBmi088 imu_bmi088(
+//     bmi088_acc_spi,
+//     bmi088_gyro_spi,
+//     {.acc_range = DeviceBmi088::AccRange::G24,
+//      .gyro_range = DeviceBmi088::GyroRange::DPS2000});
 
 #endif // __BOARD_CFG_HPP__

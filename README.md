@@ -106,11 +106,20 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
 
    // 哪些外设、用哪个句柄、波特率 / 定时器参数——全部由用户决定，库里不写死任何板级常量。
    // 实例用 C++20 inline 变量定义在 board_cfg.hpp（不再需要 extern + .cpp 定义）。
-   inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
+   inline BspCanT<16, 16> bsp_can1(
+       {.hfdcan = &hfdcan1,
+        .name = "CAN1"});
    inline __attribute__((section(".dma_buffer")))
    BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
-       {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
-   inline BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U});
+       {.huart = &huart1,
+        .mode = UartDir::TxRx,
+        .baudrate = 115200U});
+   inline BspPwm bsp_pwm_buzzer(
+       {.htim = &htim12,
+        .channel = TIM_CHANNEL_2,
+        .timer_clk_hz = 275000000UL,
+        .prescaler = 23U,
+        .period = 1999U});
 
    void board_init(void)
    {
