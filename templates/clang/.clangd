@@ -1,0 +1,27 @@
+# .clangd —— 由 stm32-framework/tools/integrate.py 生成（工程 {{PROJECT}}，预设 {{PRESET}}）
+#
+# 为什么需要它：clangd 不会自己去 CMake 构建目录里找 compile_commands.json。
+# 不给它，它就只能靠猜参数，于是 Cortex-M 相关的 -mcpu / -mfpu / 系统头全丢，头文件一路标红。
+#
+# 【CompilationDatabase】相对宿主根目录的构建目录，值取自 CMakePresets.json 里该预设的 binaryDir。
+#   换预设（例如改看 Release）时二选一：
+#     1. 手动改下面这行路径，或
+#     2. 删掉本文件后重跑 tools/integrate.py（脚本只在文件不存在时生成）
+#   注意：本文件与 .vscode/settings.json 里的 clangd.arguments 是两处配置，保持一致即可；
+#   只想留一处时，删掉另一处对应的那一项。
+#
+# 【--query-driver】允许 clangd 调用交叉工具链，取到它内置的宏和系统头（stdint.h、core_cm7.h 等）。
+#   不写会报“找不到 stdint.h”“未知的 __ARM_ARCH”；路径写错表现一样，所以脚本填的是本机实际位置。
+#   多套工具链用逗号分隔，支持通配符。
+#
+# 【-Wno-unknown-warning-option】编解码里出现 GCC 专有的告警选项时不刷屏。
+CompileFlags:
+  CompilationDatabase: {{COMPILE_COMMANDS_DIR}}
+  Add:
+    - --query-driver={{QUERY_DRIVER}}
+    - -Wno-unknown-warning-option
+
+Diagnostics:
+  # 交叉编译的编译数据库里出现 clang 不认识的参数时，别把整行当成代码错误
+  Suppress:
+    - unknown-argument
