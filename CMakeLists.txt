@@ -49,7 +49,7 @@ target_include_directories(stm32_framework PUBLIC
 # HAL / CMSIS / FreeRTOS 的头文件与宏都来自 CubeMX 的 stm32cubemx（INTERFACE）目标
 target_link_libraries(stm32_framework PUBLIC stm32cubemx)
 
-# 用户配置 hardware_config.h：唯一配置源，必须由宿主提供（模板 templates/hardware_config.h）。
+# 用户配置 hardware_config.h：唯一配置源，必须由宿主提供（模板 templates/user/board/hardware_config.h）。
 # 放在宿主 user/board/（推荐；宿主给 stm32_framework 加该包含路径）或 stm32cubemx 的包含目录里。
 get_target_property(_stm32_framework_mx_inc stm32cubemx INTERFACE_INCLUDE_DIRECTORIES)
 set(_stm32_framework_cfg_dirs ${_stm32_framework_mx_inc})
@@ -63,10 +63,10 @@ endforeach()
 if(_stm32_framework_cfg)
     message(STATUS "stm32_framework: 使用配置 ${_stm32_framework_cfg}")
 else()
-    message(STATUS "stm32_framework: 没找到 hardware_config.h（必须由宿主提供，模板 templates/hardware_config.h）")
+    message(STATUS "stm32_framework: 没找到 hardware_config.h（必须由宿主提供，模板 templates/user/board/hardware_config.h）")
 endif()
 
-# 链接脚本检查：BspUart 实例要进 .dma_buffer、fault_record 要进 .noinit。CubeMX 新建工程的链接脚本
+# 链接脚本检查：BspUartT 实例要进 .dma_buffer、fault_record 要进 .noinit。CubeMX 新建工程的链接脚本
 # 没有这两段，缺了链接器只会把它们当孤儿段随便放（可能落进 DMA 访问不到的 DTCM），运行时才静默出错。
 # 所以在配置阶段检查，并把链接脚本登记为配置依赖：它一变（手改、换模板、CubeMX 重新生成），下次构建就重新检查。
 # 只认 CMAKE_EXE_LINKER_FLAGS 里的 -T（CubeMX 生成的工具链文件就是这样写的），找不到就跳过。
