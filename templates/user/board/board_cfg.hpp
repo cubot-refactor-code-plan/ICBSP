@@ -4,6 +4,7 @@
  *
  * @note 只包含本工程 CubeMX 实际生成的句柄头文件；串口 / SPI 实例必须放 .dma_buffer。
  *       board_init() 在 system_init() 之后、system_start() 之前调用。
+ *       新增 BspUartT 的 Transport / 缓冲大小时，要在 bsp_uart.cpp 补对应显式实例化。
  */
 
 #ifndef __BOARD_CFG_HPP__
