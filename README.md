@@ -108,8 +108,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
    // 实例用 C++20 inline 变量定义在 board_cfg.hpp（不再需要 extern + .cpp 定义）。
    inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
    inline __attribute__((section(".dma_buffer")))
-   BspUartT<mode::dma, 128, 128> bsp_uart1(
-       {.huart = &huart1, .mode = UartMode::TxRx, .baudrate = 115200U});
+   BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
+       {.huart = &huart1, .mode = UartDirection::TxRx, .baudrate = 115200U});
    inline BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U});
 
    void board_init(void)
