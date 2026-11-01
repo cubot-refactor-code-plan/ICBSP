@@ -1,0 +1,11 @@
+# ---- stm32_framework（integrate.py 添加，可手动调整）------------------------------
+# clangd 不会自己去 CMake 构建目录找 compile_commands.json，必须在这里指明；
+# 少了它，Cortex-M 的 -mcpu / -mfpu 与系统头全丢，头文件会一路标红。
+#   - CompilationDatabase：相对宿主根目录的构建目录（取自 CMakePresets.json 的 binaryDir）
+#   - --query-driver：允许 clangd 调用交叉工具链取内置宏与系统头（stdint.h 等）
+# 换预设（例如改看 Release）时改下面第一行，或删掉本段后重跑 integrate.py。
+CompileFlags:
+  CompilationDatabase: {{COMPILE_COMMANDS_DIR}}
+  Add:
+    - --query-driver={{QUERY_DRIVER}}
+    - -Wno-unknown-warning-option
