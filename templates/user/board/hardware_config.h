@@ -1,99 +1,111 @@
 /**
  * @file hardware_config.h
- * @brief stm32_framework 的唯一配置入口：所有可调宏、功能开关和取值检查都在这里
+ * @brief 本板的唯一配置入口：库的全部可调宏、功能开关与取值检查都集中在这里
  *
- * @details - 放在宿主工程 user/board/，宿主给 stm32_framework 加该包含路径；CMake 配置阶段会打印实际路径。
- *          - 所有值都是实际生效的 #define，不再依赖库里的默认值头文件。
- *          - 顶部先包含 HAL / FreeRTOS，下面的 HAL_*_MODULE_ENABLED 才能正确反映 CubeMX 配置；
- *            没开对应 HAL 模块时，功能开关会自动变成 0。
- *          - 取值越界在编译时报 static_assert；节点数不够用时在 init() / system_start() 断言停机。
- *          - 只放宏，C / C++ 都能包含。
+ * @details
+ *
+ * 【它是什么】
+ *   stm32_framework 里**没有**任何“默认值头文件”。库的每一个可调参数都是本文件里的 `#define`，
+ *   库源码通过 CMake 加的包含路径直接 `#include "hardware_config.h"`。
+ *   CMake 配置阶段会打印实际用的是哪一份：
+ *
+ *       -- stm32_framework: 使用配置 /…/user/board/hardware_config.h
+ *
+ *   所以“改库的行为”= 改本文件的宏，不用改库源码；换板 = 换一份本文件。
+ *
+ * 【四组宏怎么理解】
+ *   ① 功能开关：决定“这段代码编不编译、这些任务建不建”——关掉省 Flash/RAM，但功能就没了
+ *   ② 库任务：优先级与栈深——决定实时性和会不会栈溢出
+ *   ③ 外设参数：队列深度、超时、缓冲区大小——决定吞吐、丢帧与阻塞时长
+ *   ④ 取值检查：只做编译期断言，不改任何行为
  */
 
 #ifndef HARDWARE_CONFIG_H
 #define HARDWARE_CONFIG_H
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
 #include "FreeRTOS.h"      // IWYU pragma: keep（configMAX_PRIORITIES）
+#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
 #include "task.h"          // IWYU pragma: keep（tskIDLE_PRIORITY）
 
-/* ==================== 功能开关 ==================== */
+/* ==================================================================
+ * ① 功能开关：关掉就不编译对应代码、也不创建对应任务
+ * ================================================================== */
 
 /** @brief 系统维护任务 sys_task：CAN Bus-Off 恢复、串口补救、Online 计时 */
-#define SYS_TASK_ENABLE            1
+#define SYS_TASK_ENABLE 1
 /** @brief CAN 接收路径：can_rx_task + CanRxNode */
-#define CAN_RX_ENABLE              1
+#define CAN_RX_ENABLE 1
 /** @brief CAN 发送路径：can_tx_task + CanTxNode */
-#define CAN_TX_ENABLE              1
+#define CAN_TX_ENABLE 1
 /** @brief sys_task 里的串口补救巡检 */
-#define UART_PATROL_ENABLE         1
+#define UART_PATROL_ENABLE 1
 
-/* HAL 没开对应模块时强制关闭，避免任务引用不存在的类型 */
+/* HAL 没开对应模块时强制关闭，避免任务引用不存在的类型（例如换板时 CubeMX 里没开 FDCAN） */
 #ifndef HAL_FDCAN_MODULE_ENABLED
 #  undef CAN_RX_ENABLE
 #  undef CAN_TX_ENABLE
-#  define CAN_RX_ENABLE            0
-#  define CAN_TX_ENABLE            0
+#  define CAN_RX_ENABLE 0
+#  define CAN_TX_ENABLE 0
 #endif
 
 #ifndef HAL_UART_MODULE_ENABLED
 #  undef UART_PATROL_ENABLE
-#  define UART_PATROL_ENABLE       0
+#  define UART_PATROL_ENABLE 0
 #endif
 
 /* ==================== 库任务（system_init() 创建） ==================== */
 
 /** @brief 系统维护任务 sys_task 的优先级：高于业务任务，低于 CAN 收发任务 */
-#define SYS_TASK_PRIORITY          (tskIDLE_PRIORITY + 7)
+#define SYS_TASK_PRIORITY (tskIDLE_PRIORITY + 7)
 /** @brief sys_task 栈深（字） */
-#define SYS_TASK_STACK             256
+#define SYS_TASK_STACK 256
 
 /** @brief CAN 收 / 发任务的优先级：最高，1 kHz 节拍内必须跑完 */
-#define CAN_TASK_PRIORITY          (tskIDLE_PRIORITY + 8)
+#define CAN_TASK_PRIORITY (tskIDLE_PRIORITY + 8)
 /** @brief CAN 收 / 发任务栈深（字）：接收节点回调在 can_rx_task 里同步执行，回调用栈多就加大 */
-#define CAN_TASK_STACK             512
+#define CAN_TASK_STACK 512
 
 /* ==================== CAN ==================== */
 
 /** @brief 每路 CAN 的接收队列深度（帧）：ISR 写入，can_rx_task 每毫秒取走 */
-#define CAN_RX_QUEUE_FRAMES        16
+#define CAN_RX_QUEUE_FRAMES 16
 /** @brief 每路 CAN 的回退队列深度（帧）：没有接收节点认领的帧，供 BspCan::receive() 读取 */
-#define CAN_RX_RETURN_FRAMES       16
+#define CAN_RX_RETURN_FRAMES 16
 /** @brief can_rx_task 每 1 ms 每条总线最多分发的帧数（1~64） */
-#define CAN_RX_DISPATCH_PER_TICK   16
+#define CAN_RX_DISPATCH_PER_TICK 16
 /** @brief 每路 CAN 的发送队列深度（帧） */
-#define CAN_TX_QUEUE_FRAMES        8
+#define CAN_TX_QUEUE_FRAMES 8
 /** @brief 接收节点总数上限（全部总线合计，≤255） */
-#define CAN_RX_NODE_MAX            50
+#define CAN_RX_NODE_MAX 50
 /** @brief 发送节点总数上限（全部总线合计，≤255） */
-#define CAN_TX_NODE_MAX            50
+#define CAN_TX_NODE_MAX 50
 /** @brief 控制指令有效期 (ms)：发送槽位超过这么久没被 FillData() 刷新就清零（必须大于心跳） */
-#define CAN_CMD_EXPIRE_MS          100
+#define CAN_CMD_EXPIRE_MS 100
 /** @brief 保底心跳 (ms)：发送节点至少这么久整帧发一次 */
-#define CAN_TX_HEARTBEAT_MS        5
+#define CAN_TX_HEARTBEAT_MS 5
 /** @brief Bus-Off 恢复的重试间隔 (ms) */
-#define CAN_BUSOFF_RETRY_MS        100
+#define CAN_BUSOFF_RETRY_MS 100
 
 /* ==================== UART ==================== */
 
 /** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置 */
-#define UART_ENABLE_FIFO           1
+#define UART_ENABLE_FIFO 1
 /** @brief BspUart::printf() 取格式化缓冲锁、入队的等待上限 (ms) */
-#define UART_PRINTF_TIMEOUT_MS     10
+#define UART_PRINTF_TIMEOUT_MS 10
 
 /* ==================== SPI ==================== */
 
 /** @brief 每个 BspSpi 实例的 DMA 弹跳缓冲（字节，收发各一份） */
-#define SPI_DMA_BUFFER_SIZE        256
+#define SPI_DMA_BUFFER_SIZE 256
 /** @brief BspSpi / BspSpiDevice 传输接口的默认超时 (ms) */
-#define SPI_TRANSFER_TIMEOUT_MS    10
+#define SPI_TRANSFER_TIMEOUT_MS 10
 
 /* ==================== BMI088 ==================== */
 
 /** @brief DeviceBmi088 自动刷新任务的优先级：低于库的 sys / CAN 任务，高于一般业务任务 */
-#define BMI088_TASK_PRIORITY       (tskIDLE_PRIORITY + 6)
+#define BMI088_TASK_PRIORITY (tskIDLE_PRIORITY + 6)
 /** @brief DeviceBmi088 自动刷新任务栈深（字）：含 VQF 姿态解算 */
-#define BMI088_TASK_STACK          512
+#define BMI088_TASK_STACK 512
 
 /* ==================== 取值检查 ==================== */
 
