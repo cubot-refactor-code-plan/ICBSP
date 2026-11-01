@@ -5,7 +5,7 @@
 // ---------------- 模板实例化 ----------------
 
 // 显式实例化：必须覆盖宿主的 board_cfg.cpp 里用到的串口类型
-template class DeviceMotorT<BspUartT<mode::dma, 128, 128>>;
+template class DeviceMotorT<BspUartT<uart_mode::dma, 128, 128>>;
 
 namespace
 {
