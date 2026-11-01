@@ -1,15 +1,15 @@
-#include "board_instances.hpp"
 #include "bsp_can.hpp"  // 未开 FDCAN 时为空
 #include "bsp_dwt.hpp"
 #include "bsp_uart.hpp" // 未开 UART 时为空
-#include "hardware_config.h"
+#include "online_check.hpp"
 #include "system.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
-#include "online_check.hpp"
 #include "task.h"
-
 #include <stdint.h>
+
+#include "hardware_config.h"
+#include "board_instances.hpp"
 
 #if SYS_TASK_ENABLE
 
