@@ -4,6 +4,7 @@
 #ifdef HAL_SPI_MODULE_ENABLED
 
 #include "bsp_spi.hpp"
+#include "board_instances.hpp"
 
 #include <string.h>
 
@@ -56,17 +57,16 @@ constexpr size_t HAL_MAX_SEGMENT = 0xFFFFU;
 extern "C"
 {
   /**
-   * @brief DMA 全双工传输完成（SPI EOT 中断里由 HAL 调用）：按句柄查登记表，交给对应实例
-   * @note 没有登记的 SPI（宿主工程自己管理的）直接忽略。
+   * @brief DMA 全双工传输完成（SPI EOT 中断里由 HAL 调用）
+   * @note 只处理 BSP_SPI_INSTANCES 清单里的实例，清单外的 SPI 直接忽略。
    */
   void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    BspSpi    *spi                      = BspSpi::find(hspi);
-    if (spi != nullptr)
-    {
-      spi->on_txrx_cplt_isr(&xHigherPriorityTaskWoken);
-    }
+#define X(name) \
+    if (hspi == name.handle()) { name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); }
+    BSP_SPI_INSTANCES(X)
+#undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
@@ -74,90 +74,16 @@ extern "C"
   void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    BspSpi    *spi                      = BspSpi::find(hspi);
-    if (spi != nullptr)
-    {
-      spi->on_error_isr(&xHigherPriorityTaskWoken);
-    }
+#define X(name) \
+    if (hspi == name.handle()) { name.on_error_isr(&xHigherPriorityTaskWoken); }
+    BSP_SPI_INSTANCES(X)
+#undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 }
 
 // ----------------
 
-
-// ---------------- 实例登记表 ----------------
-
-BspSpi  *BspSpi::_registry[BspSpi::MAX_INSTANCES] = {};
-uint32_t BspSpi::_registry_num                    = 0U;
-
-/** @brief 登记本实例；同一句柄只允许一个实例 */
-Status BspSpi::register_self()
-{
-  if (_hspi == nullptr)
-  {
-    return Status::BAD_ARG;
-  }
-  for (uint32_t i = 0U; i < _registry_num; ++i)
-  {
-    if (_registry[i] == this)
-    {
-      return Status::OK;
-    }
-    if (_registry[i]->_hspi == _hspi)
-    {
-      return Status::BAD_ARG; // 两个实例绑定同一路 SPI：回调只会交给其中一个，属于配置错误
-    }
-  }
-  if (_registry_num >= MAX_INSTANCES)
-  {
-    return Status::FULL;
-  }
-  _registry[_registry_num] = this;
-  ++_registry_num;
-  return Status::OK;
-}
-
-/** @brief 摘除：后面的实例前移，保持表紧凑 */
-void BspSpi::unregister_self()
-{
-  for (uint32_t i = 0U; i < _registry_num; ++i)
-  {
-    if (_registry[i] == this)
-    {
-      for (uint32_t j = i + 1U; j < _registry_num; ++j)
-      {
-        _registry[j - 1U] = _registry[j];
-      }
-      --_registry_num;
-      _registry[_registry_num] = nullptr;
-      return;
-    }
-  }
-}
-
-uint32_t BspSpi::instance_count()
-{
-  return _registry_num;
-}
-
-BspSpi *BspSpi::instance_at(uint32_t index)
-{
-  return (index < _registry_num) ? _registry[index] : nullptr;
-}
-
-/** @brief 线性查找（最多 6 项），ISR 中调用 */
-BspSpi *BspSpi::find(const SPI_HandleTypeDef *hspi)
-{
-  for (uint32_t i = 0U; i < _registry_num; ++i)
-  {
-    if (_registry[i]->_hspi == hspi)
-    {
-      return _registry[i];
-    }
-  }
-  return nullptr;
-}
 
 // ----------------
 
@@ -171,7 +97,6 @@ BspSpi::BspSpi(const Config &cfg) : _hspi(cfg.hspi), _use_dma(cfg.use_dma), _dma
 
 BspSpi::~BspSpi()
 {
-  unregister_self();
   if (_lock != nullptr)
   {
     vSemaphoreDelete(_lock);
@@ -207,12 +132,6 @@ Status BspSpi::init()
     }
   }
 
-  const Status reg = register_self();
-  if (reg != Status::OK)
-  {
-    return reg;
-  }
-
   _lock = xSemaphoreCreateMutex(); // 互斥量自带优先级继承
   _done = xSemaphoreCreateBinary();
   if (_lock == nullptr || _done == nullptr)
@@ -227,7 +146,6 @@ Status BspSpi::init()
       vSemaphoreDelete(_done);
       _done = nullptr;
     }
-    unregister_self();
     return Status::IO_ERROR;
   }
 

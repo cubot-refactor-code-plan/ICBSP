@@ -109,7 +109,7 @@ public:
    *
    * @return OK=成功；BAD_ARG=指针/机械参数非法；NOT_INIT=编码器还没 init()
    *
-   * @note 须在 bsp_init() 之后调用（编码器已启动、PWM 已 Start）。
+   * @note 须在 board_init() 之后调用（编码器已启动、PWM 已 Start）。
    */
   Status init();
 

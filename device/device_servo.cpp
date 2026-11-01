@@ -12,7 +12,7 @@
 /**
  * @brief 只保存配置
  *
- * @note 不碰硬件：PWM 通道由 bsp_init() 启动（上电 0% 占空比 = 无脉冲），
+ * @note 不碰硬件：PWM 通道由 board_init() 启动（上电 0% 占空比 = 无脉冲），
  *       本类要写脉宽得等上层第一次 set_angle() / set_pulse_us()。
  * @note 运动状态的初值全部写在 device_servo.hpp 的成员声明里（NSDMI），构造不再逐字段赋值。
  */
@@ -50,7 +50,7 @@ Status DeviceServo::init(void)
     return Status::BAD_ARG;
 
   // 脉宽必须能塞进一个 PWM 周期。get_counter_clk_hz() 为 0 说明 PWM 还没 init（正常流程里
-  // bsp_init() 在前面，不会走到这），此时跳过检查而不是误判成 BAD_ARG。
+  // board_init() 在前面，不会走到这），此时跳过检查而不是误判成 BAD_ARG。
   const uint32_t clk = _cfg.pwm->get_counter_clk_hz();
   if (clk > 0U)
   {

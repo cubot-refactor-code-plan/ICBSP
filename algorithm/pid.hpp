@@ -298,9 +298,8 @@ public:
 protected:
   /**
    * @brief 根据传入计算出其他输入项
-   * @note virtual，允许继承后自定义输入处理
    */
-  virtual void calc_input(float target, float feedback);
+  void calc_input(float target, float feedback);
 
 private:
   /* ==================== 私有成员函数 ==================== */

@@ -10,7 +10,7 @@
  * @details 硬件只是一路 PWM 通道，「发声」属于器件语义：频率限幅、默认音长与音量、
  *          阻塞式鸣叫都在这里。换蜂鸣器或换通道只改实例化处传入的 BspPwm 引用。
  *
- * @note 实例见 device_cfg.cpp。buzzer.beep(3000, 40) 响 40 ms 后自动关；buzzer.tone() 只起振。
+ * @note 实例见 宿主的 board_cfg.cpp。buzzer.beep(3000, 40) 响 40 ms 后自动关；buzzer.tone() 只起振。
  * @warning beep() 内部用 vTaskDelay() 阻塞，只能在任务上下文调用。
  */
 
@@ -32,19 +32,14 @@ class DeviceBuzzer
 public:
   // ---------------- 配置 ----------------
 
-  /** @brief 蜂鸣器配置：音域与默认值 */
+  /** @brief 蜂鸣器配置：音域与默认值（聚合，可用指定初始化） */
   struct Config
   {
-    /** @brief 按序构造配置（参数顺序 = 字段顺序） */
-    Config(uint32_t default_freq = 3000UL, uint32_t freq_min = 50UL, uint32_t freq_max = 20000UL, uint32_t short_ms = 80UL, float volume_pct = 50.0f) : default_freq(default_freq), freq_min(freq_min), freq_max(freq_max), short_ms(short_ms), volume_pct(volume_pct)
-    {
-    }
-
-    uint32_t default_freq; ///< 默认频率 (Hz)：tone()/beep() 传 0 时使用
-    uint32_t freq_min;     ///< 频率下限 (Hz)
-    uint32_t freq_max;     ///< 频率上限 (Hz)
-    uint32_t short_ms;     ///< 默认鸣叫时长 (ms)：beep() 传 0 时使用
-    float    volume_pct;   ///< 默认音量（占空比 %）：tone()/beep() 传 ≤0 时使用
+    uint32_t default_freq = 3000UL; ///< 默认频率 (Hz)：tone()/beep() 传 0 时使用
+    uint32_t freq_min     = 50UL;   ///< 频率下限 (Hz)
+    uint32_t freq_max     = 20000UL;///< 频率上限 (Hz)
+    uint32_t short_ms     = 80UL;   ///< 默认鸣叫时长 (ms)：beep() 传 0 时使用
+    float    volume_pct   = 50.0f;  ///< 默认音量（占空比 %）：tone()/beep() 传 ≤0 时使用
   };
 
   // ----------------

@@ -70,9 +70,6 @@ class MatrixF32
 {
   static_assert(ROWS > 0U && COLS > 0U, "MatrixF32: 行数、列数至少为 1");
 
-  template <uint32_t, uint32_t>
-  friend class MatrixF32; // 不同尺寸之间相互访问 _data（乘法、转置、取行列）
-
 public:
   static constexpr uint32_t SIZE = ROWS * COLS; ///< 元素个数
 
@@ -187,11 +184,6 @@ public:
   /** @brief 数乘 */
   MatrixF32 operator*(float value) const;
 
-  /** @brief 数乘（标量在左） */
-  friend MatrixF32 operator*(float value, const MatrixF32 &m)
-  {
-    return m * value;
-  }
 
   /**
    * @brief 矩阵乘法：(ROWS × COLS) · (COLS × K) = ROWS × K
@@ -282,8 +274,8 @@ public:
   /** @brief 取唯一的元素（只有 1×1 可调用，例如 vᵀ·A·v 的结果） */
   float scalar() const;
 
-private:
-  float _data[ROWS * COLS]; ///< 数据，行优先
+public:
+  float _data[ROWS * COLS]; ///< 数据，行优先（公开以便不同尺寸的 MatrixF32 互访）
 };
 
 /* ==================== 常用向量与旋转矩阵（matrix.cpp） ==================== */
@@ -676,6 +668,13 @@ float MatrixF32<ROWS, COLS>::scalar() const
 {
   static_assert(ROWS == 1U && COLS == 1U, "MatrixF32::scalar(): 只有 1×1 可调用");
   return _data[0];
+}
+
+/** @brief 数乘（标量在左），复用成员 operator*(float) */
+template <uint32_t ROWS, uint32_t COLS>
+MatrixF32<ROWS, COLS> operator*(float value, const MatrixF32<ROWS, COLS> &m)
+{
+  return m * value;
 }
 
 #endif // __MATRIX_HPP__

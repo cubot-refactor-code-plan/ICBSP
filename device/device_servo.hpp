@@ -56,7 +56,7 @@ public:
    */
   struct Config
   {
-    BspPwm *pwm            = nullptr; ///< 绑定的 PWM 通道（须已配成 50 Hz / 20 ms，见 bsp_cfg.cpp 的 bsp_pwm1）
+    BspPwm *pwm            = nullptr; ///< 绑定的 PWM 通道（须已配成 50 Hz / 20 ms，见 board_cfg.cpp 的 bsp_pwm1）
     float   pulse_min_us   = 500.0f;  ///< 角度 0 端对应的脉宽 (µs)，常见 500 或 1000
     float   pulse_max_us   = 2500.0f; ///< 角度 range_deg 端对应的脉宽 (µs)，常见 2500 或 2000
     float   range_deg      = 180.0f;  ///< 行程 (度)：180° 舵机填 180，270° 舵机填 270

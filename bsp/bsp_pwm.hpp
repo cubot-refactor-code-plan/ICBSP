@@ -60,7 +60,7 @@ public:
   /**
    * @brief 只保存配置，硬件操作全部推迟到 init()
    *
-   * @note constexpr + 内联：bsp_cfg.hpp 的全局实例是 inline 变量，需要常量初始化
+   * @note constexpr + 内联：board_cfg.hpp 的全局实例是 inline 变量，需要常量初始化
    *       （否则每个包含该头文件的 TU 都会生成一份构造代码）。
    */
   constexpr explicit BspPwm(const Config &cfg) :

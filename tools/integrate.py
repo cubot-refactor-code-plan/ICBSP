@@ -34,7 +34,7 @@ from pathlib import Path
 
 LIB_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = LIB_ROOT / "templates"
-BOARD_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp")
+BOARD_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp", "board_instances.hpp")
 APP_TEMPLATES = ("app_main.h", "app_main.cpp", "app_task.hpp")
 TASK_TEMPLATES = ("demo_task.cpp",)
 
@@ -266,8 +266,18 @@ def plan_linker(host, plan, rep, explicit, region):
     tf = TextFile(path)
     rel = path.relative_to(host).as_posix()
     missing = [s for s in ("dma_buffer", "noinit") if not re.search(rf"\.{s}\s*(\(NOLOAD\))?\s*:", tf.text)]
+    if "dma_buffer" not in missing:
+        # .dma_buffer 必须是可加载段：constexpr 实例的初值要从 Flash 拷进 RAM_D1
+        dma_block = re.search(r"^[ \t]*\.dma_buffer[^\n]*:\s*\{.*?\}\s*>[^\n]*", tf.text, re.M | re.S)
+        block_text = dma_block.group(0) if dma_block else ""
+        if "(NOLOAD)" in block_text:
+            rep.error(step, f"{rel} 的 .dma_buffer 是 NOLOAD，实例初值会丢；改成 `.dma_buffer : {{ ... }} >RAM_D1 AT> FLASH`（见 templates/linker_sections.ld）")
+            return
+        if "AT>" not in block_text:
+            rep.error(step, f"{rel} 的 .dma_buffer 缺少 AT> FLASH 加载区；按 templates/linker_sections.ld 手动补上")
+            return
     if not missing:
-        rep.skip(step, f"{rel} 已有 .dma_buffer / .noinit")
+        rep.skip(step, f"{rel} 已有可加载的 .dma_buffer 与 .noinit")
         return
 
     regions = {
@@ -291,8 +301,9 @@ def plan_linker(host, plan, rep, explicit, region):
 
     template = re.sub(r"^\s*/\*.*?\*/\s*\n", "", read_template("linker_sections.ld"), count=1, flags=re.S)
     blocks = {}
-    for m in re.finditer(r"^[ \t]*\.(\w+)[^\n]*:\s*\{.*?\}\s*>\s*\w+", template, re.M | re.S):
-        blocks[m.group(1)] = re.sub(r">\s*\w+$", f">{region}", m.group(0))
+    # 连同 AT> FLASH 与 __dma_buffer_load = LOADADDR(...) 一起取，不能只截到第一个 >region
+    for m in re.finditer(r"^[ \t]*\.(\w+)[^\n]*:\s*\{.*?\}\s*>[^\n]*(?:\n[ \t]*__\w+_load\s*=[^\n]*)?", template, re.M | re.S):
+        blocks[m.group(1)] = re.sub(r"\}\s*>\s*\w+", f"}} >{region}", m.group(0), count=1)
 
     lines = tf.text.split("\n")
     data = next((i for i, l in enumerate(lines) if re.match(r"\s*\.data\s*:", l)), None)
@@ -311,7 +322,7 @@ def plan_linker(host, plan, rep, explicit, region):
         rep.error(step, f"{rel} 里 .data 之前的结构不认识，请按 templates/linker_sections.ld 手动添加")
         return
 
-    insert = ["", "  /* stm32_framework：见 templates/linker_sections.ld（.dma_buffer 放 BspUart 实例，.noinit 放 fault_record） */"]
+    insert = ["", "  /* stm32_framework：见 templates/linker_sections.ld（.dma_buffer 可加载，放 BspUart / BspSpi 实例；.noinit 放 fault_record） */"]
     for i, name in enumerate(missing):
         if i:
             insert.append("")
@@ -413,7 +424,7 @@ def check_board_cfg(host, rep, board_cfg_text, app_rel):
     if missing:
         rep.warn(step, f"模板用到 {', '.join(missing)}，本工程没有：在 {app_rel}/board_cfg.* 里删掉或换成实际句柄（连同 #include）")
 
-    for h, baud in re.findall(r"BspUart<\d+>\s+\w+\(\{\s*&(huart\d+)\s*,\s*\w+\s*,\s*(\d+)U?\s*\}\)", board_cfg_text):
+    for h, baud in re.findall(r"BspUartT<[^>]+>\s+\w+\(\{\s*\.huart\s*=\s*&(huart\d+)[^}]*\.baudrate\s*=\s*(\d+)U?", board_cfg_text):
         if h in handles:
             m = re.search(rf"{h}\.Init\.BaudRate\s*=\s*(\d+)\s*;", handles[h].read_text(encoding="utf-8"))
             if m and m.group(1) != baud:
