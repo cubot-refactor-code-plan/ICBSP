@@ -9,6 +9,7 @@
 
 #include "bsp_can.hpp"
 #include "status.hpp"
+#include "system.hpp"
 
 #include <new>
 #include <string.h>
@@ -115,7 +116,7 @@ Status CanTxNodeT<CanT>::init()
   if (_lock == nullptr)
   {
     _statu = Status::FULL;
-    SysInitError(_statu);
+    sys_state.init_error(_statu);
     return _statu;
   }
   next        = _head;
@@ -130,7 +131,7 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
 {
   if (_frozen || can_id > 0x7FFU || division == 0U || division > 8U || (8U % division) != 0U || slot >= division)
   {
-    SysInitError(Status::BAD_ARG);
+    sys_state.init_error(Status::BAD_ARG);
     return nullptr;
   }
   for (CanTxNodeT *node = _head; node != nullptr; node = node->next)
@@ -142,19 +143,19 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
         node->bufferRegister |= static_cast<uint8_t>(1U << slot);
         return node;
       }
-      SysInitError(Status::FULL);
+      sys_state.init_error(Status::FULL);
       return nullptr;
     }
   }
   if (_num >= CAN_TX_NODE_MAX)
   {
-    SysInitError(Status::FULL);
+    sys_state.init_error(Status::FULL);
     return nullptr;
   }
   CanTxNodeT *node = new (std::nothrow) CanTxNodeT(can_item, can_id, division);
   if (node == nullptr)
   {
-    SysInitError(Status::FULL);
+    sys_state.init_error(Status::FULL);
     return nullptr;
   }
   const Status status = node->init();

@@ -11,9 +11,9 @@
 #ifndef __MOTOR_DEFINITION_HPP__
 #define __MOTOR_DEFINITION_HPP__
 
-#ifndef PI 
-#define PI 3.1415926f
-#endif  // PI
+#ifndef PI
+#  define PI 3.1415926f
+#endif // PI
 
 /**
  * @brief 单个电机经过机械传动换算后的通用运动学数据
@@ -28,10 +28,10 @@ struct MotorData
    */
   struct Radian
   {
-    float angle_single_round; ///< 单圈机械角度，单位：rad
-    float angle_multi_round;  ///< 累计多圈机械角度，单位：rad
-    float velocity;           ///< 角速度，单位：rad/s
-    float acceleration;       ///< 角加速度，单位：rad/s^2
+    float  angle_single_round; ///< 单圈机械角度，单位：rad
+    double angle_multi_round;  ///< 累计多圈机械角度，单位：rad
+    float  velocity;           ///< 角速度，单位：rad/s
+    float  acceleration;       ///< 角加速度，单位：rad/s^2
   } radian_data;
 
   /**

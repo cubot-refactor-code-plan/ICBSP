@@ -38,7 +38,7 @@ static void can_rx_service(CanT &can)
 extern "C" void can_rx_task(void *argument)
 {
   (void)argument;
-  SysFlagWaitRunning();
+  sys_state.wait_running();
 #define X(name) CanRxNodeT<decltype(name)>::freeze();
   BSP_CAN_INSTANCES(X)
 #undef X
@@ -47,7 +47,7 @@ extern "C" void can_rx_task(void *argument)
   TickType_t wake_time = xTaskGetTickCount();
   for (;;)
   {
-    if ((osEventFlagsGet(sysEvent) & SYS_FLAG_RUNNING_BIT) != 0U)
+    if (sys_state.running())
     {
 #define X(name) can_rx_service(name);
       BSP_CAN_INSTANCES(X)

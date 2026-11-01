@@ -4,6 +4,7 @@
 #ifdef HAL_SPI_MODULE_ENABLED
 
 #include "device_bmi088.hpp"
+#include "system.hpp"
 
 #include <new>
 
@@ -415,7 +416,7 @@ void DeviceBmi088::task_entry(void *argument)
 
 void DeviceBmi088::run()
 {
-  SysFlagWaitRunning(); // 初始化期有失败时这里让任务自行退出
+  sys_state.wait_running(); // 初始化期有失败时这里让任务自行退出
 
   // 丢掉等运行位期间攒下的数据就绪计数，否则第一帧会被当成漏了几百帧
   (void)ulTaskNotifyTake(pdTRUE, 0U);

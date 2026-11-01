@@ -27,13 +27,18 @@ bool has_tx_nodes()
 #endif
 
 
+// ---------------- 全局系统状态 ----------------
+
+EventState sys_state;
+
+
 // ---------------- 库入口 ----------------
 
 
 extern "C" void system_init(void)
 {
-  // 系统事件组最先建：CAN 节点注册、SysFlagWaitRunning() 都依赖它
-  configASSERT(SysFlagInit() == Status::OK);
+  // 系统状态最先建：CAN 节点注册、任务入口的 wait_running() 都依赖它
+  configASSERT(sys_state.init() == Status::OK);
 
   // 调度器启动前任务不会运行（CAN 收发任务还会先等运行态），所以可以早于用户的外设 init()；
   // 任务名受 configMAX_TASK_NAME_LEN（16）限制
@@ -57,8 +62,8 @@ extern "C" void system_start(void)
   }
 #endif
 
-  // 有初始化失败记录（各注册函数调过 SysInitError）就在这里停机，fault_record 记下本行
-  configASSERT(SysCompleteInit() == Status::OK);
+  // 有初始化失败记录（各注册函数调过 sys_state.init_error）就在这里停机，fault_record 记下本行
+  configASSERT(sys_state.complete_init() == Status::OK);
 }
 
 
