@@ -42,11 +42,11 @@ inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
 /**
  * @brief 串口：句柄 + 收发模式 + 波特率（必须与 CubeMX 一致，发送卡死判定按它估算）
  * @note 必须放进 .dma_buffer：实例里就是 DMA 收发缓冲，H7 的 DMA1 / DMA2 访问不到默认 .bss 所在的 DTCM
- *       （放错了 init() 返回 BAD_ARG）。只收不发的串口用 UartDirection::RxOnly。
+ *       （放错了 init() 返回 BAD_ARG）。只收不发的串口用 UartDir::RxOnly。
  *       CubeMX 里：RX DMA（Normal）+ TX DMA + 串口全局中断。
  */
 inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
-    {.huart = &huart1, .mode = UartDirection::TxRx, .baudrate = 115200U});
+    {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
 
 /**
  * @brief PWM：句柄、通道、定时器时钟 (Hz)、PSC、ARR —— 从 CubeMX 的时钟树与 tim.c 抄
