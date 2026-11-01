@@ -7,8 +7,8 @@
 // ---------------- 模板实例化 ----------------
 
 // 显式实例化：必须覆盖 宿主的 board_cfg.cpp 里用到的串口类型，否则链接时找不到成员函数
-template class DeviceR9dsT<BspUartT<mode::it, 128, 32>>;
-template class DeviceR9dsT<BspUartT<mode::dma, 128, 128>>;
+template class DeviceR9dsT<BspUartT<uart_mode::it, 128, 32>>;
+template class DeviceR9dsT<BspUartT<uart_mode::dma, 128, 128>>;
 
 // ----------------
 // ---------------- 构造与析构 ----------------
