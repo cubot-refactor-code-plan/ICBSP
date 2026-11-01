@@ -65,6 +65,11 @@ python3 third_party/stm32-framework/tools/integrate.py             # 执行
 - 复制 `templates/user/board`、`templates/user/app` 到宿主
 - 在根 `CMakeLists.txt` 接入库、设置 C++20、收集 `user/**/*.cpp`
 - 配置 clangd 的 compile_commands 目录
+- 生成 / 合并 `.vscode/tasks.json`、`.vscode/launch.json`：工程名取 `CMAKE_PROJECT_NAME`，
+  `device` 与 OpenOCD target 按 `.ioc` 的 `Mcu.Name` 推出来（`STM32H723VGTx` → `STM32H723VG`）；
+  宿主已有的任务与调试配置不覆盖，只补缺失项
+- 复制 `Flash/` 烧录脚本：脚本运行时自己在 `build/` 下递归找 `.elf`，不用传路径；
+  宿主 `Flash/` 下没有 SVD 时 `launch.json` 不写 `svdFile`，只提示一次（外设寄存器面板不可用，调试本身不受影响）
 
 脚本可重复执行，已完成的步骤会跳过。`board_cfg` 里的句柄、波特率、PWM 参数仍要按实际 CubeMX 工程核对。
 

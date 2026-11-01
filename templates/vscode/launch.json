@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "cwd": "${workspaceFolder}",
+            "type": "cortex-debug",
+            "request": "launch",
+            "name": "cmsis-dap-debug",
+            "servertype": "openocd",
+            // 工程名来自 CMakeLists.txt 的 CMAKE_PROJECT_NAME，不是文件夹名
+            "executable": "build/{{PRESET}}/{{PROJECT}}.elf",
+            "runToEntryPoint": "main",
+            "configFiles": [
+                "interface/cmsis-dap.cfg",
+                "target/{{OPENOCD_TARGET}}"
+            ],
+            // SVD: 外设寄存器面板用，与调试器无关；宿主没有 SVD 时 integrate.py 会去掉这两行
+            "svdFile": "Flash/{{SVD}}",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 20
+            }
+        },
+        {
+            "cwd": "${workspaceFolder}",
+            "type": "cortex-debug",
+            "request": "launch",
+            "name": "jlink-debug",
+            "servertype": "jlink",
+            "interface": "swd",
+            "executable": "build/{{PRESET}}/{{PROJECT}}.elf",
+            "runToEntryPoint": "main",
+            "device": "{{DEVICE}}",
+            // SVD: 同上，JLink 也一样靠它画外设寄存器
+            "svdFile": "Flash/{{SVD}}",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 20
+            }
+        }
+    ]
+}

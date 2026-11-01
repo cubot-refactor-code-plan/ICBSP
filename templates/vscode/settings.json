@@ -1,0 +1,52 @@
+{
+    // CMake 预设把编译数据库放在 {{COMPILE_COMMANDS_DIR}}/，clangd 默认只找 build/，需显式指定
+    // （先执行一次 cmake --preset {{PRESET}}）。这里是相对路径，相对 VS Code 的 ${workspaceFolder}。
+    // 用命令行参数指定后，库代码也用宿主工程的编译数据库，跳转与补全才对得上。
+    "clangd.arguments": [
+        "--compile-commands-dir={{COMPILE_COMMANDS_DIR}}",
+        "--query-driver={{QUERY_DRIVER}}"
+    ],
+    // 调试时变量按自然类型显示（寄存器位域不会显示成十进制大数）
+    "cortex-debug.variableUseNaturalFormat": true,
+    "cmake.useCMakePresets": "always",
+    // 状态栏按钮，对应 tasks.json 里的任务 label
+    "VsCodeTaskButtons.showCounter": false,
+    "VsCodeTaskButtons.tasks": [
+        {
+            "label": "[🔨 编译]",
+            "task": "Build",
+            "tooltip": "编译项目"
+        },
+        {
+            "label": "[🧹 重新编译]",
+            "task": "Clean_Rebuild",
+            "tooltip": "先清理再重新编译"
+        },
+        {
+            "label": "[🗑️ 清理]",
+            "task": "Clean",
+            "tooltip": "仅清理构建产物"
+        },
+        {
+            "label": "[⚡ DAP烧录]",
+            "task": "OpenOCD_flash",
+            "tooltip": "OpenOCD + DAPLink 烧录"
+        },
+        {
+            "label": "[🔌 JLink烧录]",
+            "task": "JLink_flash",
+            "tooltip": "经 OpenOCD 的 jlink 适配器烧录"
+        }
+    ],
+    // 本库的源码用 `// ---------------- 标题 ----------------` 做分区，outline 里显示成区块
+    "outlinePlus.regionBoundaryPatternByLanguageId": {
+        "c": {
+            "startRegex": "^\\s*//+\\s*-{16}\\s*(.+?)\\s*-{16}\\s*$",
+            "endRegex": "^\\s*//+\\s*-{16}\\s*$"
+        },
+        "cpp": {
+            "startRegex": "^\\s*//+\\s*-{16}\\s*(.+?)\\s*-{16}\\s*$",
+            "endRegex": "^\\s*//+\\s*-{16}\\s*$"
+        }
+    }
+}
