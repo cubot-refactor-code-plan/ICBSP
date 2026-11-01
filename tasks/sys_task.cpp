@@ -1,5 +1,6 @@
 #include "board_instances.hpp"
 #include "bsp_can.hpp"  // 未开 FDCAN 时为空
+#include "bsp_dwt.hpp"
 #include "bsp_uart.hpp" // 未开 UART 时为空
 #include "hardware_config.h"
 #include "system.hpp"
@@ -12,24 +13,26 @@
 
 #if SYS_TASK_ENABLE
 
-volatile uint32_t sys_loop_count    = 0U;               ///< 维护任务循环次数（调试观察）
-volatile Status   sys_online_status = Status::NOT_INIT; ///< 最近一次 Online::update() 的结果
-
-// 串口补救巡检的周期（本任务 1 拍 = 1 ms）：UART_PATROL_PERIOD_MS，默认 10 ms。
-// tx_recover() 判“通道空闲却有数据”要连续两次巡检都看到才动手，10 ms 间隔与 main 分支实测一致；
-// rx_recover() 只在 RX 三处状态不一致时才动作，正常时每次只读一次寄存器。
-constexpr uint32_t UART_PATROL_PERIOD = UART_PATROL_PERIOD_MS;
+// 维护周期：Online 计时、CAN 恢复、UART 巡检统一按这个节拍
+constexpr uint32_t SYS_TASK_PERIOD_MS = 10U;
 
 
 extern "C" void sys_task(void *argument)
 {
-  (void)argument; // 任务不需要外部参数。
+  (void)argument;
   static_assert(configTICK_RATE_HZ == 1000U,
                 "sys_task requires a 1 kHz FreeRTOS tick");
 
   TickType_t wake_time = xTaskGetTickCount();
+  uint8_t    count     = 0U;
+
   for (;;)
   {
+    ++count;
+
+    // 本轮计时基准（无状态，首次结果丢弃）
+    uint32_t mark = 0U;
+    (void)bsp_dwt.get_delta_s(&mark);
 
 #  if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
     // CAN 硬件 Bus-Off 自恢复：按板级实例列表直接展开
@@ -39,21 +42,31 @@ extern "C" void sys_task(void *argument)
 #  endif
 
 #  if defined(HAL_UART_MODULE_ENABLED) && UART_PATROL_ENABLE
-    // 串口补救：卡死的发送续发 + 停摆的接收重建（ISR 只计数，恢复只能在任务侧做）
-    if ((sys_loop_count % UART_PATROL_PERIOD) == 0U)
-    {
+    // 串口补救：卡死的发送续发 + 停摆的接收重建
 #    define X(name)            \
       (void)name.tx_recover(); \
       (void)name.rx_recover();
-      BSP_UART_INSTANCES(X)
+    BSP_UART_INSTANCES(X)
 #    undef X
-    }
 #  endif
 
     // 在线情况更新
-    sys_online_status = Online::update();
-    sys_loop_count    = sys_loop_count + 1U;
-    vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1U));
+    (void)Online::update();
+
+#  if defined(HAL_UART_MODULE_ENABLED) && defined(print_uart)
+    // 每 2 s 打一次，避免打印本身占掉巡检时间
+    if (count == 200U)
+    {
+      const double uptime_s = bsp_dwt.get_time_s();
+
+      print_uart("[sys] time=%us cycle=%uus\r\n",
+                 static_cast<unsigned>(uptime_s),
+                 static_cast<unsigned>(bsp_dwt.get_delta_s(&mark) * 1000000.0));
+      count = 0U;
+    }
+#  endif
+
+    vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(SYS_TASK_PERIOD_MS));
   }
 }
 
