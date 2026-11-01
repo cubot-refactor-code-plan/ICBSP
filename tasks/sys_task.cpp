@@ -1,5 +1,6 @@
 #include "system.hpp"
 #include "hardware_config.h"
+#include "board_instances.hpp"
 #include "bsp_can.hpp"  // 未开 FDCAN 时为空
 #include "bsp_uart.hpp" // 未开 UART 时为空
 
@@ -31,22 +32,20 @@ extern "C" void sys_task(void *argument)
   for (;;)
   {
 #if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
-    // CAN 硬件 Bus-Off 自恢复：遍历 BspCan 登记表（各实例 init() 时登记）
-    for (uint32_t i = 0U; i < BspCan::instance_count(); ++i)
-    {
-      (void)BspCan::instance_at(i)->service_recovery();
-    }
+    // CAN 硬件 Bus-Off 自恢复：按板级实例列表直接展开
+#define X(name) (void)name.service_recovery();
+    BSP_CAN_INSTANCES(X)
+#undef X
 #endif
 #if defined(HAL_UART_MODULE_ENABLED) && UART_PATROL_ENABLE
-    // 串口补救：卡死的发送续发 + 停摆的接收重建（ISR 只计数，恢复只能在任务侧做），遍历 BspUart 登记表
+    // 串口补救：卡死的发送续发 + 停摆的接收重建（ISR 只计数，恢复只能在任务侧做）
     if ((sys_loop_count % UART_PATROL_PERIOD) == 0U)
     {
-      for (uint32_t i = 0U; i < BspUartBase::instance_count(); ++i)
-      {
-        BspUartBase *const uart = BspUartBase::instance_at(i);
-        (void)uart->tx_recover();
-        (void)uart->rx_recover();
-      }
+#define X(name)            \
+      (void)name.tx_recover(); \
+      (void)name.rx_recover();
+      BSP_UART_INSTANCES(X)
+#undef X
     }
 #endif
     // 在线情况更新

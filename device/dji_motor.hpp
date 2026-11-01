@@ -79,7 +79,7 @@ struct DjiMotorParam
   uint16_t current_limit;  ///< 原始控制指令允许的绝对值上限
 };
 
-template <MotorType type>
+template <MotorType type, typename CanT>
 class DjiMotor;
 
 /**
@@ -90,7 +90,7 @@ class DjiMotor;
  * @details CanTxNode 聚合发送槽位，CanRxNode 按总线和反馈 ID 分发接收帧。
  * @note 对象不可复制或移动，以保证在线检查节点和控制帧槽位的身份稳定。
  */
-template <MotorType type>
+template <MotorType type, typename CanT>
 class DjiMotor
 {
 private:
@@ -100,11 +100,11 @@ private:
   Online              _online;      ///< 由有效反馈帧刷新的在线检查对象
   LuenbergerMotorData _lvbo_data;   ///< 可选的 Luenberger 观测结果
 
-  BspCan            *_can_item;     ///< 接收反馈所用的物理 CAN
+  CanT              *_can_item;     ///< 接收反馈所用的物理 CAN
   uint8_t            _motor_id;     ///< 电调配置的 DJI 协议 ID
   uint8_t            _bus_slot;     ///< 当前电机在控制帧中的槽位，范围 0~3
-  CanTxNode       *_tx_node;
-  CanRxNode       *_rx_node;
+  CanTxNodeT<CanT> *_tx_node;
+  CanRxNodeT<CanT> *_rx_node;
   static Status rx_callback(void *context, const CanRxMsg &rx);
   DjiMotorControlMode _control_mode; ///< GM6020 控制模式；其他型号忽略
   Status             _statu;        ///< 构造校验或初始化状态，运行期收发结果由函数返回
@@ -172,7 +172,7 @@ public:
    * @note 构造后调用 init() 注册收发节点；错误可通过 statu() 查询。
    * @note 构造阶段不会调用 BspCan::init() 或发送 CAN 帧。
    */
-  DjiMotor(BspCan &can_item,
+  DjiMotor(CanT &can_item,
            uint8_t motor_id,
            float ratio = 0,
            float offset = 0.0f,

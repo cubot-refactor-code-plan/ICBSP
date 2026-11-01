@@ -1,38 +1,30 @@
 /**
  * @file bsp_key.hpp
  * @author Rh
- * @brief 按键驱动 — 纯软件轮询消抖（无 ISR、无 FreeRTOS 依赖）
+ * @brief 按键驱动：纯软件轮询消抖（无 ISR、无 FreeRTOS 依赖）
  * @version 0.2
  * @date 2026-07-25
  *
  * @copyright Copyright (c) 2026
  *
- * @details poll() 需在 FreeRTOS 任务中周期性调用（如每 50ms）。
+ * @details update() 需在 FreeRTOS 任务中周期性调用（如每 50ms）。
  *
- * @note 消抖公式:
- *       消抖时间 = debounce_cnt × 轮询周期
- *       长按时间 = long_press_cnt × 轮询周期
+ * @note 时间换算（T = 轮询周期，即 update() 的调用间隔）:
+ *       消抖时间 = debounce_cnt × T
+ *       长按时间 = long_press_cnt × T      ← 从"电平跳变那一刻"起算
  *
- * @note 支持事件:
- *       - PRESSED:  按下确认（消抖后）
- *       - RELEASED: 释放确认（消抖后）
- *       - LONG_PRESS: 持续按住超过阈值（只触发一次，释放后重置）
+ * @note 有 4 种事件:
+ *       - NONE:  无事件（常态，多数轮询返回此值）
+ *       - PRESS: 按下（消抖确认那一刻触发一次）
+ *       - SHORT: 短按触发（按下后在长按阈值内松手 → 触发一次）
+ *       - LONG:  长按触发（按住达到 long_press_cnt × T → 触发一次，松手不再产生 SHORT）
  *
- * @note 使用示例:
- *
- *   // 配置: 低有效, 50ms 轮询 → 100ms 消抖, 1s 长按
- *   BspKey key;
- *   key.init({KEY_GPIO_Port, KEY_Pin, true, 2, 20});
- *
- *   // 在 50ms 周期任务中:
- *   BspKey::Event e = key.poll();
- *   switch (e)
- *   {
- *     case BspKey::Event::PRESSED:    break;
- *     case BspKey::Event::LONG_PRESS: break;
- *     default: break;
- *   }
- *
+ * @note 使用约束:
+ *       1. update() 必须在【同一个任务】中周期性调用，本类非线程安全；
+ *       2. init() 以当前电平作为初始稳定状态：上电时若按键已被按住，
+ *          不会产生 PRESS（防误触发），直接从"已按下"状态开始计时。
+ *       3. 未 init()（或 init() 失败）时，update() / read_raw() 安全返回，不会崩溃。
+ *       状态机与用法见 bsp_key.md。
  */
 
 #ifndef __BSP_KEY_HPP__
@@ -48,18 +40,20 @@
  * @brief 按键驱动类
  *
  * @note 纯软件轮询消抖（无 ISR、无 FreeRTOS 依赖）；
- *       poll() 需在任务中周期性调用，消抖/长按时间 = 计数阈值 × 轮询周期。
+ *       update() 需在任务中周期性调用，消抖/长按时间 = 计数阈值 × 轮询周期。
  */
 class BspKey
 {
 public:
-  /** @brief 按键事件类型 */
+  // ---------------- 公有接口 ----------------
+
+  /** @brief 按键事件类型（一次"按下→松手"只会得到 PRESS+SHORT 或 PRESS+LONG） */
   enum class Event
   {
-    NONE       = 0, ///< 无事件（常态）
-    PRESSED    = 1, ///< 按下确认（消抖完成后触发一次）
-    RELEASED   = 2, ///< 释放确认（消抖完成后触发一次）
-    LONG_PRESS = 3, ///< 长按（持续按住超过 long_press_cnt 次轮询，仅触发一次）
+    NONE  = 0, ///< 无事件（常态）
+    PRESS = 1, ///< 按下（消抖确认后触发一次）
+    SHORT = 2, ///< 短按（按下后在长按阈值内松手 → 触发一次）
+    LONG  = 3, ///< 长按（按住持续 long_press_cnt 次轮询 → 仅触发一次）
   };
 
   /**
@@ -71,66 +65,76 @@ public:
    *   实际长按时间 = long_press_cnt × 轮询周期
    * @endcode
    * 例: 50ms 轮询 + debounce_cnt=2 → 100ms 消抖
+   *
+   * @note debounce_cnt / long_press_cnt 均必须 >= 1，否则 init() 返回 BAD_ARG。
    */
   struct Config
   {
-    /**
-     * @brief 按序构造配置（参数顺序 = 字段顺序）
-     */
-    Config(GPIO_TypeDef *port = nullptr, uint16_t pin = 0U, bool active_low = true, uint8_t debounce_cnt = 3U, uint16_t long_press_cnt = 200U)
-
-      : port(port),
-        pin(pin),
-        active_low(active_low),
-        debounce_cnt(debounce_cnt),
-        long_press_cnt(long_press_cnt)
-    {
-    }
-
-    GPIO_TypeDef *port;           ///< GPIO 端口 (GPIOA / GPIOB / ...)
-    uint16_t      pin;            ///< 引脚掩码 (GPIO_PIN_x)
-    bool          active_low;     ///< 有效电平: true=低有效(上拉), false=高有效(下拉)
-    uint8_t       debounce_cnt;   ///< 消抖计数 (连续相同电平次数)
-    uint16_t      long_press_cnt; ///< 长按计数阈值 (按住持续次数)
+    GPIO_TypeDef *port           = nullptr; ///< GPIO 端口 (GPIOA / GPIOB / ...)
+    uint16_t      pin            = 0U;      ///< 引脚掩码 (GPIO_PIN_x)
+    bool          active_low     = true;    ///< 有效电平: true=低有效(上拉), false=高有效(下拉)
+    uint8_t       debounce_cnt   = 3U;      ///< 消抖计数 (连续相同电平次数)
+    uint16_t      long_press_cnt = 200U;    ///< 长按计数阈值 (按住持续次数)
   };
 
+  /** @brief 默认构造（未绑定引脚，init() 会返回 BAD_ARG） */
   BspKey() = default;
 
   /**
-   * @brief 绑定引脚并初始化消抖状态机
-   * @param cfg 引脚 + 消抖/长按参数（可匿名按序传入）
+   * @brief 构造：只保存配置（纯赋值，不碰硬件）
    *
-   * @note 硬件引脚方向/上下拉由 CubeMX 的 MX_GPIO_Init() 配置，
-   *       本函数仅保存参数并读取初始电平。
-   *
-   * @return Status OK=绑定成功，BAD_ARG=端口/引脚非法
+   * @note 必须是 constexpr：bsp_cfg.hpp 里的全局实例是 inline 变量，需要常量初始化。
+   * @note 读初始电平要调 `HAL_GPIO_ReadPin`，必须等 CubeMX 的 MX_GPIO_Init() 跑过，
+   *       所以引脚检测与消抖状态机的启动只能放在 init()。
    */
-  Status init(const Config &cfg);
+  constexpr explicit BspKey(const Config &cfg) :
+    _port(cfg.port), _pin(cfg.pin), _active_low(cfg.active_low), _debounce_cnt(cfg.debounce_cnt), _long_press_cnt(cfg.long_press_cnt)
+  {
+  }
 
   /**
-   * @brief 轮询消抖（每周期调用一次）
+   * @brief 校验已保存的配置，并以当前电平作为初始稳定状态
+   *
+   * @note 配置在构造时已经存好，所以本函数不再收参；重复调用只会重读一次电平。
+   *
+   * @return Status OK=绑定成功；
+   *         BAD_ARG=端口/引脚非法，或 debounce_cnt / long_press_cnt 为 0
+   */
+  Status init();
+
+  /**
+   * @brief 轮询消抖（每周期调用一次，须在单任务中调用）
    *
    * 消抖算法:
    *   1. 读取当前 GPIO 电平
-   *   2. 若与上次稳定状态相同 → 清零波动计数
+   *   2. 若与上次稳定状态相同 → 清零抖动计数
    *   3. 若不同 → 累加计数，达到 debounce_cnt 则确认状态变化
-   *   4. 按下后累加 hold_cnt，达到 long_press_cnt 触发 LONG_PRESS（仅一次）
+   *   4. 确认按下时，以已累计的消抖次数作为保持计数起点
+   *      （即长按从"电平跳变那一刻"起算），此后每次轮询累加，
+   *      达到 long_press_cnt 触发 LONG（每次按下仅一次）
+   *
+   * @note 未 init()（_port == nullptr）时安全返回 NONE，不会崩溃。
    *
    * @return 本次触发的事件:
-   *         - NONE:       无变化
-   *         - PRESSED:    刚按下
-   *         - RELEASED:   刚释放
-   *         - LONG_PRESS: 长按触发
+   *         - NONE:  无事件
+   *         - PRESS: 刚按下
+   *         - SHORT: 短按（已松手，且本次按下未触发过 LONG）
+   *         - LONG:  长按触发
    */
-  Event poll();
+  Event update();
 
-  /** @brief 读取当前引脚电平 @return true=高电平, false=低电平 */
-  bool read() const;
+  /**
+   * @brief 当前是否处于「按下」稳定态（消抖后的电平）
+   *
+   * @note 专给「按住时要一直亮、松手就灭」这类显示用：事件只在跳变那一刻给一次，
+   *       而本函数每拍都能问到当前状态。未 init() 时返回 false。
+   */
+  bool pressed() const { return _last_stable; }
 
-  /** @brief 是否正在按下（消抖后的稳定状态） */
-  bool is_pressed() const { return _last_stable; }
-
+  // ----------------
 private:
+  // ---------------- 私有实现 ----------------
+
   GPIO_TypeDef *_port           = nullptr; ///< GPIO 端口指针
   uint16_t      _pin            = 0U;      ///< 引脚掩码
   bool          _active_low     = true;    ///< 有效电平极性
@@ -141,6 +145,8 @@ private:
   uint8_t  _cnt         = 0U;    ///< 当前连续不一致计数
   uint16_t _hold_cnt    = 0U;    ///< 按下保持计数
   bool     _long_fired  = false; ///< 本次按下周期内长按是否已触发
+
+  // ----------------
 };
 
 #endif // __BSP_KEY_HPP__

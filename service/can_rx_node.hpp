@@ -8,66 +8,155 @@
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
 
 #include "bsp_can.hpp"
+#include "status.hpp"
 
-/** @brief 轮询各 CAN 原始接收缓冲，分发成功则消费，否则送入回退缓冲。 */
-extern "C" void can_rx_task(void *argument);
+#include <new>
 
 /**
  * @brief 初始化阶段注册、运行阶段只读的 CAN 接收节点。
+ * @tparam CanT 具体的 BspCanT<RX_DEPTH, TX_DEPTH> 类型。
  * @note 注册/注销仅由单一初始化任务执行；CAN 对象和 context 必须保持有效。
  */
-class CanRxNode
+template <typename CanT>
+class CanRxNodeT
 {
 public:
   /** @note 在接收任务中同步调用，应短且不阻塞；rx 仅在回调期间有效。 */
   using Callback = Status (*)(void *context, const CanRxMsg &rx);
 
+  /**
+   * @brief 初始化阶段注册接收节点，相同 CAN、帧类型和 ID 不允许重复。
+   * @return 成功返回节点；失败返回 nullptr，参数/冲突/资源错误记入系统初始化错误。
+   */
+  static CanRxNodeT *regist(CanT &can_item, uint32_t can_id, Callback callback, void *context = nullptr,
+                            uint32_t id_type = FDCAN_STANDARD_ID);
+
+  /** @brief 初始化阶段注销并销毁接收节点。 */
+  static Status unregist(CanT &can_item, CanRxNodeT *node);
+
+  /** @brief 运行态后冻结注册，防止任务运行期间修改链表。 */
+  static void freeze() { _frozen = true; }
+
+  /**
+   * @brief 接收任务调用：把一帧分发给本类型 CAN 上匹配的节点。
+   * @return true=有节点消费了这帧；false=没有节点认领。
+   */
+  static bool dispatch(CanT &can_item, const CanRxMsg &rx);
+
+  /** @brief 指定 CAN 实例上已注册的接收节点数。 */
+  static uint32_t count_for(const CanT &can_item);
+
 private:
-  uint32_t   _can_id;
-  uint32_t   _id_type;
-  Callback   _callback;
-  void      *_context;
-  CanRxNode *next;
+  CanT       *_can;
+  uint32_t    _can_id;
+  uint32_t    _id_type;
+  Callback    _callback;
+  void       *_context;
+  CanRxNodeT *next;
 
-  static uint8_t       node_num;
-  static bool          frozen;
+  CanRxNodeT(CanT &can_item, uint32_t can_id, Callback callback, void *context, uint32_t id_type) :
+    _can(&can_item), _can_id(can_id), _id_type(id_type), _callback(callback), _context(context), next(nullptr)
+  {
+  }
 
-  CanRxNode(uint32_t can_id, Callback callback, void *context, uint32_t id_type);
-  ~CanRxNode() = default;
-  // 记忆运行状态，防止运行标志清除后重新修改注册表。
-  static bool is_frozen(void);
+  ~CanRxNodeT() = default;
 
-  friend CanRxNode *regist(BspCan &can_item, uint32_t can_id, Callback callback, void *context, uint32_t id_type);
-  friend Status unregist(BspCan &can_item, CanRxNode *node);
-  friend void can_rx_task(void *argument);
-
-public:
-  CanRxNode(const CanRxNode &) = delete;
-  CanRxNode &operator=(const CanRxNode &) = delete;
-  CanRxNode(CanRxNode &&) = delete;
-  CanRxNode &operator=(CanRxNode &&) = delete;
+  static inline CanRxNodeT *_head   = nullptr;
+  static inline uint32_t    _num    = 0U;
+  static inline bool        _frozen = false;
 };
 
-/**
- * @brief 初始化阶段注册接收节点，相同 CAN、帧类型和 ID 不允许重复。
- * @param can_item 所用 CAN 对象。
- * @param can_id 标准帧 11 位或扩展帧 29 位 ID。
- * @param callback 非空接收回调。
- * @param context 回调对象指针，可为空，必须保持有效。
- * @param id_type FDCAN_STANDARD_ID（默认）或 FDCAN_EXTENDED_ID。
- * @return 成功返回节点；失败返回 nullptr，参数/冲突/资源错误记入系统初始化错误。
- * @note 必须在 system_init()（内含 SysFlagInit()）之后、system_start() 之前的初始化阶段调用；节点总数上限 CAN_RX_NODE_MAX（默认 50）。
- */
-CanRxNode *regist(BspCan &can_item, uint32_t can_id, CanRxNode::Callback callback, void *context = nullptr, uint32_t id_type = FDCAN_STANDARD_ID);
+template <typename CanT>
+CanRxNodeT<CanT> *CanRxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, Callback callback, void *context,
+                                           uint32_t id_type)
+{
+  if (_frozen)
+  {
+    return nullptr;
+  }
+  if (callback == nullptr || can_id > ((id_type == FDCAN_EXTENDED_ID) ? 0x1FFFFFFFU : 0x7FFU) ||
+      (id_type != FDCAN_STANDARD_ID && id_type != FDCAN_EXTENDED_ID))
+  {
+    SysInitError(Status::BAD_ARG);
+    return nullptr;
+  }
+  for (CanRxNodeT *node = _head; node != nullptr; node = node->next)
+  {
+    if (node->_can == &can_item && node->_can_id == can_id && node->_id_type == id_type)
+    {
+      SysInitError(Status::BUSY);
+      return nullptr;
+    }
+  }
+  if (_num >= CAN_RX_NODE_MAX)
+  {
+    SysInitError(Status::FULL);
+    return nullptr;
+  }
+  CanRxNodeT *node = new (std::nothrow) CanRxNodeT(can_item, can_id, callback, context, id_type);
+  if (node == nullptr)
+  {
+    SysInitError(Status::FULL);
+    return nullptr;
+  }
+  node->next = _head;
+  _head      = node;
+  ++_num;
+  return node;
+}
 
-/**
- * @brief 初始化阶段注销并销毁接收节点。
- * @param can_item 注册节点所属的 CAN 对象。
- * @param node 注册返回的节点指针；成功后调用方必须置空。
- * @return OK 成功；BAD_ARG 指针无效；NOT_SUPPORTED 已冻结，节点保持有效。
- * @note 不支持运行期注销；必须在销毁回调上下文之前注销成功。
- */
-Status unregist(BspCan &can_item, CanRxNode *node);
+template <typename CanT>
+Status CanRxNodeT<CanT>::unregist(CanT &can_item, CanRxNodeT *node)
+{
+  if (node == nullptr || _frozen)
+  {
+    return Status::NOT_SUPPORTED;
+  }
+  CanRxNodeT **link = &_head;
+  while (*link != nullptr)
+  {
+    if (*link == node)
+    {
+      if (node->_can != &can_item)
+      {
+        return Status::BAD_ARG;
+      }
+      *link = node->next;
+      delete node;
+      --_num;
+      return Status::OK;
+    }
+    link = &(*link)->next;
+  }
+  return Status::BAD_ARG;
+}
+
+template <typename CanT>
+bool CanRxNodeT<CanT>::dispatch(CanT &can_item, const CanRxMsg &rx)
+{
+  for (CanRxNodeT *node = _head; node != nullptr; node = node->next)
+  {
+    if (node->_can == &can_item && node->_can_id == rx.header.Identifier && node->_id_type == rx.header.IdType)
+    {
+      return node->_callback(node->_context, rx) == Status::OK;
+    }
+  }
+  return false;
+}
+
+template <typename CanT>
+uint32_t CanRxNodeT<CanT>::count_for(const CanT &can_item)
+{
+  uint32_t count = 0U;
+  for (CanRxNodeT *node = _head; node != nullptr; node = node->next)
+  {
+    if (node->_can == &can_item)
+    {
+      ++count;
+    }
+  }
+  return count;
+}
 
 #endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE
 

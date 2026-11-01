@@ -431,7 +431,7 @@ Status BspSpiDevice::init()
   {
     return Status::NOT_INIT;
   }
-  if (_cs.init(BspGpio::Config(_cs.get_port(), _cs.get_pin())) != Status::OK)
+  if (_cs.port() == nullptr || _cs.pin() == 0U)
   {
     return Status::BAD_ARG;
   }

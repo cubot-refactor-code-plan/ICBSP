@@ -10,8 +10,8 @@
 #include <cmath>
 #include <cstdlib>
 
-template<MotorType type>
-DjiMotor<type>::DjiMotor(BspCan &can_item,
+template<MotorType type, typename CanT>
+DjiMotor<type, CanT>::DjiMotor(CanT &can_item,
         uint8_t motor_id,
         float ratio,
         float offset,
@@ -91,13 +91,13 @@ _feedback_ready(false)
   data_mutex_attr.name = data_mutex_name;
 }
 
-template <MotorType type>
-DjiMotor<type>::~DjiMotor()
+template <MotorType type, typename CanT>
+DjiMotor<type, CanT>::~DjiMotor()
 {
   // 接收节点持有 this；必须在上下文销毁之前成功注销。
   if (_rx_node != nullptr)
   {
-    const Status result = unregist(*_can_item, _rx_node);
+    const Status result = CanRxNodeT<CanT>::unregist(*_can_item, _rx_node);
     configASSERT(result == Status::OK);
     if (result != Status::OK)
     {
@@ -108,7 +108,7 @@ DjiMotor<type>::~DjiMotor()
   }
   if (_tx_node != nullptr)
   {
-    const Status result = unregist(_tx_node, _bus_slot);
+    const Status result = CanTxNodeT<CanT>::unregist(_tx_node, _bus_slot);
     configASSERT(result == Status::OK);
     if (result != Status::OK)
     {
@@ -128,8 +128,8 @@ DjiMotor<type>::~DjiMotor()
   // _online 是成员对象，其析构函数会自动注销在线检查节点。
 }
 
-template<MotorType type>
-Status DjiMotor<type>::init()
+template<MotorType type, typename CanT>
+Status DjiMotor<type, CanT>::init()
 {
   // 系统事件未就绪时保留对象状态，允许初始化流程稍后重试。
   if (sysEvent == nullptr)
@@ -221,7 +221,7 @@ Status DjiMotor<type>::init()
   }
 
   // 注册
-  _tx_node = regist(*_can_item,tx_can_id,4,_bus_slot);
+  _tx_node = CanTxNodeT<CanT>::regist(*_can_item, tx_can_id, 4U, _bus_slot);
   if ( _tx_node == nullptr )
   {
     osMutexDelete(data_mutex_headler);
@@ -232,11 +232,11 @@ Status DjiMotor<type>::init()
   }
 
   const uint32_t feedback_id = (type == Motor6020 ? 0x204U : 0x200U) + _motor_id;
-  _rx_node = regist(*_can_item, feedback_id, &DjiMotor<type>::rx_callback, this);
+  _rx_node = CanRxNodeT<CanT>::regist(*_can_item, feedback_id, &DjiMotor<type, CanT>::rx_callback, this);
   if (_rx_node == nullptr)
   {
     // 注册器已记录具体冲突/资源错误；撤销本次初始化取得的发送槽位和锁。
-    const Status result = unregist(_tx_node, _bus_slot);
+    const Status result = CanTxNodeT<CanT>::unregist(_tx_node, _bus_slot);
     configASSERT(result == Status::OK);
     (void)result;
     _tx_node = nullptr;
@@ -250,14 +250,14 @@ Status DjiMotor<type>::init()
   return _statu;
 }
 
-template <MotorType type>
-Status DjiMotor<type>::rx_callback(void *context, const CanRxMsg &rx)
+template <MotorType type, typename CanT>
+Status DjiMotor<type, CanT>::rx_callback(void *context, const CanRxMsg &rx)
 {
-  return static_cast<DjiMotor<type> *>(context)->DataUnpack(rx);
+  return static_cast<DjiMotor<type, CanT> *>(context)->DataUnpack(rx);
 }
 
-template <MotorType type>
-Status DjiMotor<type>::DataUnpack(const CanRxMsg &rx)
+template <MotorType type, typename CanT>
+Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
 {
   if (_tx_node == nullptr || data_mutex_headler == nullptr)
   {
@@ -320,8 +320,8 @@ Status DjiMotor<type>::DataUnpack(const CanRxMsg &rx)
   return Status::OK;
 }
 
-template<MotorType type>
-Status DjiMotor<type>::FillData(int16_t output)
+template<MotorType type, typename CanT>
+Status DjiMotor<type, CanT>::FillData(int16_t output)
 {
   if (_statu != Status::OK )
   {
@@ -344,45 +344,45 @@ Status DjiMotor<type>::FillData(int16_t output)
 
 }
 
-template <MotorType type>
-const MotorData &DjiMotor<type>::data(void) const
+template <MotorType type, typename CanT>
+const MotorData &DjiMotor<type, CanT>::data(void) const
 {
   return _data;
 }
 
-template <MotorType type>
-const DjiMotorRawData &DjiMotor<type>::raw_data(void) const
+template <MotorType type, typename CanT>
+const DjiMotorRawData &DjiMotor<type, CanT>::raw_data(void) const
 {
   return _raw_data;
 }
 
-template <MotorType type>
-const DjiMotorParam &DjiMotor<type>::param(void) const
+template <MotorType type, typename CanT>
+const DjiMotorParam &DjiMotor<type, CanT>::param(void) const
 {
   return _param;
 }
 
-template <MotorType type>
-const Online &DjiMotor<type>::online(void) const
+template <MotorType type, typename CanT>
+const Online &DjiMotor<type, CanT>::online(void) const
 {
   return _online;
 }
 
-template <MotorType type>
-const LuenbergerMotorData &DjiMotor<type>::lvboData(void) const
+template <MotorType type, typename CanT>
+const LuenbergerMotorData &DjiMotor<type, CanT>::lvboData(void) const
 {
   return _lvbo_data;
 }
 
-template <MotorType type>
-Status DjiMotor<type>::statu(void) const
+template <MotorType type, typename CanT>
+Status DjiMotor<type, CanT>::statu(void) const
 {
   return _statu;
 }
 
 // 为支持的电机型号生成已定义成员的符号，供其他编译单元链接。
-template class DjiMotor<Motor3508>;
-template class DjiMotor<Motor6020>;
-template class DjiMotor<Motor2006>;
+template class DjiMotor<Motor3508, BspCanT<16, 16>>;
+template class DjiMotor<Motor6020, BspCanT<16, 16>>;
+template class DjiMotor<Motor2006, BspCanT<16, 16>>;
 
 #endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE && CAN_TX_ENABLE

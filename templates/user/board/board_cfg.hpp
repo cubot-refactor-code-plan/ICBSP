@@ -26,14 +26,14 @@
 
 /* ==================== 函数声明 ==================== */
 
-/** @brief 板级初始化：各实例 init()（实例在 init() 时登记进库的登记表） */
+/** @brief 板级初始化：各实例 init() */
 void board_init(void);
 
 
 /* ==================== 实例声明 ==================== */
 
-extern BspCan       bsp_can1;   ///< CAN1
-extern BspUart<128> bsp_uart1;  ///< 串口 1（128 字节收发缓冲）
+extern BspCanT<16, 16> bsp_can1;   ///< CAN1（16 帧接收 / 16 帧发送缓冲）
+extern BspUartT<uart_detail::DmaTransport, 128, 128> bsp_uart1; ///< 串口 1（DMA，128 字节收发缓冲）
 extern BspPwm       bsp_pwm_buzzer; ///< 蜂鸣器 PWM 通道
 extern DeviceBuzzer buzzer;     ///< 无源蜂鸣器（设备层，绑定 bsp_pwm_buzzer）
 
