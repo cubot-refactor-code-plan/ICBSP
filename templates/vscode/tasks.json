@@ -1,0 +1,119 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        /* ==================== 编译 ==================== */
+        {
+            "label": "Build",
+            "detail": "增量编译（cmake --build --preset {{PRESET}}）",
+            "type": "shell",
+            "command": "cmake --build --preset {{PRESET}}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                {
+                    "owner": "cpp",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": {
+                        "regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning|note):\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "message": 5
+                    }
+                }
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Clean_Rebuild",
+            "detail": "删除 build/{{PRESET}} 后重新配置并编译",
+            "type": "shell",
+            "command": "rm -rf build/{{PRESET}} && cmake --preset {{PRESET}} && cmake --build --preset {{PRESET}}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                {
+                    "owner": "cpp",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": {
+                        "regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning|note):\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "message": 5
+                    }
+                }
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Clean",
+            "detail": "仅删除构建产物 build/{{PRESET}}",
+            "type": "shell",
+            "command": "rm -rf build/{{PRESET}}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        /* ==================== 烧录 ==================== */
+        // 脚本自己递归找 build/ 下的 .elf，不需要 VS Code 传路径
+        {
+            "label": "OpenOCD_flash",
+            "detail": "OpenOCD + CMSIS-DAP 烧录",
+            "type": "process",
+            "command": "${workspaceFolder}/Flash/OpenOCD_flash.sh",
+            "windows": {
+                "command": "${workspaceFolder}\\Flash\\OpenOCD_flash.bat"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "JLink_flash",
+            "detail": "经 OpenOCD 的 jlink 适配器烧录",
+            "type": "process",
+            "command": "${workspaceFolder}/Flash/JLink_flash.sh",
+            "windows": {
+                "command": "${workspaceFolder}\\Flash\\JLink_flash.bat"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

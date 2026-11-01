@@ -13,6 +13,8 @@
 | `user/app/app_main.*` | `user/app/` | `app_init()` 与 `StartDefaultTask()` |
 | `user/app/app_task.hpp` | `user/app/` | 示例任务声明（heartbeat / monitor） |
 | `user/app/task/demo_task.cpp` | `user/app/task/` | 示例任务实现，不自动创建 |
+| `vscode/settings.json`、`vscode/tasks.json`、`vscode/launch.json` | 宿主 `.vscode/` | 编译 / 烧录任务与调试配置，宿主没有才生成；有就只补缺失项 |
+| `Flash/OpenOCD_flash.*`、`Flash/JLink_flash.*`、`Flash/*.cfg` | 宿主 `Flash/` | 烧录脚本，运行时按工程名在 `build/` 下递归找 `.elf`；`.sh` 自动加可执行权限 |
 
 `board_cfg.*` 用的是 `hfdcan1` / `huart1` / `htim12`，换成实际外设；没开的外设连同 `#include` 一起删。新增实例时同时改 `board_instances.hpp`，否则 HAL 回调找不到它。
 
@@ -33,4 +35,16 @@ file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/use
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
 ```
+
+## .vscode 与 Flash
+
+`vscode/` 三个文件里的占位符由 `integrate.py` 填：`{{PRESET}}` 取 `--preset`，`{{PROJECT}}` 取根
+`CMakeLists.txt` 的 `CMAKE_PROJECT_NAME`，`{{MCU}}` / `{{DEVICE}}` / `{{OPENOCD_TARGET}}` 按 `.ioc` 的
+`Mcu.Name` 推出来（`STM32H723VGTx` → device `STM32H723VG`、target `stm32h7x.cfg`）。
+
+宿主已经有这三个文件时，脚本按 `settings.json` 的键名、`tasks[].label`、`configurations[].name`
+补缺失项，原有的键、任务、调试配置以及注释都不动（JSONC 支持 `//`、`/* */` 与尾逗号）。
+
+SVD 不随本目录分发：只有宿主 `Flash/` 下真的有匹配的 `.svd`，`launch.json` 才写 `svdFile`；
+没有就去掉这一项并提示一次——外设寄存器面板不可用，断点、变量、内存、反汇编都不受影响。
 
