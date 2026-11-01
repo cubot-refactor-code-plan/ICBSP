@@ -20,6 +20,9 @@ stm32_framework 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX�
      任务与调试配置（原有内容与注释都保留）。工程名取 CMAKE_PROJECT_NAME，芯片与 OpenOCD target 取 .ioc
      的 Mcu.Name；宿主 Flash/ 下有 SVD 才写 svdFile，没有就不写并提示一次
  10. 复制 Flash/ 烧录脚本（templates/Flash）：脚本运行时自己在 build/ 下递归找 .elf，不需要传路径
+ 11. 生成 .clang-format（沿用库根目录那一份，Language: Cpp 只作用于 C++）与 .clangd
+     （templates/clang：CompilationDatabase 指向该预设的构建目录 + 本机交叉工具链的 query-driver）。
+     两者都已存在时不覆盖，只校对内容是否还对得上
 
 所有片段都从 templates/ 读取，与模板保持一致。只改内容仍是 CubeMX 默认的 USER CODE 段；遇到已有自定义内容
 就报错并说明要手动合并的位置。任何一步报错都不写任何文件。保持各文件原有的行尾（CRLF / LF）。
@@ -104,6 +107,7 @@ class Plan:
         self.edits[tf.path] = tf
 
     def create(self, path, text):
+        """登记一个新文件：text 为 str 时按 UTF-8 写入，为 bytes 时原样写（保留行尾）"""
         self.new_files[path] = text
 
     def chmod(self, path, mode):
@@ -134,7 +138,10 @@ class Plan:
                 tf.path.write_bytes(tf.to_bytes())
         for path, text in self.new_files.items():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
+            if isinstance(text, bytes):
+                path.write_bytes(text)
+            else:
+                path.write_text(text, encoding="utf-8")
         for path, mode in self.modes.items():
             path.chmod(mode)
 
@@ -1063,6 +1070,67 @@ def plan_flash(host, plan, rep, info):
         rep.skip(step, "Flash/ 脚本已存在")
 
 
+# ==================== 9. clangd：.clang-format / .clangd ====================
+
+
+CLANGD = TEMPLATES / "clang"
+CLANGD_FILE = CLANGD / ".clangd"
+CLANGD_FLAGS = CLANGD / "compile_flags.yaml"
+CLANG_FORMAT = LIB_ROOT / ".clang-format"
+
+
+def plan_clang(host, plan, rep, info):
+    """
+    生成 .clang-format 与 .clangd（已存在的不覆盖，但会校对 / 补缺）
+
+    - `.clang-format` 直接用库根目录那一份：唯一来源，不在 templates 里再存一份，避免两处不同步。
+      它带 `Language: Cpp`，只格式 C++，CubeMX 生成的 Core/Src/*.c 不会被改。
+    - `.clangd` 按 CMakePresets 的 binaryDir 填 CompilationDatabase，按本机工具链位置填
+      --query-driver；缺了这两项 clangd 就会把 Cortex-M 工程标成一片红。
+      宿主已经有手写 `.clangd` 时**不覆盖**：没有 CompileFlags 就把这一段补在最前面，
+      已有 CompileFlags 就用 [注意] 提示手动改（避免动别人写好的配置）。
+    """
+    step = "clangd"
+
+    dst = host / ".clang-format"
+    if dst.exists():
+        if dst.read_bytes() == CLANG_FORMAT.read_bytes():
+            rep.skip(step, ".clang-format 已存在（与库风格一致）")
+        else:
+            rep.warn(step, ".clang-format 已存在但与库风格不同：保留宿主的；想要库风格就先删掉再重跑")
+    else:
+        # 按字节复制：库那份是 CRLF，经文本读写会被换成 LF
+        plan.create(dst, CLANG_FORMAT.read_bytes())
+        rep.ok(step, "新建 .clang-format（与库一致；Language: Cpp，不碰 CubeMX 生成的 .c）")
+
+    dst = host / ".clangd"
+    if not dst.exists():
+        plan.create(dst, render_template(CLANGD_FILE, info))
+        rep.ok(step, f"新建 .clangd（编译数据库 {info['COMPILE_COMMANDS_DIR']}，query-driver {info['QUERY_DRIVER']}）")
+        return
+
+    tf = TextFile(dst)
+    if info["COMPILE_COMMANDS_DIR"] in tf.text:
+        rep.skip(step, f".clangd 已存在（编译数据库 {info['COMPILE_COMMANDS_DIR']}）")
+        return
+    if re.search(r"^CompileFlags\s*:", tf.text, re.M):
+        rep.warn(
+            step,
+            f".clangd 已有 CompileFlags 但没指向 {info['COMPILE_COMMANDS_DIR']}："
+            "把 CompilationDatabase 改成该目录（换过预设时一定要改，否则索引的是旧构建）",
+        )
+        return
+    # 宿主的手写配置里没有 CompileFlags：把这一段补在最前面，其余保持原样
+    block = render_template(CLANGD_FLAGS, info)
+    tf.text = block + "\n" + tf.text.lstrip("\n")
+    plan.edit(tf)
+    rep.ok(
+        step,
+        f"在已有 .clangd 顶部补 CompileFlags（编译数据库 {info['COMPILE_COMMANDS_DIR']}，"
+        f"query-driver {info['QUERY_DRIVER']}），原有配置未改动",
+    )
+
+
 # ==================== 入口 ====================
 
 
@@ -1089,6 +1157,7 @@ def main():
     ap.add_argument("--no-hardware-config", action="store_true", help="不复制 hardware_config.h")
     ap.add_argument("--no-vscode", action="store_true", help="不处理 .vscode/settings.json、tasks.json、launch.json")
     ap.add_argument("--no-flash", action="store_true", help="不复制 Flash/ 烧录脚本")
+    ap.add_argument("--no-clang", action="store_true", help="不生成 .clang-format / .clangd")
     args = ap.parse_args()
 
     host = (args.host or default_host()).resolve()
@@ -1106,12 +1175,14 @@ def main():
         if not args.no_hardware_config:
             plan_hardware_config(host, plan, rep, args.board_dir)
         plan_cmake(host, plan, rep, args.board_dir, args.app_dir, args.user_dir)
-        if not args.no_vscode or not args.no_flash:
+        if not args.no_vscode or not args.no_flash or not args.no_clang:
             info = detect_project(host, rep, args.preset)
             if not args.no_vscode:
                 plan_vscode(host, plan, rep, info)
             if not args.no_flash:
                 plan_flash(host, plan, rep, info)
+            if not args.no_clang:
+                plan_clang(host, plan, rep, info)
     rep.print()
 
     if rep.has_error:
@@ -1131,7 +1202,7 @@ def main():
         f"  2. 业务任务写在 {args.app_dir}/task/；示例 heartbeat/monitor 不自动创建，需要时在 StartDefaultTask() 里 xTaskCreate\n"
         f"  3. cmake --preset {args.preset} && cmake --build --preset {args.preset}\n"
         f"  4. 烧录：bash Flash/OpenOCD_flash.sh 或 bash Flash/JLink_flash.sh（自动在 build/ 下找 .elf）\n"
-        "  5. VS Code 里 clangd: Restart language server"
+        "  5. VS Code 里执行 clangd: Restart language server（.clangd 已指向该预设的编译数据库）"
     )
     return 0
 
