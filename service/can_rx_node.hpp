@@ -9,6 +9,7 @@
 
 #include "bsp_can.hpp"
 #include "status.hpp"
+#include "system.hpp"
 
 #include <new>
 
@@ -77,26 +78,26 @@ CanRxNodeT<CanT> *CanRxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, Call
   if (callback == nullptr || can_id > ((id_type == FDCAN_EXTENDED_ID) ? 0x1FFFFFFFU : 0x7FFU) ||
       (id_type != FDCAN_STANDARD_ID && id_type != FDCAN_EXTENDED_ID))
   {
-    SysInitError(Status::BAD_ARG);
+    sys_state.init_error(Status::BAD_ARG);
     return nullptr;
   }
   for (CanRxNodeT *node = _head; node != nullptr; node = node->next)
   {
     if (node->_can == &can_item && node->_can_id == can_id && node->_id_type == id_type)
     {
-      SysInitError(Status::BUSY);
+      sys_state.init_error(Status::BUSY);
       return nullptr;
     }
   }
   if (_num >= CAN_RX_NODE_MAX)
   {
-    SysInitError(Status::FULL);
+    sys_state.init_error(Status::FULL);
     return nullptr;
   }
   CanRxNodeT *node = new (std::nothrow) CanRxNodeT(can_item, can_id, callback, context, id_type);
   if (node == nullptr)
   {
-    SysInitError(Status::FULL);
+    sys_state.init_error(Status::FULL);
     return nullptr;
   }
   node->next = _head;
