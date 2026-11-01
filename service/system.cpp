@@ -16,13 +16,13 @@ namespace
 {
 bool has_tx_nodes()
 {
-#define X(name)                                  \
-  if (CanTxNodeT<decltype(name)>::count_for(name) > 0U) \
-  {                                              \
-    return true;                                 \
-  }
+#  define X(name)                                         \
+    if (CanTxNodeT<decltype(name)>::count_for(name) > 0U) \
+    {                                                     \
+      return true;                                        \
+    }
   BSP_CAN_INSTANCES(X)
-#undef X
+#  undef X
   return false;
 }
 } // namespace
