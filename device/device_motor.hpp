@@ -28,21 +28,19 @@
 
 #include "bsp_encoder.hpp" // 测速反馈
 #include "bsp_pwm.hpp"     // H 桥两路输出
-#include "bsp_uart.hpp"    // pid_print() 的打印串口
 #include "pid.hpp"         // 速度环
 #include "status.hpp"      // 统一状态码
 
+#include <stddef.h>
 #include <stdint.h>
 
 /**
  * @brief 电机设备类
  *
- * @tparam Uart 打印 JustFloat 用的串口类型（BspUartT<...>）
- *
  * @note 生命周期：init() 一次 → 每拍 update(dt_s)；init() 前 update() 安全返回 false。
+ * @note 不绑定串口：JustFloat 帧由 pid_frame() 组好交给调用方，发送在 App 层做。
  */
-template <typename Uart>
-class DeviceMotorT
+class DeviceMotor
 {
 public:
   // ---------------- 配置 ----------------
@@ -85,18 +83,16 @@ public:
     float deadband_cm_s = 0.4f;
 
     PID::Config pid {}; ///< 速度环参数（默认全 0，靠实机标定）
-
-    Uart *uart = nullptr; ///< 打印串口（nullptr = pid_print() 什么也不发）
   };
 
   // ----------------
   // ---------------- 公有接口 ----------------
 
   /** @brief 默认构造：未绑定，init() 返回 BAD_ARG */
-  DeviceMotorT() = default;
+  DeviceMotor() = default;
 
   /** @brief 构造：只保存配置（不碰硬件） */
-  explicit DeviceMotorT(const Config &cfg);
+  explicit DeviceMotor(const Config &cfg);
 
   /**
    * @brief 初始化：校验绑定与机械参数、算出 counts_per_cm、把两路 PWM 归 0
@@ -136,13 +132,25 @@ public:
    */
   bool update(float dt_s);
 
+  /** @brief JustFloat 可拼的数据位 */
+  enum PidField : uint8_t
+  {
+    PID_TARGET   = 1U << 0, ///< 目标值
+    PID_FEEDBACK = 1U << 1, ///< 反馈值
+    PID_OUTPUT   = 1U << 2, ///< PID 原始输出
+    PID_ALL      = PID_TARGET | PID_FEEDBACK | PID_OUTPUT,
+  };
+
   /**
-   * @brief 把本电机 PID 的「目标值 + 实测值」按 JustFloat 发到 Config::uart
+   * @brief 按 JustFloat 协议组帧，返回实际长度
    *
-   * @note 时机由调用方决定（PID 自己不会发）：例如调参任务里每 10 ms 调一次。
-   * @note 没绑 uart 时什么也不做；发送不阻塞，串口队列满就丢这一帧。
+   * @param buf    输出缓冲，至少 16 字节
+   * @param fields 要拼的数据：PID_TARGET / PID_FEEDBACK / PID_OUTPUT 任意组合
+   * @return 实际字节数（4 × 数据个数 + 4）；buf 为空或 fields 无效返回 0
+   *
+   * @note 帧尾固定 00 00 80 7F；本函数只组帧，发送由调用方负责。
    */
-  void pid_print();
+  size_t pid_frame(uint8_t *buf, uint8_t fields = PID_ALL) const;
 
   // ----------------
   // ---------------- 查询 ----------------
