@@ -63,8 +63,9 @@ extern "C"
   void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if (false) {}
 #define X(name) \
-    if (hspi == name.handle()) { name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); }
+    else if (hspi == name.handle()) { name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); }
     BSP_SPI_INSTANCES(X)
 #undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -74,8 +75,9 @@ extern "C"
   void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if (false) {}
 #define X(name) \
-    if (hspi == name.handle()) { name.on_error_isr(&xHigherPriorityTaskWoken); }
+    else if (hspi == name.handle()) { name.on_error_isr(&xHigherPriorityTaskWoken); }
     BSP_SPI_INSTANCES(X)
 #undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
