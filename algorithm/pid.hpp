@@ -265,11 +265,6 @@ public:
    */
   void reset();
 
-  /**
-   * @brief 快速打印target和feedback到vofa [暂未实现]
-   */
-  void print();
-
   /** @brief PID 最近一拍的输入与原始输出（供波形 / 调试读取） */
   struct Data
   {
