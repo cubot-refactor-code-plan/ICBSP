@@ -28,32 +28,52 @@ extern "C"
   void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    if (false) {}
-#define X(name) \
-    else if (hfdcan == name.handle()) { name.process_fifo0_isr(RxFifo0ITs, &xHigherPriorityTaskWoken); }
+    if (false)
+    {
+    }
+
+#  define X(name)                                                    \
+    else if (hfdcan == name.handle())                                \
+    {                                                                \
+      name.process_fifo0_isr(RxFifo0ITs, &xHigherPriorityTaskWoken); \
+    }
     BSP_CAN_INSTANCES(X)
-#undef X
+#  undef X
+
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
   void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    if (false) {}
-#define X(name) \
-    else if (hfdcan == name.handle()) { name.trigger_tx_from_isr(&xHigherPriorityTaskWoken); }
+    if (false)
+    {
+    }
+
+#  define X(name)                                          \
+    else if (hfdcan == name.handle())                      \
+    {                                                      \
+      name.trigger_tx_from_isr(&xHigherPriorityTaskWoken); \
+    }
     BSP_CAN_INSTANCES(X)
-#undef X
+#  undef X
+
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
   void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
   {
-    if (false) {}
-#define X(name) \
-    else if (hfdcan == name.handle()) { name.process_error_isr(ErrorStatusITs); }
+    if (false)
+    {
+    }
+
+#  define X(name)                             \
+    else if (hfdcan == name.handle())         \
+    {                                         \
+      name.process_error_isr(ErrorStatusITs); \
+    }
     BSP_CAN_INSTANCES(X)
-#undef X
+#  undef X
   }
 }
 
@@ -229,8 +249,8 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::read_raw(CanRxMsg *msg, uint32_t timeout_ms)
   {
     return Status::NOT_INIT;
   }
-  const TickType_t wait = (timeout_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
-  const size_t received = xMessageBufferReceive(_rx_message_buffer, msg, sizeof(CanRxMsg), wait);
+  const TickType_t wait     = (timeout_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+  const size_t     received = xMessageBufferReceive(_rx_message_buffer, msg, sizeof(CanRxMsg), wait);
   return (received > 0) ? Status::OK : Status::TIMEOUT;
 }
 
@@ -333,7 +353,10 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::service_recovery()
     // 均为非阻塞缓冲
     xMessageBufferReset(_tx_message_buffer);
     xMessageBufferReset(_rx_message_buffer);
-    if (_rx_return_buffer != nullptr) { xMessageBufferReset(_rx_return_buffer); }
+    if (_rx_return_buffer != nullptr)
+    {
+      xMessageBufferReset(_rx_return_buffer);
+    }
     // 取消硬件中旧控制帧，取消请求在重新启动后由硬件完成。
     _hfdcan->Instance->TXBCR = _hfdcan->Instance->TXBRP;
   }

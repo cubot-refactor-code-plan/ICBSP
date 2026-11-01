@@ -1,6 +1,6 @@
 #include "bsp_uart.hpp"
-#include "board_instances.hpp"
 #include "FreeRTOS.h" // IWYU pragma: keep
+#include "board_instances.hpp"
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -26,31 +26,53 @@ extern "C"
   void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   {
     BaseType_t woken = pdFALSE;
-    if (false) {}
-#define X(name) \
-    else if (huart == name.handle()) { name.on_idle_isr(Size, &woken); }
-    BSP_UART_INSTANCES(X)
+    if (false)
+    {
+    }
+
+#define X(name)                     \
+  else if (huart == name.handle())  \
+  {                                 \
+    name.on_idle_isr(Size, &woken); \
+  }
+  BSP_UART_INSTANCES(X)
 #undef X
+
     portYIELD_FROM_ISR(woken);
   }
+
 
   void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   {
     BaseType_t woken = pdFALSE;
-    if (false) {}
-#define X(name) \
-    else if (huart == name.handle()) { name.start_transmission_from_isr(&woken); }
-    BSP_UART_INSTANCES(X)
+    if (false)
+    {
+    }
+
+#define X(name)                               \
+  else if (huart == name.handle())            \
+  {                                           \
+    name.start_transmission_from_isr(&woken); \
+  }
+  BSP_UART_INSTANCES(X)
 #undef X
+
     portYIELD_FROM_ISR(woken);
   }
 
+
   void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   {
-    if (false) {}
-#define X(name) \
-    else if (huart == name.handle()) { name.on_error_isr(); }
-    BSP_UART_INSTANCES(X)
+    if (false)
+    {
+    }
+
+#define X(name)                    \
+  else if (huart == name.handle()) \
+  {                                \
+    name.on_error_isr();           \
+  }
+  BSP_UART_INSTANCES(X)
 #undef X
   }
 }
@@ -72,7 +94,7 @@ DmaRxFlags read_dma_rx_flags(const UART_HandleTypeDef *huart)
 {
   DmaRxFlags flags {};
 
-  flags.hal_busy = (huart->RxState == HAL_UART_STATE_BUSY_RX); 
+  flags.hal_busy = (huart->RxState == HAL_UART_STATE_BUSY_RX);
   flags.dmaren   = ((huart->Instance->CR3 & USART_CR3_DMAR) != 0U);
 
   if (huart->hdmarx != nullptr && IS_DMA_STREAM_INSTANCE(huart->hdmarx->Instance) != 0U)
@@ -493,7 +515,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
   {
     _tx_inflight_len       = rest;
     _tx_last_activity_tick = xTaskGetTickCount();
-    _tx_stall_rec_cnt = _tx_stall_rec_cnt + 1;
+    _tx_stall_rec_cnt      = _tx_stall_rec_cnt + 1;
     return true;
   }
 
@@ -620,7 +642,7 @@ void BspUartT<Transport, RX_SIZE, TX_SIZE>::start_transmission_from_isr(BaseType
     // 启动失败：把刚取出的字节写回流缓冲区，避免丢数据。
     // 恢复动作由巡检任务进行（tx_recover函数）
     (void)xStreamBufferSendFromISR(_tx_stream_buffer, _tx_buffer, bytes_to_send, pxHigherPriorityTaskWoken);
-    _tx_inflight_len = 0;
+    _tx_inflight_len   = 0;
     _tx_start_fail_cnt = _tx_start_fail_cnt + 1;
   }
   else
@@ -773,7 +795,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::arm_reception()
   if (!Transport::arm_rx(_huart, _rx_buffer, RX_SIZE))
   {
     _rx_arm_fail_cnt = _rx_arm_fail_cnt + 1; // 诊断：启动失败计数（正常应恒为 0）
-    return false;       // 启动失败：由调用方决定重试或上报
+    return false;                            // 启动失败：由调用方决定重试或上报
   }
   _rx_should_run = true;
   return true;
@@ -839,7 +861,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::start_transmission(TickType_t wait)
         // 启动失败：字节已从流缓冲区取出，必须回滚，否则丢数据。
         // 刚取出 n 字节，流缓冲区至少有 n 字节空间，所以这次回滚必定成功。
         (void)xStreamBufferSend(_tx_stream_buffer, _tx_buffer, bytes_to_send, 0);
-        _tx_inflight_len = 0; // 未启动 → 无在途数据
+        _tx_inflight_len   = 0; // 未启动 → 无在途数据
         _tx_start_fail_cnt = _tx_start_fail_cnt + 1;
       }
       else
