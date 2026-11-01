@@ -434,13 +434,14 @@ def check_board_cfg(host, rep, board_cfg_text, app_rel):
     if missing:
         rep.warn(step, f"模板用到 {', '.join(missing)}，本工程没有：在 {app_rel}/board_cfg.* 里删掉或换成实际句柄（连同 #include）")
 
-    for h, baud in re.findall(r"BspUartT<[^>]+>\s+\w+\(\{\s*\.huart\s*=\s*&(huart\d+)[^}]*\.baudrate\s*=\s*(\d+)U?", board_cfg_text):
+    for h, baud in re.findall(r"BspUartT<[^>]+>\s+\w+\(\s*\{\s*\.huart\s*=\s*&(huart\d+)[^}]*\.baudrate\s*=\s*(\d+)U?", board_cfg_text):
         if h in handles:
             m = re.search(rf"{h}\.Init\.BaudRate\s*=\s*(\d+)\s*;", handles[h].read_text(encoding="utf-8"))
             if m and m.group(1) != baud:
                 rep.warn(step, f"{h} 模板波特率 {baud}，CubeMX 是 {m.group(1)}：改 {app_rel}/board_cfg.hpp（必须一致）")
 
-    pwm = r"BspPwm\s+\w+\(\{\s*&(htim\d+)\s*,\s*\w+\s*,\s*(\d+)UL?\s*,\s*(\d+)U?\s*,\s*(\d+)U?\s*\}\)"
+    # 指定初始化器写法：.htim / .timer_clk_hz / .prescaler / .period，顺序按 board_cfg.hpp
+    pwm = r"BspPwm\s+\w+\(\s*\{\s*\.htim\s*=\s*&(htim\d+)[^}]*?\.timer_clk_hz\s*=\s*(\d+)UL?[^}]*?\.prescaler\s*=\s*(\d+)U?[^}]*?\.period\s*=\s*(\d+)U?"
     for h, clk, psc, arr in re.findall(pwm, board_cfg_text):
         if h not in handles:
             continue
