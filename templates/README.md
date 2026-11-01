@@ -7,8 +7,8 @@
 | `linker_sections.ld` | 宿主链接脚本 `SECTIONS { }` 里、`.data` 之前 | 可加载的 `.dma_buffer`（串口 / SPI 实例，DMA 可达的 AXI SRAM，`AT> FLASH`）与 `.noinit`（`fault_record`，复位保留） |
 | `FreeRTOSConfig_user_code.h` | `Core/Inc/FreeRTOSConfig.h` 的 USER CODE 1 段 | `configASSERT` → `fault_on_assert()` |
 | `freertos_user_code.c` | `Core/Src/freertos.c` 的 Includes / 4 / 5 / Init 段 | 栈溢出与分配失败钩子；`MX_FREERTOS_Init()` 调 `app_init()` |
-| `hardware_config.h` | `user/board/` | 必选：唯一配置源，所有宏、功能开关与范围检查都在这里 |
-| `user/board/board_cfg.*` | `user/board/` | 外设与设备实例、`board_init()` |
+| `user/board/hardware_config.h` | `user/board/` | 必选：唯一配置源，所有宏、功能开关与范围检查都在这里 |
+| `user/board/board_cfg.*` | `user/board/` | `board_cfg.hpp` 放 inline 外设实例，`board_cfg.cpp` 放 `board_init()` |
 | `user/board/board_instances.hpp` | `user/board/` | `BSP_CAN_INSTANCES` / `BSP_UART_INSTANCES` / `BSP_SPI_INSTANCES` 实例名清单，库的 HAL 回调与任务按它展开 |
 | `user/app/app_main.*` | `user/app/` | `app_init()` 与 `StartDefaultTask()` |
 | `user/app/app_task.hpp` | `user/app/` | 示例任务声明（heartbeat / monitor） |

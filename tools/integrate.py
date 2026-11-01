@@ -416,7 +416,7 @@ def host_handles(host):
 
 
 def check_board_cfg(host, rep, board_cfg_text, app_rel):
-    """模板 board_cfg.cpp 写的是 DM-MC02 的句柄与参数，对照本工程 CubeMX 生成的代码核对"""
+    """模板 board_cfg.hpp 写的是 DM-MC02 的句柄与参数，对照本工程 CubeMX 生成的代码核对"""
     step = "board_cfg"
     handles = host_handles(host)
     used = sorted(set(re.findall(r"&(h\w+)", strip_comments(board_cfg_text))))
@@ -428,7 +428,7 @@ def check_board_cfg(host, rep, board_cfg_text, app_rel):
         if h in handles:
             m = re.search(rf"{h}\.Init\.BaudRate\s*=\s*(\d+)\s*;", handles[h].read_text(encoding="utf-8"))
             if m and m.group(1) != baud:
-                rep.warn(step, f"{h} 模板波特率 {baud}，CubeMX 是 {m.group(1)}：改 {app_rel}/board_cfg.cpp（必须一致）")
+                rep.warn(step, f"{h} 模板波特率 {baud}，CubeMX 是 {m.group(1)}：改 {app_rel}/board_cfg.hpp（必须一致）")
 
     pwm = r"BspPwm\s+\w+\(\{\s*&(htim\d+)\s*,\s*\w+\s*,\s*(\d+)UL?\s*,\s*(\d+)U?\s*,\s*(\d+)U?\s*\}\)"
     for h, clk, psc, arr in re.findall(pwm, board_cfg_text):
@@ -439,7 +439,7 @@ def check_board_cfg(host, rep, board_cfg_text, app_rel):
             m = re.search(rf"{h}\.Init\.{field}\s*=\s*([^;]+);", src)
             have = eval_int(m.group(1)) if m else None
             if have is not None and have != int(want):
-                rep.warn(step, f"{h} 模板 {field} = {want}，CubeMX 是 {have}：改 {app_rel}/board_cfg.cpp")
+                rep.warn(step, f"{h} 模板 {field} = {want}，CubeMX 是 {have}：改 {app_rel}/board_cfg.hpp")
         rep.warn(step, f"{h} 的定时器时钟模板写的是 {clk} Hz（DM-MC02），按本工程时钟树核对")
 
 
@@ -466,7 +466,7 @@ def plan_app(host, plan, rep, board_dir, app_dir):
     if copied:
         rep.ok(step, f"复制 {', '.join(copied)}")
     else:
-        rep.skip(step, "board_cfg / app_main / app_task 已存在")
+        rep.skip(step, "board_cfg / board_instances / app_main / app_task 已存在")
     cfg_parts = []
     for name in ("board_cfg.hpp", "board_cfg.cpp"):
         cfg_path = board / name
@@ -546,7 +546,7 @@ def lib_block(lib_rel, board_rel, app_rel, user_rel):
         "target_link_libraries(${CMAKE_PROJECT_NAME} stm32_framework)\n"
         "target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_20)\n"
         f"target_include_directories(${{CMAKE_PROJECT_NAME}} PRIVATE {board_rel} {app_rel} {user_rel}/module)\n"
-        "target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)  # BspUart::printf 打印浮点需要（nano.specs）\n"
+        "target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)  # BspUartT::printf 打印浮点需要（nano.specs）\n"
     )
 
 
