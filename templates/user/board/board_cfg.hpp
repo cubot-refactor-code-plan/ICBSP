@@ -20,7 +20,7 @@
  *            - 串口 / SPI 实例必须放 `.dma_buffer`：DMA1/DMA2 访问不到 ITCM / DTCM，
  *              链接脚本检查（CMake 配置阶段）会拦下来
  *            - 改动 `BspUartT` 的 Transport（`dma` / `it`）或缓冲大小时，
- *              要去 `bsp/bsp_uart.cpp` 补一行对应的显式实例化，否则链接报未定义
+ *              要去 `code/bsp/bsp_uart.cpp` 补一行对应的显式实例化，否则链接报未定义
  *            - 这里每加一个实例，`board_instances.hpp` 必须同步加名字，否则中断不会分发
  *
  *          【调用顺序】`board_init()` 在 `system_init()` 之后、`system_start()` 之前调用。
