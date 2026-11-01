@@ -20,7 +20,7 @@
  *   // 1) 模板实例化在 bsp_uart.cpp
  *   template class BspUart<128>;
  *
- *   // 2) 全局实例写在用户的板级配置里（示例：examples/dm_mc02/user/board/bsp_cfg.cpp）：句柄 + 是否启用发送 + 波特率
+ *   // 2) 全局实例写在用户的板级配置里（宿主示例：user/board/bsp_cfg.cpp）：句柄 + 是否启用发送 + 波特率
  *   __attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart1({&huart1, true, 115200});
  *   //    RS485 收发器的 DE 没接到 UART 硬件 DE 引脚时，再传 DE 所在的 GPIO（软件 DE，见 Config::de_port）
  *   __attribute__((section(".dma_buffer"))) BspUart<128> bsp_rs485({&huart6, true, 115200, DRE_GPIO_Port, DRE_Pin});
