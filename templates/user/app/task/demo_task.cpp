@@ -1,6 +1,6 @@
 #include "app_task.hpp"
 
-#include "status.hpp"
+#include "system.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"
@@ -13,12 +13,12 @@ volatile UserMonitor user_monitor     = {};
 /* ==================== 任务 ==================== */
 
 /**
- * @note 任务入口先等运行态：初始化失败时 SysFlagWaitRunning() 让任务自行退出，不会跑在半初始化的系统上。
+ * @note 任务入口先等运行态：初始化失败时 sys_state.wait_running() 让任务自行退出，不会跑在半初始化的系统上。
  */
 void heartbeat_task(void *argument)
 {
   (void)argument;
-  SysFlagWaitRunning();
+  sys_state.wait_running();
   TickType_t wake = xTaskGetTickCount();
   for (;;)
   {
@@ -30,7 +30,7 @@ void heartbeat_task(void *argument)
 void monitor_task(void *argument)
 {
   (void)argument;
-  SysFlagWaitRunning();
+  sys_state.wait_running();
   TickType_t wake = xTaskGetTickCount();
   for (;;)
   {

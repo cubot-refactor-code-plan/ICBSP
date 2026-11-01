@@ -5,6 +5,7 @@
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE && CAN_TX_ENABLE
 
 #include "dji_motor.hpp"
+#include "system.hpp"
 #include <stdio.h>
 #include <string.h>
 #include <cmath>
@@ -32,7 +33,7 @@ data_mutex_attr{},
 _total_ecd(0),
 _feedback_ready(false)
 {
-  if (sysEvent != nullptr && (osEventFlagsGet(sysEvent) & SYS_FLAG_RUNNING_BIT) != 0)  // 只允许在初始化期使用
+  if (sys_state.running())  // 只允许在初始化期使用
   {
     return;
   }
@@ -112,7 +113,7 @@ DjiMotor<type, CanT>::~DjiMotor()
     configASSERT(result == Status::OK);
     if (result != Status::OK)
     {
-      SysFlagSet(result);
+      (void)sys_state.error(result);
     }
     _tx_node = nullptr;
   }
@@ -132,11 +133,11 @@ template<MotorType type, typename CanT>
 Status DjiMotor<type, CanT>::init()
 {
   // 系统事件未就绪时保留对象状态，允许初始化流程稍后重试。
-  if (sysEvent == nullptr)
+  if (!sys_state.is_ready())
   {
     return Status::NOT_INIT;
   }
-  if ((osEventFlagsGet(sysEvent) & SYS_FLAG_RUNNING_BIT) != 0)  // 只允许在初始化期使用
+  if (sys_state.running())  // 只允许在初始化期使用
   {
     return Status::NOT_SUPPORTED;
   }
@@ -147,7 +148,7 @@ Status DjiMotor<type, CanT>::init()
   }
   if (_statu != Status::NOT_INIT)
   {
-    SysInitError(_statu);
+    sys_state.init_error(_statu);
     return _statu;
   }
 
@@ -197,7 +198,7 @@ Status DjiMotor<type, CanT>::init()
         default:
         {
           _statu = Status::BAD_ARG;
-          SysInitError(_statu);
+          sys_state.init_error(_statu);
           return _statu;
         }
       }
@@ -206,7 +207,7 @@ Status DjiMotor<type, CanT>::init()
     default:
     {
       _statu = Status::BAD_ARG;
-      SysInitError(_statu);
+      sys_state.init_error(_statu);
       return _statu;
     }
   }
@@ -216,7 +217,7 @@ Status DjiMotor<type, CanT>::init()
   if (data_mutex_headler == NULL)
   {
     _statu = Status::FULL;
-    SysInitError(_statu);
+    sys_state.init_error(_statu);
     return _statu;
   }
 
@@ -227,7 +228,7 @@ Status DjiMotor<type, CanT>::init()
     osMutexDelete(data_mutex_headler);
     data_mutex_headler = nullptr;
     _statu = Status::FULL;
-    SysInitError(_statu);
+    sys_state.init_error(_statu);
     return _statu;
   }
 

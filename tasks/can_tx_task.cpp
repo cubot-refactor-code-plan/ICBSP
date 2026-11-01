@@ -11,7 +11,7 @@
 extern "C" void can_tx_task(void *argument)
 {
   (void)argument;
-  SysFlagWaitRunning();
+  sys_state.wait_running();
 
   const TickType_t start_tick = xTaskGetTickCount();
 #define X(name)                                        \

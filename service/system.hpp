@@ -9,7 +9,7 @@
  *
  * @details 宿主工程在 freertos.c 的 MX_FREERTOS_Init()（USER CODE 段）里按顺序调用：
  *
- *            system_init();    // 1. 建系统事件组 + 创建 sys / can_rx（调度器启动前不会运行）
+ *            system_init();    // 1. 建系统 EventState + 创建 sys / can_rx（调度器启动前不会运行）
  *            board_init();     // 2. 用户：各外设实例 init()、设备 init()、注册 CAN 节点等
  *            system_start();   // 3. 有发送节点才建 can_tx，然后置运行位
  *
@@ -17,8 +17,8 @@
  *            - sys_task    CAN Bus-Off 恢复、每 10 ms 串口收发补救、推进 Online 离线计时；
  *            - can_rx_task 把各 CAN 收到的帧按 ID 分发给接收节点，没人要的进回退缓冲；
  *            - can_tx_task 按槽位聚合发送 CAN 控制帧（保底心跳 + 100 ms 指令有效期）；
- *              在 system_start() 里检查 CanTxNode::count()，没有发送节点时不创建。
- *          任务体在 tasks/，它们遍历 BspCan / BspUartBase 的实例登记表，不引用任何板级实例。
+ *              在 system_start() 里检查板级实例的发送节点，没有发送节点时不创建。
+ *          任务体在 tasks/，通过 board_instances.hpp 的 X-macro 展开，不维护实例登记表。
  *
  * @note 任务优先级与栈深等可配置项见宿主 user/board/hardware_config.h。
  */
@@ -27,19 +27,26 @@
 #define __SYSTEM_HPP__
 
 #ifdef __cplusplus
+#include "status.hpp"
+
+/** @brief 整个系统的状态（定义在 service/system.cpp） */
+extern EventState sys_state;
+#endif
+
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
   /**
-   * @brief 库初始化：建系统事件组、创建库任务
-   * @note 必须最先调用（CAN 节点注册等要用系统事件组）；在调度器启动前调用，失败就地断言停机。
+   * @brief 库初始化：建系统 EventState、创建库任务
+   * @note 必须最先调用（CAN 节点注册等要用系统状态）；在调度器启动前调用，失败就地断言停机。
    */
   void system_init(void);
 
   /**
    * @brief 初始化完成：置运行位，放行所有等待运行态的任务
-   * @note 有初始化失败记录（SysInitError）时断言停机，fault_record 记下本次调用位置。
+   * @note 有初始化失败记录（sys_state.init_error）时断言停机，fault_record 记下本次调用位置。
    */
   void system_start(void);
 
