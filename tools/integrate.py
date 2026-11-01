@@ -489,7 +489,7 @@ def plan_hardware_config(host, plan, rep, board_dir):
     if dst.exists():
         text = dst.read_text(encoding="utf-8")
         if "CAN_RX_ENABLE" not in text:
-            rep.warn(step, f"{board_dir}/hardware_config.h 是旧版（缺少 CAN_RX_ENABLE 等开关）：请按 templates/hardware_config.h 更新")
+            rep.warn(step, f"{board_dir}/hardware_config.h 是旧版（缺少 CAN_RX_ENABLE 等开关）：请按 templates/user/board/hardware_config.h 更新")
         else:
             rep.skip(step, f"{board_dir}/hardware_config.h 已存在")
         if legacy.exists():
@@ -498,7 +498,7 @@ def plan_hardware_config(host, plan, rep, board_dir):
     if legacy.exists():
         rep.warn(step, "检测到旧位置 Core/Inc/hardware_config.h：请手动移到 user/board/，脚本不自动复制以免产生两份配置")
         return
-    plan.create(dst, (TEMPLATES / "hardware_config.h").read_text(encoding="utf-8"))
+    plan.create(dst, (TEMPLATES / "user" / "board" / "hardware_config.h").read_text(encoding="utf-8"))
     rep.ok(step, f"复制完整配置到 {board_dir}/（所有宏实际定义，按需修改）")
 
 
