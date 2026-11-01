@@ -17,7 +17,7 @@
 `board_cfg.*` 用的是 `hfdcan1` / `huart1` / `htim12`，换成实际外设；没开的外设连同 `#include` 一起删。新增实例时同时改 `board_instances.hpp`，否则 HAL 回调找不到它。
 
 `hardware_config.h` 是唯一配置源：所有宏都写成实际值，顶部包含 HAL / FreeRTOS，`HAL_FDCAN_MODULE_ENABLED` / `HAL_UART_MODULE_ENABLED` 未定义时会自动关闭 `CAN_RX_ENABLE` / `CAN_TX_ENABLE` / `UART_PATROL_ENABLE`。不再有默认值头文件。
-SPI / BMI088 的写法在 `board_cfg.cpp` 注释里，开 SPI 后再取消注释。
+SPI / BMI088 的写法在 `board_cfg.hpp` 注释里，开 SPI 后再取消注释；外设实例都是 `inline` 变量，`board_cfg.cpp` 只放 `board_init()`。
 
 宿主 CMake 只需要包含路径和 `user/**/*.cpp` 收集：
 
