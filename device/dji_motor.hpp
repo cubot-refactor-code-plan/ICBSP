@@ -171,7 +171,7 @@ public:
    * @param control_mode GM6020 的控制模式；其他电机型号忽略该参数
    *
    * @note 构造后调用 init() 注册收发节点；错误可通过 statu() 查询。
-   * @note 构造阶段不会调用 BspCan::init() 或发送 CAN 帧。
+   * @note 构造阶段不会调用 BspCanT::init() 或发送 CAN 帧。
    */
   DjiMotor(CanT &can_item,
            uint8_t motor_id,
