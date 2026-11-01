@@ -1,36 +1,72 @@
 /**
  * @file board_cfg.hpp
- * @brief 板级实例配置：外设实例、句柄、参数
+ * @brief 板级实例配置：本板有哪些外设实例、绑定哪些 CubeMX 句柄、参数是什么
  *
- * @details 本文件是**模板**：`integrate.py` 只在宿主 `user/board/` 下没有同名文件时才复制过来，
- *          之后它就完全归宿主所有，脚本不会再改（只会核对参数并给 [注意]）。
+ * @details
  *
- *          【要改的三处】
- *            1. 句柄：模板用的是 DM-MC02 的 `hfdcan1` / `huart1` / `htim12`，换成自己 CubeMX 生成的
- *            2. 参数：CAN 队列长度、串口波特率、PWM 的 timer_clk_hz / prescaler / period
- *            3. 没开的外设：整段删掉，连顶部对应的 `#include` 一起删
- *               （库按 `HAL_FDCAN_MODULE_ENABLED` / `HAL_UART_MODULE_ENABLED` / `HAL_SPI_MODULE_ENABLED`
- *                条件编译，没有实例不影响其它部分）
+ * 【板级四个文件的分工】
  *
- *          【脚本会核对什么】`integrate.py` 会把这些 `&句柄` 与 `Core/Src/*.c` 里的
- *          `xxx_HandleTypeDef` 比对，并把串口波特率、PWM 的 prescaler / period 与 CubeMX 的值对比，
- *          对不上给 [注意]。但 `timer_clk_hz` 是时钟树给的，脚本算不出来，必须自己看时钟树。
+ *   | 文件                  | 放什么                             | 什么时候改                     |
+ *   | --------------------- | ---------------------------------- | ------------------------------ |
+ *   | `hardware_config.h`   | 库的全部宏（开关/优先级/队列/超时） | 调库的行为、换板               |
+ *   | `board_cfg.hpp`（本文件） | 外设实例（inline 全局变量）与句柄绑定 | 加/删外设、改量程波特率等参数   |
+ *   | `board_instances.hpp` | 实例名清单（X-macro）              | **每次加实例都要同步**         |
+ *   | `board_cfg.cpp`       | `board_init()`：谁先 init、谁后 init | 改初始化顺序、加设备 init       |
  *
- *          【三条硬规矩】
- *            - 串口 / SPI 实例必须放 `.dma_buffer`：DMA1/DMA2 访问不到 ITCM / DTCM，
- *              链接脚本检查（CMake 配置阶段）会拦下来
- *            - 改动 `BspUartT` 的 Transport（`dma` / `it`）或缓冲大小时，
- *              要去 `code/bsp/bsp_uart.cpp` 补一行对应的显式实例化，否则链接报未定义
- *            - 这里每加一个实例，`board_instances.hpp` 必须同步加名字，否则中断不会分发
+ *   业务任务与更高层的编排在 `user/app/`，本目录只管“板子上有什么、怎么起来”。
  *
- *          【调用顺序】`board_init()` 在 `system_init()` 之后、`system_start()` 之前调用。
+ * 【初始化时序（从复位到业务跑起来）】
+ *
+ *   main()
+ *     → HAL_Init / SystemClock_Config
+ *     → MX_GPIO_Init / MX_DMA_Init / MX_TIMx_Init / MX_USARTx_UART_Init / MX_FDCANx_Init …（CubeMX 生成）
+ *        这些只**配置**外设，不启动收发
+ *     → MX_FREERTOS_Init()
+ *         → app_init()                       ← user/app/app_main.cpp
+ *             1) system_init()               ← 库：建 sys_state、创建 sys / can_rx 任务
+ *             2) board_init()                ← **本目录**：各实例 init()、设备 init()、注册 CAN 节点
+ *             3) system_start()              ← 库：有发送节点才建 can_tx，然后置运行位
+ *     → osKernelStart()                      调度器启动，任务才开始跑
+ *
+ *   所以 `board_init()` 里的“顺序”只对**初始化**有意义：此时调度器还没跑，
+ *   本文件里的 `init()` 都不允许阻塞等事件、也不允许依赖别的任务。
+ *
+ * 【三条硬规矩（踩了就很难查）】
+ *
+ *   1. **串口 / SPI 实例必须放 `.dma_buffer` 段**
+ *      H7 的 DMA1/DMA2 访问不到 ITCM / DTCM，实例里的接收/发送缓冲如果是普通全局变量
+ *      （被链接到 DTCM），DMA 搬过去就是脏数据或直接卡住。CMake 配置阶段有段检查会拦。
+ *
+ *   2. **改 `BspUartT` 的 Transport 或缓冲大小，要在库里补显式实例化**
+ *      模板定义在 `.cpp` 里，只实例化了三种组合（`code/bsp/bsp_uart.cpp`）：
+ *          `BspUartT<uart_mode::dma, 128, 128>`
+ *          `BspUartT<uart_mode::it, 128, 32>`
+ *          `BspUartT<uart_mode::it, 128, 128>`
+ *      写成别的组合会**链接报未定义**（编译能过，链接不过）。
+ *
+ *   3. **本文件每加一个实例，`board_instances.hpp` 必须同步加名字**
+ *      少了这一步不报错、不告警，只是那个实例的 HAL 回调不会被分发、串口巡检也不管它
+ *      ——表现是“数据收不到”，不是“编译失败”。
+ *
+ * 【本板 DMA 现状（决定串口能不能用 `uart_mode::dma`）】
+ *
+ *   RX + TX 都有 DMA ：USART1、USART3、UART4、UART7、UART8、UART9、USART10
+ *   只有 RX 有 DMA   ：UART5
+ *   没有 DMA         ：USART2
+ *
+ * 【加一个外设实例的完整步骤（以再加一路 CAN2 为例）】
+ *
+ *   1. CubeMX：开 FDCAN2 的 RX FIFO0 中断，确认经典 CAN 模式，重新生成
+ *   2. 本文件「外设实例」分节下面加：
+ *          inline BspCanT<16, 16> bsp_can2({.hfdcan = &hfdcan2, .name = "CAN2"});
+ *   3. `board_instances.hpp` 的 `BSP_CAN_INSTANCES` 里加 `X(bsp_can2)`
+ *   4. `board_cfg.cpp` 的 `board_init()` 里加一行 `configASSERT(bsp_can2.init() == Status::OK);`
  */
 
 #ifndef __BOARD_CFG_HPP__
 #define __BOARD_CFG_HPP__
 
-// CubeMX 生成的句柄头文件：按实际用到的外设增删。
-// 名字对不上时编译直接报「hfdcan1 未定义」，比链接期才发现好。
+// CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
 #include "fdcan.h"
 #include "main.h"
 #include "tim.h"
@@ -42,57 +78,44 @@
 #include "bsp_uart.hpp"
 #include "device_buzzer.hpp"
 
-
 /** @brief 板级初始化：各实例 init()，实现在 board_cfg.cpp */
 void board_init(void);
 
 
-/* ==================== 外设实例 ==================== */
+/* ==================================================================
+ * 外设实例（inline 全局变量：整个工程只有一份定义，任何包含本头文件的 TU 都能直接用）
+ *
+ * 为什么必须 `constexpr` 构造 + 平凡析构：inline 变量要求常量初始化，
+ * 否则每个包含本头文件的 .cpp 都会生成一份构造代码，还会注册 atexit。
+ * 需要释放资源时显式调 `deinit()`，不要写析构函数。
+ * ================================================================== */
 
 /**
- * CAN1
- *   - 模板参数 `BspCanT<收队列帧数, 发队列帧数>`：ISR 写、can_rx_task 每毫秒取走，
- *     16 帧够 8 个电机一轮；挂满一条总线（比如 20 个 3508 + 电调）就提到 32/48
- *   - `.hfdcan` 必须是 CubeMX 的经典 CAN 模式 + RX FIFO0 中断
- *   - `.name` 只在打印里出现，随意但别重名
+ * CAN1：一条总线的收发（`BspCanT<收队列帧数, 发队列帧数>`）
+ *
  */
 inline BspCanT<16, 16> bsp_can1(
     {.hfdcan = &hfdcan1,
      .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
 
 /**
- * USART1：DMA 收发，115200
- *   - 两个模板参数是 RX / TX 环形缓冲字节数，128 字节能放几帧自定义协议
- *   - 换成中断模式：`BspUartT<uart_mode::it, 128, 32>`，CubeMX 里只开 UART 全局中断即可
- *   - 收发方向：`UartDir::RxOnly` / `TxOnly` / `TxRx`，只收的从机会话不占用 TX DMA
- *   - 必须放 .dma_buffer（见文件头「三条硬规矩」）
- *   - 波特率要和 CubeMX 里 USART1 的 BaudRate 一致，否则脚本给 [注意]、通讯也会乱码
+ * USART1：调试串口，DMA 收发，115200（`print_uart` 用的就是它）
+ *
  */
 inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
-    {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
+    {.huart = &huart1,
+     .mode = UartDir::TxRx,
+     .baudrate = 115200U});
 
-/**
- * 调试打印：任何包含本头文件的文件都能用
- *
- *     print_uart("can rx %d frames\r\n", count);
- *
- * 就是 `bsp_uart1.printf` 的宏，换了调试串口只改上一行实例即可。
- * 打印浮点要在宿主 CMake 里加 `target_link_options(... -u _printf_float)`。
- */
 #define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
 
 /**
- * DWT 计时：给 sys_task 算循环耗时、给业务做微秒级计时。
- * 必须在 board_init() 里 init()，且要放在第一个（sys_task 一开始就要用）。
+ * DWT 计时基准（Cortex-M7 内核 CYCCNT，不占外设、不需要中断）
  */
 inline BspDwt bsp_dwt {};
 
 /**
  * 蜂鸣器 PWM：TIM12_CH2
- *   - 频率 = timer_clk_hz / (prescaler + 1) / (period + 1)
- *     模板值：275 MHz / 24 / 2000 ≈ 5.7 kHz
- *   - timer_clk_hz 填 CubeMX 时钟树里 TIM12 的输入时钟（APB1 定时器时钟），填错音调就偏
- *   - prescaler / period 要和 CubeMX 的 TIM12 参数一致（脚本会对比这两项）
  */
 inline BspPwm bsp_pwm_buzzer(
     {.htim = &htim12,
@@ -101,44 +124,17 @@ inline BspPwm bsp_pwm_buzzer(
      .prescaler = 23U,
      .period = 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
 
-// ---------------- 以下按需打开 ----------------
-//
-// SPI 与片选：CubeMX 里 SPI 要「全双工主机 + 软件 NSS + MasterKeepIOState = ENABLE」，
-// 片选是普通 GPIO 输出。BspSpi 用 DMA 时同样要放 .dma_buffer。
-//
-//   inline __attribute__((section(".dma_buffer"))) BspSpi bsp_spi2(
-//       {.hspi = &hspi2,
-//        .use_dma = true,        // DMA 传输，短帧走阻塞阈值以下的路径
-//        .dma_threshold = 16U}); // 小于这个字节数用轮询，省一次 DMA 开销
-//
-// 每个片选一个 BspSpiDevice：
-//   .cs_port / .cs_pin  片选 GPIO，CubeMX 的 main.h 里有 XXX_CS_Pin 定义
-//   .read_flag          读命令要或上的标志位（BMI088 是 0x80）
-//   .read_dummy         读之前要先发的空字节数（BMI088 陀螺仪是 1，加速度计是 0）
-//
-//   inline BspSpiDevice bmi088_acc_spi(
-//       bsp_spi2,
-//       {.cs_port = GYRO_ACC_CS_GPIO_Port,
-//        .cs_pin = GYRO_ACC_CS_Pin,
-//        .read_flag = 0x80U,
-//        .read_dummy = 1U});
-// ----------------
 
-
-/* ==================== 设备实例 ==================== */
+/* ==================================================================
+ * 设备实例（设备层：包装外设，提供“按物理量”的接口；不拥有下面的外设实例）
+ *
+ * 顺序要求：设备必须在本文件里**外设实例之后**定义，并且在 board_init() 里外设 init() 之后 init()。
+ * ================================================================== */
 
 /**
- * 无源蜂鸣器：包装了一个 PWM 通道，`buzzer.beep(freq, ms)` 之类由设备层提供。
- * PWM 在 board_init() 里启动，不在这里。
+ * 无源蜂鸣器：包装上面的 PWM 通道
+ *
  */
 inline DeviceBuzzer buzzer(bsp_pwm_buzzer);
-
-// ---------------- BMI088（SPI 片选就绪后再打开） ----------------
-//
-//   inline DeviceBmi088 imu_bmi088(
-//       bmi088_acc_spi,
-//       bmi088_gyro_spi,
-//       {.acc_range = DeviceBmi088::AccRange::G24,
-//        .gyro_range = DeviceBmi088::GyroRange::DPS2000});
 
 #endif // __BOARD_CFG_HPP__
