@@ -304,7 +304,7 @@ sys_state.init_error(Status::IO_ERROR); // 初始化失败
 
 `system_init()` 创建：
 
-- `sys_task`：CAN Bus-Off 恢复、UART 巡检、`Online::update()`
+- `sys_task`：10 ms 周期；DWT 计时；CAN Bus-Off 恢复、UART 巡检、`Online::update()`；每 2 s 经 `print_uart` 打印一次循环耗时
 - `can_rx_task`：按 ID 分发 CAN 帧，未认领的进回退缓冲
 
 `system_start()` 检查发送节点，有节点才创建：

@@ -76,8 +76,6 @@
 
 /* ==================== UART ==================== */
 
-/** @brief 串口补救巡检周期 (ms)：卡死的发送约 2 个周期内续发，停摆的接收 1 个周期内重建 */
-#define UART_PATROL_PERIOD_MS      10
 /** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置 */
 #define UART_ENABLE_FIFO           1
 /** @brief BspUart::printf() 取格式化缓冲锁、入队的等待上限 (ms) */
@@ -114,7 +112,6 @@ static_assert(CAN_TX_NODE_MAX >= 1 && CAN_TX_NODE_MAX <= 255, "hardware_config.h
 static_assert(CAN_TX_HEARTBEAT_MS >= 1, "hardware_config.h: CAN_TX_HEARTBEAT_MS 至少 1 ms");
 static_assert(CAN_CMD_EXPIRE_MS > CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指令有效期必须长于保底心跳");
 static_assert(CAN_BUSOFF_RETRY_MS >= 1, "hardware_config.h: CAN_BUSOFF_RETRY_MS 至少 1 ms");
-static_assert(UART_PATROL_PERIOD_MS >= 1, "hardware_config.h: UART_PATROL_PERIOD_MS 至少 1 ms");
 static_assert(UART_ENABLE_FIFO == 0 || UART_ENABLE_FIFO == 1, "hardware_config.h: UART_ENABLE_FIFO 取 0 或 1");
 static_assert(UART_PRINTF_TIMEOUT_MS >= 1, "hardware_config.h: UART_PRINTF_TIMEOUT_MS 至少 1 ms");
 static_assert(SPI_DMA_BUFFER_SIZE >= 16 && SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: SPI_DMA_BUFFER_SIZE 取 16~65535");
