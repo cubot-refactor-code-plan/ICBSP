@@ -134,8 +134,4 @@ void PID::reset()
   _has_last = false;
 }
 
-void PID::print()
-{
-  // 暂未实现
-  return;
-}
+
