@@ -259,7 +259,7 @@ stm32-framework/                    仓库根 = 库
   `acc_saturation_count()` / `gyro_saturation_count()` 给出。不驱动板上的加热电阻（DM-MC02 上是 PB1 / TIM3_CH4，误开容易损坏硬件），温控属于上层。
   数据就绪中断由宿主的 `HAL_GPIO_EXTI_Callback` 转调（库不占用它）。默认 `Config::auto_update = true`：`init()` 建内部任务 "imu"（`BMI088_TASK_PRIORITY` / `BMI088_TASK_STACK`），
   每次陀螺仪数据就绪刷新一帧（没有中断时每 10 ms）；默认陀螺仪 1000 Hz（`HZ1000_BW116`），约占 CPU 7.5%~14%，改 2000 Hz 翻倍；自动刷新的对象必须存活到系统停止，临时对象用 `auto_update = false`。
-  默认 `Config::attitude = true`：内部任务每帧用 VQF（`algorithm/vqf.*`，dlaidig/vqf，MIT，见 `LICENSES/MIT.txt`，版权在文件头 SPDX 行）做六轴姿态解算，写 `ImuData` 的四元数 / 欧拉角（Z-Y-X，芯片本体坐标，yaw 零点任意、无磁力计会慢漂）；
+  默认 `Config::attitude = true`：内部任务每帧用 VQF（`algorithm/vqf.*`，dlaidig/vqf，MIT，见 `LICENSE`，版权在文件头 SPDX 行）做六轴姿态解算，写 `ImuData` 的四元数 / 欧拉角（Z-Y-X，芯片本体坐标，yaw 零点任意、无磁力计会慢漂）；
   按陀螺仪 ODR 周期积分，所以只在数据就绪中断唤醒的帧上解算（没转调 EXTI 时姿态不更新），漏帧按最新一帧补积分并计入 `attitude_skip_count()`；手动模式不解算。任务栈默认 512 字。
 - HAL V1.11.6 `HAL_DMA_Abort()` 读-改-写竞争（3.6）：HAL 时基优先级须高于串口中断；即使这样，-O2 构建下偶有 5 ms 中断内等待与少量丢数，根治（接收改 DMA 循环模式）待做。
 - 运行期可恢复的失败返回 `Status`，初始化失败一律 `configASSERT` 停机并写 `fault_record`（见 `docs/编码规范.md` 第 8 节）。
