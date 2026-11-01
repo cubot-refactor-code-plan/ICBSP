@@ -34,7 +34,6 @@ stm32-framework/
 ```bash
 python3 third_party/stm32-framework/tools/integrate.py --dry-run   # 只看将改什么
 python3 third_party/stm32-framework/tools/integrate.py             # 执行
-cmake --preset Debug && cmake --build --preset Debug
 ```
 
 脚本可重复执行，已完成的步骤会跳过。它会检查 CubeMX 前提、给链接脚本加 `.dma_buffer` / `.noinit`、
@@ -45,16 +44,16 @@ cmake --preset Debug && cmake --build --preset Debug
 
 ## 接入要求
 
-| 项目 | 要求 |
-| --- | --- |
-| 芯片 | STM32H7 系列 |
-| 工具链 | CubeMX → Project Manager → Toolchain = **CMake** |
-| RTOS | FreeRTOS，**CMSIS_V2**，tick **1 kHz** |
-| HAL 时基 | 不用 SysTick；优先级要高于 UART / CAN 中断 |
-| FDCAN | 经典 CAN，RX FIFO0，开 FDCAN 中断 |
-| UART | RX/TX DMA + 全局中断（驱动用 IDLE 断帧） |
-| SPI | 全双工主机、软件 NSS、`MasterKeepIOState = ENABLE` |
-| 链接脚本 | 必须有**可加载**的 `.dma_buffer` 与 `.noinit` |
+| 项目     | 要求                                                     |
+| -------- | -------------------------------------------------------- |
+| 芯片     | STM32H7 系列                                             |
+| 工具链   | CubeMX → Project Manager → Toolchain = **CMake** |
+| RTOS     | FreeRTOS，**CMSIS_V2**，tick **1 kHz**       |
+| HAL 时基 | 不用 SysTick；优先级要高于 UART / CAN 中断               |
+| FDCAN    | 经典 CAN，RX FIFO0，开 FDCAN 中断                        |
+| UART     | RX/TX DMA + 全局中断（驱动用 IDLE 断帧）                 |
+| SPI      | 全双工主机、软件 NSS、`MasterKeepIOState = ENABLE`     |
+| 链接脚本 | 必须有**可加载**的 `.dma_buffer` 与 `.noinit`  |
 
 库按 `HAL_FDCAN_MODULE_ENABLED` / `HAL_UART_MODULE_ENABLED` / `HAL_SPI_MODULE_ENABLED` 等宏条件编译：
 没开的外设不会生成对应驱动和任务。每项要求的原因、CubeMX 里怎么勾、接完怎么自查，
@@ -62,13 +61,14 @@ cmake --preset Debug && cmake --build --preset Debug
 
 ## 文档
 
-| 文档 | 内容 |
-| --- | --- |
-| [docs/接入指南.md](docs/接入指南.md) | 硬性要求逐条解释、CubeMX 设置、自动/手动接入、自查清单、常见问题 |
-| [docs/常用接口.md](docs/常用接口.md) | UART / CAN / 电机 / PID / 系统状态的使用示例 |
-| [docs/编码规范.md](docs/编码规范.md) | 命名、分层、注释格式 |
+| 文档                                      | 内容                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| [docs/接入指南.md](docs/接入指南.md)       | 硬性要求逐条解释、CubeMX 设置、自动/手动接入、自查清单、常见问题   |
+| [docs/常用接口.md](docs/常用接口.md)       | UART / CAN / 电机 / PID / 系统状态的使用示例                       |
+| [docs/编辑器配置.md](docs/编辑器配置.md)   | `.vscode/settings.json` 各项作用；outline++ 分区正则逐段拆解       |
+| [docs/编码规范.md](docs/编码规范.md)       | 命名、分层、注释格式                                               |
 | [templates/README.md](templates/README.md) | 每个模板文件复制到宿主哪里；`.vscode` 与 `Flash/` 的占位符规则 |
-| [docs/bsp_test/](docs/bsp_test/) | BSP 历史测试记录（旧 API 名称不代表当前接口） |
+| [docs/bsp_test/](docs/bsp_test/)           | BSP 历史测试记录（旧 API 名称不代表当前接口）                      |
 
 ## 配置
 
@@ -94,9 +94,6 @@ CAN 接收和发送保持两个独立任务，不合并。
 
 - BSP 没有运行时登记表，`board_instances.hpp` 必须和 `board_cfg.*` 同步；漏写实例不会报错，但对应中断不会分发。
 - `BspUartT` 的显式实例化在 `bsp_uart.cpp`；新增 Transport / 缓冲大小时要补一行实例化。
-- `DeviceMotor` 不持有串口，`pid_frame()` 只组帧，发送由 App 做。
-- `dji_motor_group`、`corexy_protocol`、`Module` 没有并入库。
-- GXS_V1 宿主迁移、全新 CubeMX 工程从零接入、实板验证尚未完成。
 
 ## 许可证
 
