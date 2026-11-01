@@ -36,7 +36,7 @@ Status DeviceMotor::init()
   if (_config.out_max <= 0.0f)
     return Status::BAD_ARG;
 
-  // 编码器必须已在 bsp_init() 里启动过，否则 read_delta() 恒为 0、闭环会一路积分到限幅
+  // 编码器必须已在 board_init() 里启动过，否则 read_delta() 恒为 0、闭环会一路积分到限幅
   if (!_config.encoder->initialized())
     return Status::NOT_INIT;
 

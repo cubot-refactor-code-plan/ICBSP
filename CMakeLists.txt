@@ -91,7 +91,32 @@ if(_stm32_framework_ld AND EXISTS "${_stm32_framework_ld}")
             "stm32_framework: 链接脚本 ${_stm32_framework_ld} 缺少 ${_stm32_framework_ld_missing} 段"
             "。请把 ${CMAKE_CURRENT_SOURCE_DIR}/templates/linker_sections.ld 里的段加进去（放在 SECTIONS 里 .data 之前）。")
     endif()
-    message(STATUS "stm32_framework: 链接脚本检查通过（.dma_buffer、.noinit）：${_stm32_framework_ld}")
+    # .dma_buffer 里是 constexpr 全局实例：必须是可加载段（AT> FLASH），否则句柄/波特率等初值丢失
+    string(FIND "${_stm32_framework_ld_text}" "\n  .dma_buffer" _stm32_framework_dma_pos)
+    if(_stm32_framework_dma_pos EQUAL -1)
+        message(FATAL_ERROR
+            "stm32_framework: ${_stm32_framework_ld} 里找不到缩进 2 空格的 .dma_buffer 段定义。"
+            "请按 templates/linker_sections.ld 的格式手动加入。")
+    endif()
+    string(SUBSTRING "${_stm32_framework_ld_text}" ${_stm32_framework_dma_pos} -1 _stm32_framework_dma_rest)
+    string(FIND "${_stm32_framework_dma_rest}" "\n  .noinit" _stm32_framework_dma_len)
+    if(_stm32_framework_dma_len EQUAL -1)
+        string(LENGTH "${_stm32_framework_dma_rest}" _stm32_framework_dma_len)
+    endif()
+    string(SUBSTRING "${_stm32_framework_dma_rest}" 0 ${_stm32_framework_dma_len} _stm32_framework_dma_block)
+    string(FIND "${_stm32_framework_dma_block}" "(NOLOAD)" _stm32_framework_dma_noload)
+    if(NOT _stm32_framework_dma_noload EQUAL -1)
+        message(FATAL_ERROR
+            "stm32_framework: ${_stm32_framework_ld} 的 .dma_buffer 写成了 NOLOAD，实例初值不会进 Flash。"
+            "请改成 `.dma_buffer : { ... } >RAM_D1 AT> FLASH`（见 templates/linker_sections.ld）。")
+    endif()
+    string(FIND "${_stm32_framework_dma_block}" "AT>" _stm32_framework_dma_at)
+    if(_stm32_framework_dma_at EQUAL -1)
+        message(FATAL_ERROR
+            "stm32_framework: ${_stm32_framework_ld} 的 .dma_buffer 缺少 AT> FLASH 加载区。"
+            "请参考 templates/linker_sections.ld，把初值放进 Flash。")
+    endif()
+    message(STATUS "stm32_framework: 链接脚本检查通过（.dma_buffer 可加载、.noinit）：${_stm32_framework_ld}")
 else()
     message(STATUS "stm32_framework: CMAKE_EXE_LINKER_FLAGS 里没找到 -T 链接脚本，跳过 .dma_buffer / .noinit 检查")
 endif()

@@ -83,7 +83,7 @@ public:
   /**
    * @brief 构造：只保存配置（纯赋值，不碰硬件）
    *
-   * @note 必须是 constexpr：bsp_cfg.hpp 里的全局实例是 inline 变量，需要常量初始化。
+   * @note 必须是 constexpr：board_cfg.hpp 里的全局实例是 inline 变量，需要常量初始化。
    * @note 读初始电平要调 `HAL_GPIO_ReadPin`，必须等 CubeMX 的 MX_GPIO_Init() 跑过，
    *       所以引脚检测与消抖状态机的启动只能放在 init()。
    */

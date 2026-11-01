@@ -18,6 +18,9 @@
  *       清运行位（初始化错误）。正常流程 init() → complete_init() → 任务入口 wait_running()；
  *       未 init 时除 init() 外全部接口安全返回。
  *
+ * @note 分层：子节点用 set_parent() 挂到父节点。错误只向上传播，父节点不聚合 running；
+ *       要判断具体哪个子系统失败，查对应子节点的 error_code()。父节点必须比子节点活得久。
+ *
  * @note 分层约定：只给「维护多个对象的系统」用；单个设备不许引用它，失败只 return Status。
  *       生命周期、错误传播与已知局限见同目录 status.md 与 Docs/guide/系统状态标志原理.md。
  */
@@ -97,6 +100,16 @@ public:
   Status init(void);
 
   /**
+   * @brief 设置父节点：本节点的错误会向上传播到父节点
+   *
+   * @param parent 父节点（必须已 init，且比本节点活得久）
+   * @return OK=已设置；BAD_ARG=传了自己、已有父节点、或会形成环；NOT_INIT=父节点未 init
+   *
+   * @note 父指针只设置一次；可在 init() 前后调用，但父节点必须先 init。
+   */
+  Status set_parent(EventState &parent);
+
+  /**
    * @brief 初始化全部完成：置运行位
    * @return OK=已置运行位；NOT_SUPPORTED=此前已有初始化失败记录，运行位不置位；NOT_INIT=未 init
    */
@@ -147,6 +160,7 @@ private:
   // ---------------- 成员变量 ----------------
 
   EventGroupHandle_t _handle = nullptr; ///< 本实例的事件组，未 init 时为 nullptr
+  EventState        *_parent = nullptr; ///< 父节点（不拥有；只设置一次）
 
   // ----------------
 };

@@ -6,7 +6,7 @@
 
 // ---------------- 模板实例化 ----------------
 
-// 显式实例化：必须覆盖 device_cfg.cpp 里用到的串口类型，否则链接时找不到成员函数
+// 显式实例化：必须覆盖 宿主的 board_cfg.cpp 里用到的串口类型，否则链接时找不到成员函数
 template class DeviceR9dsT<BspUartT<uart_detail::ItTransport, 128, 32>>;
 template class DeviceR9dsT<BspUartT<uart_detail::DmaTransport, 128, 128>>;
 

@@ -12,7 +12,7 @@
  *       扫描器与超时模型、MMCL 容量算术、线程与总线锁约束见 `device_emmv5_group.md`。
  *
  * @note **本类不创建任务**：字节搬运靠外部任务周期调 `update()`（建议 10 ms），
- *       与 `bsp_can` / `device_r9ds` / `dji_motor_group` 保持一致。
+ *       与 `bsp_can` / `device_r9ds` / `dji_motor` 保持一致。
  *
  * @warning 同一路串口只允许一个任务调 `update()`（接收缓冲区只有一个消费者）；
  *          发送接口自带半双工总线锁，多步 MMCL 事务用 `lock_bus()` / `unlock_bus()` 包住。
@@ -46,7 +46,7 @@ class DeviceEmmv5GroupT
 private:
   // ---------------- 内部常量 ----------------
 
-  static constexpr size_t   UART_BUFFER_SIZE  = 128U; ///< 与 bsp_cfg.cpp 的 DMA 串口发送缓冲区一致
+  static constexpr size_t   UART_BUFFER_SIZE  = 128U; ///< 与 board_cfg.cpp 的 DMA 串口发送缓冲区一致
   static constexpr size_t   MAX_MOTORS        = 8U;   ///< 组内最大电机数
   static constexpr uint16_t ONLINE_TIMEOUT_MS = 100U; ///< 超过 100 ms 无有效应答判离线
 

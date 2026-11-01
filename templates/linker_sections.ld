@@ -6,9 +6,11 @@
  * （链接脚本一变就会重新检查）。CubeMX 6.18.1 重新生成时保留已有链接脚本的内容（实测只改了几行行尾），
  * 其他版本未验证，重新生成后留意配置阶段的检查结果即可。
  *
- * - .dma_buffer：BspUart 实例（内含 DMA 收发缓冲）。H7 的 DMA1 / DMA2 访问不到 DTCM，而 CubeMX
- *   默认把 .bss 放在 DTCM，所以串口实例要加 __attribute__((section(".dma_buffer"))) 并链接到
- *   RAM_D1（AXI SRAM，或 RAM_D2 / RAM_D3）。BspUart::init() 发现实例在 DTCM / ITCM 会返回 BAD_ARG。
+ * - .dma_buffer：BspUart / BspSpi 实例（内含 DMA 收发缓冲）。H7 的 DMA1 / DMA2 访问不到 DTCM，
+ *   所以实例要加 __attribute__((section(".dma_buffer"))) 并链接到 RAM_D1（AXI SRAM，或 RAM_D2 / RAM_D3）。
+ *   这些实例是 constexpr 常量初始化的，**必须可加载**（AT> FLASH），由框架在全局构造前
+ *   把初值拷进 RAM_D1；写成 NOLOAD 会让句柄 / 波特率等配置上电后变成随机值。
+ *   BspUartT::init() 发现实例在 DTCM / ITCM 会返回 BAD_ARG。
  *   假定 D-Cache 关闭；开 D-Cache 时这块要用 MPU 设成非缓存。
  * - .noinit：fault_record（断言 / 栈溢出 / 分配失败现场）。NOLOAD 且不在 .bss 范围内，启动代码
  *   不清零，复位后仍保留上一次的内容（掉电丢失）。
@@ -18,13 +20,16 @@
  * ORIGIN = 0x24000000 找到这个区并替换区名（--ram-region 可手动指定，但拒绝 ITCM / DTCM）；手动接入时自己改。
  */
 
-  .dma_buffer (NOLOAD) :
+  .dma_buffer :
   {
     . = ALIGN(32);
+    __dma_buffer_start = .;
     *(.dma_buffer)
     *(.dma_buffer*)
     . = ALIGN(32);
-  } >RAM_D1
+    __dma_buffer_end = .;
+  } >RAM_D1 AT> FLASH
+  __dma_buffer_load = LOADADDR(.dma_buffer);
 
   .noinit (NOLOAD) :
   {

@@ -6,7 +6,7 @@
  *          - 所有值都是实际生效的 #define，不再依赖库里的默认值头文件。
  *          - 顶部先包含 HAL / FreeRTOS，下面的 HAL_*_MODULE_ENABLED 才能正确反映 CubeMX 配置；
  *            没开对应 HAL 模块时，功能开关会自动变成 0。
- *          - 取值越界在编译时报 static_assert；登记表 / 节点数不够用时在 init() / system_start() 断言停机。
+ *          - 取值越界在编译时报 static_assert；节点数不够用时在 init() / system_start() 断言停机。
  *          - 只放宏，C / C++ 都能包含。
  */
 
@@ -55,8 +55,6 @@
 
 /* ==================== CAN ==================== */
 
-/** @brief BspCan 登记表容量（STM32H7 最多 FDCAN1~3） */
-#define CAN_MAX_INSTANCES          3
 /** @brief 每路 CAN 的接收队列深度（帧）：ISR 写入，can_rx_task 每毫秒取走 */
 #define CAN_RX_QUEUE_FRAMES        16
 /** @brief 每路 CAN 的回退队列深度（帧）：没有接收节点认领的帧，供 BspCan::receive() 读取 */
@@ -78,8 +76,6 @@
 
 /* ==================== UART ==================== */
 
-/** @brief BspUart 登记表容量（STM32H7 最多 11 路 U(S)ART 含 LPUART1，默认留 1 个余量） */
-#define UART_MAX_INSTANCES         12
 /** @brief 串口补救巡检周期 (ms)：卡死的发送约 2 个周期内续发，停摆的接收 1 个周期内重建 */
 #define UART_PATROL_PERIOD_MS      10
 /** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置 */
@@ -89,8 +85,6 @@
 
 /* ==================== SPI ==================== */
 
-/** @brief BspSpi 登记表容量（STM32H723 有 SPI1~6） */
-#define SPI_MAX_INSTANCES          6
 /** @brief 每个 BspSpi 实例的 DMA 弹跳缓冲（字节，收发各一份） */
 #define SPI_DMA_BUFFER_SIZE        256
 /** @brief BspSpi / BspSpiDevice 传输接口的默认超时 (ms) */
@@ -113,7 +107,6 @@ static_assert(UART_PATROL_ENABLE == 0 || UART_PATROL_ENABLE == 1, "hardware_conf
 static_assert(SYS_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: SYS_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
 static_assert(CAN_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: CAN_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
 static_assert(SYS_TASK_STACK >= 128 && CAN_TASK_STACK >= 128, "hardware_config.h: 库任务栈深至少 128 字");
-static_assert(CAN_MAX_INSTANCES >= 1 && CAN_MAX_INSTANCES <= 3, "hardware_config.h: CAN_MAX_INSTANCES 取 1~3（STM32H7 只有 FDCAN1~3）");
 static_assert(CAN_RX_QUEUE_FRAMES >= 1 && CAN_RX_RETURN_FRAMES >= 1 && CAN_TX_QUEUE_FRAMES >= 1, "hardware_config.h: CAN 队列深度至少 1 帧");
 static_assert(CAN_RX_DISPATCH_PER_TICK >= 1 && CAN_RX_DISPATCH_PER_TICK <= 64, "hardware_config.h: CAN_RX_DISPATCH_PER_TICK 取 1~64");
 static_assert(CAN_RX_NODE_MAX >= 1 && CAN_RX_NODE_MAX <= 255, "hardware_config.h: CAN_RX_NODE_MAX 取 1~255（计数为 uint8_t）");
@@ -121,11 +114,9 @@ static_assert(CAN_TX_NODE_MAX >= 1 && CAN_TX_NODE_MAX <= 255, "hardware_config.h
 static_assert(CAN_TX_HEARTBEAT_MS >= 1, "hardware_config.h: CAN_TX_HEARTBEAT_MS 至少 1 ms");
 static_assert(CAN_CMD_EXPIRE_MS > CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指令有效期必须长于保底心跳");
 static_assert(CAN_BUSOFF_RETRY_MS >= 1, "hardware_config.h: CAN_BUSOFF_RETRY_MS 至少 1 ms");
-static_assert(UART_MAX_INSTANCES >= 1 && UART_MAX_INSTANCES <= 255, "hardware_config.h: UART_MAX_INSTANCES 取 1~255");
 static_assert(UART_PATROL_PERIOD_MS >= 1, "hardware_config.h: UART_PATROL_PERIOD_MS 至少 1 ms");
 static_assert(UART_ENABLE_FIFO == 0 || UART_ENABLE_FIFO == 1, "hardware_config.h: UART_ENABLE_FIFO 取 0 或 1");
 static_assert(UART_PRINTF_TIMEOUT_MS >= 1, "hardware_config.h: UART_PRINTF_TIMEOUT_MS 至少 1 ms");
-static_assert(SPI_MAX_INSTANCES >= 1 && SPI_MAX_INSTANCES <= 6, "hardware_config.h: SPI_MAX_INSTANCES 取 1~6（STM32H7 只有 SPI1~6）");
 static_assert(SPI_DMA_BUFFER_SIZE >= 16 && SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: SPI_DMA_BUFFER_SIZE 取 16~65535");
 static_assert(SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
 static_assert(BMI088_TASK_STACK >= 128, "hardware_config.h: BMI088_TASK_STACK 至少 128 字");
