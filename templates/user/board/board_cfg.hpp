@@ -17,6 +17,7 @@
 #include "usart.h"
 
 #include "bsp_can.hpp"
+#include "bsp_dwt.hpp"
 #include "bsp_pwm.hpp"
 #include "bsp_uart.hpp"
 #include "device_buzzer.hpp"
@@ -35,6 +36,11 @@ inline BspCanT<16, 16> bsp_can1(
 /// USART1：DMA 收发，115200；必须放 .dma_buffer
 inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
+
+/// 所有包含本头文件的文件都可调用：print_uart("x=%d", x)
+#define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
+
+inline BspDwt bsp_dwt {};
 
 inline BspPwm bsp_pwm_buzzer(
     {.htim = &htim12,
