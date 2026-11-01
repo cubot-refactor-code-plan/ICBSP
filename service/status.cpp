@@ -23,6 +23,31 @@ Status EventState::init(void)
   return Status::OK;
 }
 
+/** @brief 挂父节点：父必须已 init，不能是自己，也不能形成环；只设置一次 */
+Status EventState::set_parent(EventState &parent)
+{
+  if ((&parent == this) || (_parent != nullptr))
+  {
+    return Status::BAD_ARG;
+  }
+  if (!parent.is_ready())
+  {
+    return Status::NOT_INIT;
+  }
+
+  // 顺着父链往上走：撞到自己说明会成环
+  for (const EventState *node = &parent; node != nullptr; node = node->_parent)
+  {
+    if (node == this)
+    {
+      return Status::BAD_ARG;
+    }
+  }
+
+  _parent = &parent;
+  return Status::OK;
+}
+
 /** @brief 初始化全部完成时置运行位；已有初始化失败记录则不置位，使"失败后不再进入运行态"成为单向约束 */
 Status EventState::complete_init(void)
 {
@@ -59,6 +84,12 @@ Status EventState::error(Status statu)
   
   (void)xEventGroupSetBits(_handle, status_bit(statu));
   (void)xEventGroupClearBits(_handle, status_bit(Status::OK));
+
+  // 运行期错误只向上记码；父节点的运行位不动
+  if (_parent != nullptr)
+  {
+    (void)_parent->error(statu);
+  }
   return Status::OK;
 }
 
@@ -69,10 +100,23 @@ Status EventState::init_error(Status statu)
   {
     return Status::NOT_INIT;
   }
+  if (statu == Status::OK)
+  {
+    return Status::BAD_ARG;
+  }
+
   // INIT_FAIL 与 RUNNING 先处理完再记错误码：失败位置位就一定已经停掉了运行位
   (void)xEventGroupSetBits(_handle, INIT_FAIL_BIT);
   (void)xEventGroupClearBits(_handle, RUNNING_BIT);
-  return error(statu);
+  (void)xEventGroupSetBits(_handle, status_bit(statu));
+  (void)xEventGroupClearBits(_handle, status_bit(Status::OK));
+
+  // 初始化失败要连父节点的失败位一起置：父节点同样不会再进入运行态
+  if (_parent != nullptr)
+  {
+    (void)_parent->init_error(statu);
+  }
+  return Status::OK;
 }
 
 
@@ -145,6 +189,7 @@ EventState::~EventState()
     vEventGroupDelete(_handle);
     _handle = nullptr;
   }
+  _parent = nullptr;
 }
 
 

@@ -12,7 +12,7 @@
  *
  * @details 本层只做三件事：硬件收发、总线恢复、诊断计数。
  *          它不认识任何「节点」概念：取出来的帧直接交给上层的设备类，
- *          由设备类自己判断这帧属不属于自己。实例与初始化见 bsp_cfg.cpp / bsp_init()。
+ *          由设备类自己判断这帧属不属于自己。实例与初始化见 board_cfg.cpp / board_init()。
  *
  * @note 收发：send() 非阻塞入队，由 TX-FIFO-EMPTY 中断送进硬件；receive() 从接收缓冲取一帧。
  *       同一条总线的接收缓冲**只允许一个消费者**，多个任务调用 receive() 会互相抢帧。
@@ -24,11 +24,11 @@
 /**
  * @brief CAN 驱动编译开关
  *
- * @note 本板（STM32H723VGT6）没有启用 FDCAN 外设，CubeMX 也不生成 fdcan.h，
- *       因此整套驱动（以及依赖它的 dji_motor_group）默认不参与编译。
- *       换回带 CAN 的板子：1) CubeMX 打开 FDCAN 并生成 fdcan.h；2) 本宏改 1。
- * @note 宏为 0 时本文件不产生任何类型与实例，bsp_cfg / device_cfg 里也不用写实例、
- *       bsp_init() / device_init() 里不用加 init。
+ * @note 宿主没在 CubeMX 里打开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，
+ *       整套驱动（以及依赖它的 dji_motor）不参与编译。
+ *       要用 CAN：1) CubeMX 打开 FDCAN 并生成 fdcan.h；2) 在 board_cfg 里建实例。
+ * @note 宏为 0 时本文件不产生任何类型与实例，board_cfg 里不用写实例、
+ *       board_init() 里不用加 init。
  */
 #ifndef __BSP_CAN_HPP__
 #define __BSP_CAN_HPP__
@@ -124,7 +124,7 @@ public:
    * @brief 构造函数（只绑定句柄，RTOS 资源在 init() 里创建）
    * @param cfg CAN 配置（句柄/调试名）
    *
-   * @note 必须 `constexpr` 且内联在头文件里：bsp_cfg.hpp 的全局实例是 inline 变量，
+   * @note 必须 `constexpr` 且内联在头文件里：board_cfg.hpp 的全局实例是 inline 变量，
    *       只有常量初始化才不会让每个包含该头文件的 TU 都生成一份构造代码。
    */
   constexpr BspCanT(const Config &cfg) :

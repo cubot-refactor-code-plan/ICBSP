@@ -1,6 +1,8 @@
 #include "system.hpp"
 #include "hardware_config.h"
 
+#include <string.h>
+
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "status.hpp"
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
@@ -33,6 +35,44 @@ EventState sys_state;
 
 
 // ---------------- 库入口 ----------------
+
+
+// .dma_buffer 在链接脚本里是「RAM 运行、Flash 存初值」的可加载段；CubeMX 的启动文件只拷 .data，
+// 所以这里补一次拷贝。符号由 templates/linker_sections.ld 提供；宿主没加该段时按空段跳过。
+extern "C"
+{
+  extern uint8_t __dma_buffer_start[] __attribute__((weak));
+  extern uint8_t __dma_buffer_end[] __attribute__((weak));
+  extern uint8_t __dma_buffer_load[] __attribute__((weak));
+}
+
+namespace
+{
+/**
+ * @brief 把 .dma_buffer 的初值从 Flash 拷进 RAM_D1
+ *
+ * @note 必须早于该段里所有 C++ 全局对象的动态初始化：BspSpi 这类对象的构造函数会把配置写进
+ *       对象，拷贝放在构造之后会把构造函数的结果覆盖掉。constructor(101) 排在默认
+ *       .init_array（65535）之前，此时 .data / .bss 已经由启动文件处理完。
+ */
+void init_dma_buffer()
+{
+  if (__dma_buffer_start == nullptr || __dma_buffer_end == nullptr || __dma_buffer_load == nullptr)
+  {
+    return;
+  }
+  const size_t size = static_cast<size_t>(__dma_buffer_end - __dma_buffer_start);
+  if (size > 0U)
+  {
+    memcpy(__dma_buffer_start, __dma_buffer_load, size);
+  }
+}
+
+__attribute__((constructor(101))) void init_dma_buffer_early()
+{
+  init_dma_buffer();
+}
+} // namespace
 
 
 extern "C" void system_init(void)

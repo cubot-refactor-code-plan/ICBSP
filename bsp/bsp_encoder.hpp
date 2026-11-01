@@ -60,7 +60,7 @@ public:
   /**
    * @brief 构造：只保存配置（纯赋值，不碰硬件）
    *
-   * @note 必须是 constexpr：bsp_cfg.hpp 里的全局实例是 inline 变量，需要常量初始化。
+   * @note 必须是 constexpr：board_cfg.hpp 里的全局实例是 inline 变量，需要常量初始化。
    */
   constexpr explicit BspEncoder(const Config &cfg) : _config(cfg) {}
 

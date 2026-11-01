@@ -11,7 +11,7 @@
  *          构造时绑定端口+引脚，无需 init()。
  *
  * @note 接口：set() / reset() / toggle() / set_level(bool) / get_level()。
- *       实例见 bsp_cfg.cpp，引脚对应关系见 Docs/hardware/引脚分配与冲突.md。
+ *       实例见 board_cfg.cpp，引脚对应关系见 Docs/hardware/引脚分配与冲突.md。
  */
 
 #ifndef __BSP_GPIO_HPP__
@@ -45,7 +45,7 @@ public:
   /**
    * @brief 构造函数：只做赋值，硬件已由 CubeMX 的 MX_GPIO_Init() 初始化
    *
-   * @note constexpr：bsp_cfg.hpp 的全局实例是 inline 变量，需要常量初始化。
+   * @note constexpr：board_cfg.hpp 的全局实例是 inline 变量，需要常量初始化。
    */
   constexpr BspGpio(const Config &cfg) : _port(cfg.port), _pin(cfg.pin) {}
 

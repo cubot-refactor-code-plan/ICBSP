@@ -11,7 +11,7 @@
  *
  * @details 本文件只提供一个通用模板 BspUartT<Transport, RX_SIZE, TX_SIZE>：
  *          流缓冲区、发送状态机、诊断计数与恢复流程共用，底层 DMA / 中断由 Transport 选择。
- *          具体实例放在 bsp_cfg.hpp / bsp_cfg.cpp。
+ *          具体实例放在 board_cfg.hpp / board_cfg.cpp。
  *          收发时序、诊断表与新增串口步骤见 bsp_uart.md。
  *
  * @note 用法：DMA 和 IT 模式共用，外部调用没有区别。接收是字节流（不保证整帧），
@@ -142,7 +142,7 @@ public:
   /**
    * @brief 构造函数（只做赋值，FreeRTOS 资源创建推迟到 init()）
    *
-   * @note 必须 `constexpr` 且内联在头文件里：bsp_cfg.hpp 里的全局实例是 inline 变量，
+   * @note 必须 `constexpr` 且内联在头文件里：board_cfg.hpp 里的全局实例是 inline 变量，
    *       只有常量初始化才不会让每个包含该头文件的 TU 都生成一份构造代码。
    */
   constexpr BspUartT(const Config &cfg) :

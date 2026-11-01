@@ -152,21 +152,16 @@ public:
     HZ100_BW32   = 0x07U, ///< 100 Hz，带宽 32 Hz
   };
 
-  /** @brief 设备配置（可匿名按序传入：{acc_range, gyro_range, acc_odr, gyro_odr, drdy_int, auto_update, attitude}） */
+  /** @brief 设备配置（聚合，可用指定初始化） */
   struct Config
   {
-    /** @brief 按序构造（参数顺序 = 字段顺序） */
-    Config(AccRange acc_range = AccRange::G24, GyroRange gyro_range = GyroRange::DPS2000, AccOdr acc_odr = AccOdr::HZ1600, GyroOdr gyro_odr = GyroOdr::HZ1000_BW116, bool drdy_int = true, bool auto_update = true, bool attitude = true) : acc_range(acc_range), gyro_range(gyro_range), acc_odr(acc_odr), gyro_odr(gyro_odr), drdy_int(drdy_int), auto_update(auto_update), attitude(attitude)
-    {
-    }
-
-    AccRange  acc_range;  ///< 加速度计量程
-    GyroRange gyro_range; ///< 陀螺仪量程
-    AccOdr    acc_odr;    ///< 加速度计输出数据率
-    GyroOdr   gyro_odr;   ///< 陀螺仪输出数据率 / 带宽
-    bool      drdy_int;   ///< true = 加速度计 INT1、陀螺仪 INT3 输出数据就绪（推挽、高有效、对应 EXTI 上升沿）
-    bool      auto_update;///< true = init() 建内部任务，每次陀螺仪数据就绪自动 update()（没有中断时每 10 ms 一次）；false = 调用方自己 update()
-    bool      attitude;   ///< true = 内部任务每帧用 VQF 解算姿态，写 ImuData 的四元数 / 欧拉角；只在 auto_update 下生效，且要有陀螺仪数据就绪中断
+    AccRange  acc_range   = AccRange::G24;        ///< 加速度计量程
+    GyroRange gyro_range  = GyroRange::DPS2000;   ///< 陀螺仪量程
+    AccOdr    acc_odr     = AccOdr::HZ1600;       ///< 加速度计输出数据率
+    GyroOdr   gyro_odr    = GyroOdr::HZ1000_BW116;///< 陀螺仪输出数据率 / 带宽
+    bool      drdy_int    = true;                 ///< true = 加速度计 INT1、陀螺仪 INT3 输出数据就绪（推挽、高有效、对应 EXTI 上升沿）
+    bool      auto_update = true;                 ///< true = init() 建内部任务，每次陀螺仪数据就绪自动 update()（没有中断时每 10 ms 一次）；false = 调用方自己 update()
+    bool      attitude    = true;                 ///< true = 内部任务每帧用 VQF 解算姿态，写 ImuData 的四元数 / 欧拉角；只在 auto_update 下生效，且要有陀螺仪数据就绪中断
   };
 
   static constexpr uint32_t ACC_DRDY_BIT  = 1UL << 0; ///< 手动模式下 attach_task() 的任务通知位：加速度计数据就绪
@@ -185,7 +180,7 @@ public:
    * @param gyro 陀螺仪片选设备（read_dummy 必须为 0）
    * @param cfg  量程、数据率、中断
    */
-  DeviceBmi088(BspSpiDevice &acc, BspSpiDevice &gyro, const Config &cfg = Config());
+  DeviceBmi088(BspSpiDevice &acc, BspSpiDevice &gyro, const Config &cfg);
 
   /**
    * @brief 上电配置：加速度计切到 SPI 模式（一次假读）→ 两颗软复位 → 校验芯片 ID

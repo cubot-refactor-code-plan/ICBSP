@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2026
  *
  * @details 两层：
- *          - BspSpi 对应一路 SPI 外设（一个 HAL 句柄）：总线互斥锁、DMA 完成等待、弹跳缓冲、登记表；
+ *          - BspSpi 对应一路 SPI 外设（一个 HAL 句柄）：总线互斥锁、DMA 完成等待、弹跳缓冲；
  *          - BspSpiDevice 对应总线上的一个片选：每次调用自己取锁、拉片选、传输、放片选、放锁，
  *            另外提供「寄存器读写」这一最常见的器件访问方式。设备层（如 DeviceBmi088）只拿 BspSpiDevice。
  *
@@ -79,30 +79,20 @@
 /**
  * @brief SPI 总线（一路 SPI 外设，主机模式）
  *
- * @note 登记时机：init() 时登记进静态登记表；HAL 回调按 hspi 句柄查表，
- *       查不到的 SPI（宿主工程自己管的）直接忽略。登记只发生在初始化阶段。
+ * @note HAL 回调按 board_instances.hpp 里的 BSP_SPI_INSTANCES 清单逐个比对句柄，
+ *       清单外的 SPI（宿主工程自己管的）直接忽略。
  */
 class BspSpi
 {
 public:
   // ---------------- 配置 ----------------
 
-  /** @brief 总线配置（可匿名按序传入：{hspi, use_dma, dma_threshold}） */
+  /** @brief 总线配置（聚合，可用指定初始化：{.hspi = &hspi2, .use_dma = true}） */
   struct Config
   {
-    /** @brief 按序构造（参数顺序 = 字段顺序） */
-    Config( SPI_HandleTypeDef *hspi = nullptr, 
-            bool use_dma = true, 
-            uint16_t dma_threshold = 16U) : 
-            hspi(hspi), 
-            use_dma(use_dma), 
-            dma_threshold(dma_threshold)
-    {
-    }
-
-    SPI_HandleTypeDef *hspi;          ///< SPI 句柄（CubeMX 配成全双工主机、软件 NSS）
-    bool               use_dma;       ///< true = 不短于阈值的传输走 DMA；false = 全部轮询（CubeMX 可以不配 DMA / 中断，实例也不必放 .dma_buffer）
-    uint16_t           dma_threshold; ///< 走 DMA 的最小长度（字节）；更短的轮询
+    SPI_HandleTypeDef *hspi          = nullptr; ///< SPI 句柄（CubeMX 配成全双工主机、软件 NSS）
+    bool               use_dma       = true;    ///< true = 不短于阈值的传输走 DMA；false = 全部轮询（CubeMX 可以不配 DMA / 中断，实例也不必放 .dma_buffer）
+    uint16_t           dma_threshold = 16U;     ///< 走 DMA 的最小长度（字节）；更短的轮询
   };
 
   /** @brief 诊断计数：只增不减；timeout / error / lock_timeout 一切正常时应为 0 */
@@ -122,23 +112,22 @@ public:
   /** @brief 构造函数（只做赋值，FreeRTOS 资源创建推迟到 init()） */
   BspSpi(const Config &cfg);
 
-  /** @brief 析构：从登记表摘除并释放锁与信号量 */
+  /** @brief 析构：释放锁与信号量 */
   ~BspSpi();
 
-  // 登记表里存的是对象地址，复制会让两个对象争同一个句柄
+  // 两个对象绑同一句柄会让 HAL 回调分不清是谁
   BspSpi(const BspSpi &)            = delete;
   BspSpi &operator=(const BspSpi &) = delete;
 
   /**
-   * @brief 检查配置、登记，创建总线锁（互斥量，带优先级继承）与 DMA 完成信号量
+   * @brief 检查配置，创建总线锁（互斥量，带优先级继承）与 DMA 完成信号量
    *
    * @note 在初始化阶段调用（system_init() 之后、system_start() 之前），先于挂在它上面的 BspSpiDevice::init()。
    *       不能重复调用（运行中重建锁会让正在等锁的任务失效）。
    *
    * @return OK=成功；IO_ERROR=资源创建失败；
-   *         BAD_ARG=句柄为空、已被另一个实例登记、use_dma 却没链接 RX / TX DMA、
-   *                 use_dma 却不在 DMA 可达的内存里（没放进 .dma_buffer）、已经 init 过；
-   *         FULL=SPI 登记表已满
+   *         BAD_ARG=句柄为空、use_dma 却没链接 RX / TX DMA、
+   *                 use_dma 却不在 DMA 可达的内存里（没放进 .dma_buffer）、已经 init 过
    */
   Status init();
 
@@ -197,15 +186,6 @@ public:
   /** @brief 读诊断计数 */
   Diag diag() const;
 
-  /** @brief 已登记的 SPI 实例数 */
-  static uint32_t instance_count();
-
-  /** @brief 第 index 个已登记实例；越界返回 nullptr */
-  static BspSpi *instance_at(uint32_t index);
-
-  /** @brief 按 HAL 句柄查已登记实例；查不到返回 nullptr（ISR 中可调用） */
-  static BspSpi *find(const SPI_HandleTypeDef *hspi);
-
   // ----------------
 
 private:
@@ -216,15 +196,6 @@ private:
 
   /** @brief 一段 DMA 传输（len ≤ 0xFFFF；缓冲必须 DMA 可达）：启动后阻塞等完成信号量 */
   Status transfer_dma(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms);
-
-  /**
-   * @brief 把本实例加入登记表
-   * @return OK=已登记；BAD_ARG=句柄为空或已被另一个实例登记；FULL=登记表满
-   */
-  Status register_self();
-
-  /** @brief 从登记表摘除本实例（init() 中途失败、析构时调用；不在表里则无操作） */
-  void unregister_self();
 
   /** @brief 本实例是否已 init() 成功 */
   bool _init = false;
@@ -249,12 +220,6 @@ private:
   uint8_t _tx_bounce[SPI_DMA_BUFFER_SIZE]; ///< DMA 发送弹跳缓冲（也用来放 0xFF 填充）
   uint8_t _rx_bounce[SPI_DMA_BUFFER_SIZE]; ///< DMA 接收弹跳缓冲（也用来丢弃收到的字节）
 
-  /** @brief 登记表容量：SPI_MAX_INSTANCES（默认 6，STM32H723 有 SPI1~6） */
-  static constexpr uint32_t MAX_INSTANCES = SPI_MAX_INSTANCES;
-
-  static BspSpi  *_registry[MAX_INSTANCES]; ///< 已登记实例（只在初始化阶段写，中断与任务只读）
-  static uint32_t _registry_num;            ///< 已登记数量
-
   // ----------------
 };
 
@@ -275,25 +240,13 @@ class BspSpiDevice
 public:
   // ---------------- 配置 ----------------
 
-  /** @brief 设备配置（可匿名按序传入：{cs_port, cs_pin, read_flag, read_dummy}） */
+  /** @brief 设备配置（聚合，可用指定初始化：{.cs_port = ..., .cs_pin = ...}） */
   struct Config
   {
-    /** @brief 按序构造（参数顺序 = 字段顺序） */
-    Config( GPIO_TypeDef *cs_port = nullptr, 
-            uint16_t cs_pin = 0U, 
-            uint8_t read_flag = 0x80U, 
-            uint8_t read_dummy = 0U) : 
-            cs_port(cs_port), 
-            cs_pin(cs_pin), 
-            read_flag(read_flag), 
-            read_dummy(read_dummy)
-    {
-    }
-
-    GPIO_TypeDef *cs_port;    ///< 片选端口（CubeMX 配成推挽输出、初始高电平）
-    uint16_t      cs_pin;     ///< 片选引脚掩码（GPIO_PIN_x），低有效
-    uint8_t       read_flag;  ///< 读寄存器时在地址字节上置的位（写时清掉）
-    uint8_t       read_dummy; ///< 读寄存器时地址后面跟的无效字节数
+    GPIO_TypeDef *cs_port    = nullptr; ///< 片选端口（CubeMX 配成推挽输出、初始高电平）
+    uint16_t      cs_pin     = 0U;      ///< 片选引脚掩码（GPIO_PIN_x），低有效
+    uint8_t       read_flag  = 0x80U;   ///< 读寄存器时在地址字节上置的位（写时清掉）
+    uint8_t       read_dummy = 0U;      ///< 读寄存器时地址后面跟的无效字节数
   };
 
   // ----------------
