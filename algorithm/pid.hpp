@@ -279,6 +279,17 @@ public:
    */
   void print();
 
+  /** @brief PID 最近一拍的输入与原始输出（供波形 / 调试读取） */
+  struct Data
+  {
+    float target;   ///< 最近一次 calc() 的目标值
+    float feedback; ///< 最近一次 calc() 的反馈值
+    float output;   ///< 最近一次限幅后的原始输出
+  };
+
+  /** @brief 读取目标值、当前值、原始输出 */
+  Data get() const { return {_input.target, _input.feedback, _output}; }
+
   /* ==================== 数据接口 ==================== */
 
   PidInput _input;         ///< 输入缓存
