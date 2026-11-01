@@ -45,7 +45,7 @@ inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
  *       （放错了 init() 返回 BAD_ARG）。只收不发的串口用 UartMode::RxOnly。
  *       CubeMX 里：RX DMA（Normal）+ TX DMA + 串口全局中断。
  */
-inline __attribute__((section(".dma_buffer"))) BspUartT<uart_detail::DmaTransport, 128, 128> bsp_uart1(
+inline __attribute__((section(".dma_buffer"))) BspUartT<mode::dma, 128, 128> bsp_uart1(
     {.huart = &huart1, .mode = UartMode::TxRx, .baudrate = 115200U});
 
 /**

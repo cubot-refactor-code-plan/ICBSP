@@ -64,6 +64,14 @@ struct ItTransport
 }
 
 
+/** @brief BspUartT 的 Transport 短名：mode::dma / mode::it */
+namespace mode
+{
+using dma = uart_detail::DmaTransport;
+using it  = uart_detail::ItTransport;
+}
+
+
 /** @brief 串口收发模式 */
 enum class UartMode : uint8_t
 {
@@ -76,7 +84,7 @@ enum class UartMode : uint8_t
 /**
  * @brief 串口驱动（IDLE 中断 + DMA/中断收发 + FreeRTOS 流缓冲区）
  *
- * @tparam Transport DMA 或中断传输策略
+ * @tparam Transport DMA 或中断传输策略（mode::dma / mode::it）
  * @tparam RX_SIZE 接收流缓冲区与接收暂存区大小（字节）
  * @tparam TX_SIZE 发送流缓冲区、发送暂存区与 printf 缓冲大小（字节）
  *
