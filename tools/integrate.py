@@ -467,8 +467,13 @@ def plan_app(host, plan, rep, board_dir, app_dir):
         rep.ok(step, f"复制 {', '.join(copied)}")
     else:
         rep.skip(step, "board_cfg / app_main / app_task 已存在")
-    if (board / "board_cfg.cpp").exists():
-        check_board_cfg(host, rep, (board / "board_cfg.cpp").read_text(encoding="utf-8"), board_rel)
+    cfg_parts = []
+    for name in ("board_cfg.hpp", "board_cfg.cpp"):
+        cfg_path = board / name
+        if cfg_path.exists():
+            cfg_parts.append(cfg_path.read_text(encoding="utf-8"))
+    if cfg_parts:
+        check_board_cfg(host, rep, "\n".join(cfg_parts), board_rel)
     app_main = app / "app_main.cpp"
     if app_main.exists() and "user_init(" in strip_comments(app_main.read_text(encoding="utf-8")):
         rep.warn(step, f"{app_rel}/app_main.cpp 仍在调 user_init()：当前模板已改为 system_init/board_init/system_start")

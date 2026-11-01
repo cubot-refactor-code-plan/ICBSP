@@ -94,7 +94,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
 
 3. **`freertos.c`**（`templates/freertos_user_code.c`）：USER CODE 4 / 5 的钩子分别调 `fault_on_stack_overflow(pcTaskName)`、`fault_on_malloc_failed()`；`MX_FREERTOS_Init()` 的 USER CODE Init 段调 `app_init()`。
 
-4. **板级实例配置**（`templates/user/board/board_cfg.hpp` / `board_cfg.cpp`；照抄模板后按本板 CubeMX 句柄修改）：
+4. **板级实例配置**（`templates/user/board/board_cfg.hpp` / `board_cfg.cpp`；实例写在 `.hpp` 的 inline 变量里，`.cpp` 只保留 `board_init()`）：
 
    ```cpp
    #include "fdcan.h"   // 本工程 CubeMX 生成的句柄（库不包含这些头文件）
@@ -104,12 +104,13 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
    #include "bsp_pwm.hpp"
    #include "bsp_uart.hpp"
 
-   // 哪些外设、用哪个句柄、波特率 / 定时器参数——全部由用户决定，库里不写死任何板级常量
-   BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
-   __attribute__((section(".dma_buffer")))
+   // 哪些外设、用哪个句柄、波特率 / 定时器参数——全部由用户决定，库里不写死任何板级常量。
+   // 实例用 C++20 inline 变量定义在 board_cfg.hpp（不再需要 extern + .cpp 定义）。
+   inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
+   inline __attribute__((section(".dma_buffer")))
    BspUartT<uart_detail::DmaTransport, 128, 128> bsp_uart1(
        {.huart = &huart1, .mode = UartMode::TxRx, .baudrate = 115200U});
-   BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U});
+   inline BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U});
 
    void board_init(void)
    {
