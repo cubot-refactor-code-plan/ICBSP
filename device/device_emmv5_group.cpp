@@ -7,7 +7,7 @@
 // ---------------- 模板实例化 ----------------
 
 // 显式实例化：必须覆盖 宿主的 board_cfg.cpp 里用到的串口类型，否则链接时找不到成员函数
-template class DeviceEmmv5GroupT<BspUartT<uart_detail::DmaTransport, 128, 128>>;
+template class DeviceEmmv5GroupT<BspUartT<mode::dma, 128, 128>>;
 
 // ----------------
 // ---------------- 构造与生命周期 ----------------

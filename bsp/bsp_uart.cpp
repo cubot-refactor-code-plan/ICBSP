@@ -9,9 +9,9 @@
 
 // 显式实例化：按项目实际使用的串口类型生成。
 // 新增串口时要同步改三处：这里、下面的 HAL 回调分发表、board_cfg.cpp 的实例定义。
-template class BspUartT<uart_detail::DmaTransport, 128, 128>;
-template class BspUartT<uart_detail::ItTransport, 128, 32>;
-template class BspUartT<uart_detail::ItTransport, 128, 128>;
+template class BspUartT<mode::dma, 128, 128>;
+template class BspUartT<mode::it, 128, 32>;
+template class BspUartT<mode::it, 128, 128>;
 
 // ----------------
 // ---------------- HAL 回调分发 ----------------
