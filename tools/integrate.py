@@ -577,11 +577,10 @@ def plan_vscode(host, plan, rep, preset):
     path = host / ".vscode/settings.json"
     if not path.exists():
         db_dir = preset_binary_dir(host, preset).replace("${workspaceFolder}/", "")
-        lib_rel = Path(os.path.relpath(LIB_ROOT, host)).as_posix()
         text = (
             "{\n"
             f"    // CMake 预设把编译数据库放在 {db_dir}，clangd 默认只找 build/，需显式指定（先 cmake --preset {preset} 一次）。\n"
-            f"    // 命令行参数优先于 {lib_rel}/.clangd 里指向示例工程的 CompilationDatabase，库代码也用本工程的数据库。\n"
+            f"    // 命令行参数指定后，库代码也使用宿主工程的编译数据库。\n"
             '    "clangd.arguments": [\n'
             + ",\n".join(f"        {json.dumps(a)}" for a in args)
             + "\n    ],\n"

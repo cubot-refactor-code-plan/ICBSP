@@ -86,7 +86,7 @@ USER CODE 段、链接脚本、`FreeRTOSConfig.h`、`freertos.c` 未受影响；
 | 文档 | `README.md`、`bsp_uart.hpp`、`templates/hardware_config.h` | 新默认值、新配置项、FIFO 与远程帧行为、实测记录位置 | 已更新 | — |
 | 待办 | `undo.md`（git 忽略） | HAL `HAL_DMA_Abort()` 读-改-写竞争（诊断 3） | RX 改 DMA 循环模式（用户确认下次做） | — |
 
-另：submodule 的示例工程 `examples/dm_mc02` 用改后的库编译通过（0 warning），未上板。
+另：当时宿主工程用改后的库编译通过（0 warning），未上板。
 
 ## 4. CubeMX：HAL 时基中断优先级（2026-10-17，诊断 3 的缓解）
 
@@ -128,7 +128,7 @@ USER CODE 段、链接脚本、`FreeRTOSConfig.h`、`freertos.c` 未受影响；
 | 其他 | `service/imu_definition.hpp`（用户新建）、`device/dm_imu.*`（用户删除） | IMU 通用数据 `ImuData`；BMI088 按 `DjiMotor` 的写法把它存在对象里（`data()` / `raw_data()` / `temperature()`） |
 | 文档 | `README.md`、`templates/board_cfg.cpp`、`docs/bsp_test/` | 1.1 节加 SPI 要求；模块表 / 目录树加 `bsp_spi`、`device_bmi088`、`imu_definition`，删 `dm_imu`；新增 3.7 节（SPI / BMI088 实机测试）；模板加注释掉的 SPI / BMI088 示例；同步 `docs/bsp_test/` 副本 |
 
-另：示例工程 `examples/dm_mc02`（开着 SPI）用改后的库编译通过（0 warning），未上板。
+另：当时宿主工程（开着 SPI）用改后的库编译通过（0 warning），未上板。
 
 宿主工程：
 

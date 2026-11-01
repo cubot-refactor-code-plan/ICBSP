@@ -12,7 +12,7 @@
  *
  * @details 使用示例：
  *
- * @note 实例写在用户的板级配置里（示例：examples/dm_mc02/user/board/bsp_cfg.cpp），
+ * @note 实例写在用户的板级配置里（宿主示例：user/board/bsp_cfg.cpp），
  *       在 system_init() 之后、system_start() 之前 init()；init() 时登记进 BspCan 登记表，
  *       HAL 回调与库的 CAN 任务靠它找到实例：
  *

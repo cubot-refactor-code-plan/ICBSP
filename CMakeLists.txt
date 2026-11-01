@@ -6,14 +6,13 @@
 #   add_subdirectory(third_party/stm32-framework)
 #   target_link_libraries(${CMAKE_PROJECT_NAME} stm32_framework)
 #
-# 示例工程见 examples/dm_mc02（它用 add_subdirectory(../.. ...) 接入本库）。
+# 本仓库只提供库、模板和文档，不内置示例工程。
 # ------------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.22)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     message(FATAL_ERROR
-        "stm32_framework 是库，不能单独配置。请在宿主工程里 add_subdirectory() 接入，"
-        "或者构建示例：cd examples/dm_mc02 && cmake --preset Debug")
+        "stm32_framework 是库，不能单独配置。请在宿主工程里 add_subdirectory() 接入本库。")
 endif()
 
 if(NOT TARGET stm32cubemx)
