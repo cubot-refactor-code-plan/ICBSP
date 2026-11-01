@@ -1,9 +1,9 @@
 /**
  * @file bsp_pwm.hpp
  * @author Rh
- * @brief PWM 通道驱动 —— 参数全部由 Config 手动传入（驱动内无板级常量），上电默认 0% 占空比
- * @version 0.1
- * @date 2026-10-02
+ * @brief PWM 通道驱动 —— 参数全部由 Config 传入（驱动内无板级常量）
+ * @version 0.2
+ * @date 2026-10-23
  *
  * @copyright Copyright (c) 2026
  *
@@ -11,34 +11,20 @@
  *          定时器时钟、PSC、ARR 全部由使用方从 CubeMX 生成的配置里抄进 Config，
  *          驱动本身不写死任何硬件常量，换板子只改实例化处的参数。
  *
- * @note 宿主板实例（见 user/board/bsp_cfg.cpp，参数取自 CubeMX；定时器时钟 275 MHz = APB1/APB2 137.5 MHz × 2）：
- *
- *       bsp_pwm_buzzer  TIM12_CH2  PB15   无源蜂鸣器（由 Device 层 DeviceBuzzer 使用）
- *
- *       其余 PWM 通道（排针舵机、陀螺仪加热等）按需在用户的板级配置里照同样方式实例化。
- *
- * @note 用法（占空比是 0~100 的浮点值；脉宽接口对舵机更直观）：
- *
- *       bsp_pwm1.set_duty(7.5f);         // 占空比 7.5%
- *       bsp_pwm1.set_pulse_us(1500.0f);  // 舵机中位：1.5 ms 高电平
- *       bsp_pwm1.off();                  // 关断（CCR=0，引脚保持低电平）
+ * @note 换算式、计数单位与“同定时器共通道 ARR”的后果见 bsp_pwm.md。
  *
  * @warning 同一定时器的多个通道共用计数器与 ARR：set_freq() 会同时改变该定时器
- *          所有通道的频率（例如 TIM1 的 PE9 与 PE13 必须同频）。
+ *          所有通道的频率。
  * @warning PSC 由 CubeMX 的 MX_TIMx_Init() 写入，本类只用 Config::prescaler 做换算、
  *          不改 PSC 寄存器；该值必须与 CubeMX 保持一致，否则脉宽/频率换算是错的。
- * @warning 内部含浮点运算（M7 有 FPU）：只在任务上下文调用，不要放进 ISR。
+ * @warning 内部含浮点运算：只在任务上下文调用，不要放进 ISR。
  */
 
 #ifndef __BSP_PWM_HPP__
 #define __BSP_PWM_HPP__
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关来自 stm32h7xx_hal_conf.h）
-
-// 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
-#ifdef HAL_TIM_MODULE_ENABLED
-
 #include "status.hpp" // 统一状态码
+#include "stm32h7xx_hal.h" // IWYU pragma: keep（TIM_HandleTypeDef / TIM_CHANNEL_x）
 
 #include <stdint.h>
 
@@ -57,19 +43,12 @@ public:
    */
   struct Config
   {
-    /**
-     * @brief 按序构造配置（参数顺序 = 字段顺序，可匿名传入）
-     */
-    Config(TIM_HandleTypeDef *htim = nullptr, uint32_t channel = 0U, uint32_t timer_clk_hz = 0U, uint32_t prescaler = 0U, uint32_t period = 0U, float duty_pct = 0.0f) : htim(htim), channel(channel), timer_clk_hz(timer_clk_hz), prescaler(prescaler), period(period), duty_pct(duty_pct)
-    {
-    }
-
-    TIM_HandleTypeDef *htim;         ///< 定时器句柄
-    uint32_t           channel;      ///< PWM 通道（TIM_CHANNEL_x；注意 TIM_CHANNEL_1 的值就是 0，合法）
-    uint32_t           timer_clk_hz; ///< 定时器输入时钟 (Hz)：计数器时钟 = timer_clk_hz / (prescaler + 1)
-    uint32_t           prescaler;    ///< PSC 寄存器值（CubeMX 值，分频 = prescaler + 1）
-    uint32_t           period;       ///< ARR 寄存器值（CubeMX 值，一个周期 = period + 1 个计数）
-    float              duty_pct;     ///< 上电占空比 (%)，0~100，默认 0
+    TIM_HandleTypeDef *htim         = nullptr; ///< 定时器句柄
+    uint32_t           channel      = 0U;      ///< PWM 通道（TIM_CHANNEL_x；注意 TIM_CHANNEL_1 的值就是 0，合法）
+    uint32_t           timer_clk_hz = 0U;      ///< 定时器输入时钟 (Hz)：计数器时钟 = timer_clk_hz / (prescaler + 1)
+    uint32_t           prescaler    = 0U;      ///< PSC 寄存器值（CubeMX 值，分频 = prescaler + 1）
+    uint32_t           period       = 0U;      ///< ARR 寄存器值（CubeMX 值，一个周期 = period + 1 个计数）
+    float              duty_pct     = 0.0f;    ///< 上电占空比 (%)，0~100，默认 0
   };
 
   // ----------------
@@ -78,8 +57,19 @@ public:
   /** @brief 默认构造：未绑定通道，须再调 init() */
   BspPwm() = default;
 
-  /** @brief 只保存配置，硬件操作全部推迟到 init() */
-  explicit BspPwm(const Config &cfg);
+  /**
+   * @brief 只保存配置，硬件操作全部推迟到 init()
+   *
+   * @note constexpr + 内联：bsp_cfg.hpp 的全局实例是 inline 变量，需要常量初始化
+   *       （否则每个包含该头文件的 TU 都会生成一份构造代码）。
+   */
+  constexpr explicit BspPwm(const Config &cfg) :
+    _config(cfg),
+    // 计数器时钟 = 定时器时钟 / (PSC + 1)。PSC 越界时先置 0，真正的拒绝在 init() 里做
+    _counter_clk_hz((cfg.prescaler > 0xFFFFU) ? 0U : (cfg.timer_clk_hz / (cfg.prescaler + 1U))),
+    _period(cfg.period)
+  {
+  }
 
   /** @brief 默认析构 */
   ~BspPwm() = default;
@@ -121,16 +111,16 @@ public:
   void off();
 
   /** @brief 当前生效的占空比 (%) */
-  float duty_pct() const;
+  float get_duty_pct() const;
 
   /** @brief 计数器时钟 (Hz) = timer_clk_hz / (prescaler + 1) */
-  uint32_t counter_clk_hz() const;
+  uint32_t get_counter_clk_hz() const;
 
   /** @brief 当前一个周期的计数个数（ARR + 1） */
-  uint32_t period_cnt() const;
+  uint32_t get_period_cnt() const;
 
   /** @brief 当前频率 (Hz) = 计数器时钟 / 周期计数 */
-  uint32_t freq_hz() const;
+  uint32_t get_freq_hz() const;
 
   // ----------------
 private:
@@ -150,7 +140,5 @@ private:
 
   // ----------------
 };
-
-#endif // HAL_TIM_MODULE_ENABLED
 
 #endif // __BSP_PWM_HPP__

@@ -1,21 +1,6 @@
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
-
-// 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本文件不参与编译
-#ifdef HAL_TIM_MODULE_ENABLED
-
 #include "bsp_pwm.hpp"
 
 
-// ---------------- 构造 ----------------
-
-
-/** @brief 只保存配置，硬件操作在 init() 里做 */
-BspPwm::BspPwm(const Config &cfg) : _config(cfg)
-{
-}
-
-
-// ----------------
 // ---------------- 公共接口 ----------------
 
 
@@ -35,11 +20,7 @@ Status BspPwm::init()
       IS_TIM_CCX_INSTANCE(_config.htim->Instance, _config.channel) == 0U)
     return Status::BAD_ARG;
 
-  // 计数器时钟 = 定时器时钟 / (PSC + 1)
-  _counter_clk_hz = _config.timer_clk_hz / (_config.prescaler + 1U);
-
-  // 与 CubeMX 配置对齐一次 ARR，之后由 set_freq() 动态改
-  _period = _config.period;
+  // 与 CubeMX 配置对齐一次 ARR，之后由 set_freq() 动态改（_counter_clk_hz / _period 构造时已算好）
   __HAL_TIM_SET_AUTORELOAD(_config.htim, _period);
 
   // 关键：先把 CCR 清 0，保证启动瞬间是 0% 占空比（CubeMX 里 Pulse 可能非 0）
@@ -140,25 +121,25 @@ void BspPwm::_apply_duty()
 
 
 /** @brief 当前生效占空比 (%) */
-float BspPwm::duty_pct() const
+float BspPwm::get_duty_pct() const
 {
   return _duty_pct;
 }
 
 /** @brief 计数器时钟 (Hz) */
-uint32_t BspPwm::counter_clk_hz() const
+uint32_t BspPwm::get_counter_clk_hz() const
 {
   return _counter_clk_hz;
 }
 
 /** @brief 当前周期计数个数（ARR + 1） */
-uint32_t BspPwm::period_cnt() const
+uint32_t BspPwm::get_period_cnt() const
 {
   return _period + 1U;
 }
 
 /** @brief 当前频率 (Hz) */
-uint32_t BspPwm::freq_hz() const
+uint32_t BspPwm::get_freq_hz() const
 {
   if (_counter_clk_hz == 0U)
     return 0U;
@@ -167,5 +148,3 @@ uint32_t BspPwm::freq_hz() const
 }
 
 // ----------------
-
-#endif // HAL_TIM_MODULE_ENABLED
