@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-stm32_framework 宿主工程自动接入：按 README 第 1 节把 CubeMX（CMake）工程改成能用本库的样子。
+stm32_framework 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX（CMake）工程改成能用本库的样子。
 
 用法（在宿主工程根目录，或用 --host 指定）：
 
@@ -8,7 +8,7 @@ stm32_framework 宿主工程自动接入：按 README 第 1 节把 CubeMX（CMak
     python3 third_party/stm32-framework/tools/integrate.py             # 执行
 
 做的事（每一步都先判断是否已完成，已完成就跳过，可重复运行）：
-  1. 检查 CubeMX 前提（README 1.1）：STM32H7、CMake 工具链、FreeRTOS CMSIS_V2、tick 1 kHz、栈溢出检查 2、分配失败钩子
+  1. 检查 CubeMX 前提（docs/接入指南.md 第 1 节）：STM32H7、CMake 工具链、FreeRTOS CMSIS_V2、tick 1 kHz、栈溢出检查 2、分配失败钩子
   2. 链接脚本加 .dma_buffer / .noinit（templates/linker_sections.ld）
   3. FreeRTOSConfig.h 的 USER CODE 1：configASSERT → fault_on_assert（templates/FreeRTOSConfig_user_code.h）
   4. freertos.c 的 Includes / 4 / 5 / Init 段：钩子记录现场、调 app_init()（templates/freertos_user_code.c）
@@ -238,7 +238,7 @@ def check_prerequisites(host, rep):
     if main_c.is_file() and "SCB_EnableDCache" in main_c.read_text(encoding="utf-8"):
         rep.warn(step, "D-Cache 已开启：库假定 D-Cache 关闭，否则 .dma_buffer 要用 MPU 设成非缓存区")
     if ok:
-        rep.ok(step, "CubeMX 配置满足 README 1.1")
+        rep.ok(step, "CubeMX 配置满足 docs/接入指南.md 第 1 节的要求")
     return ok
 
 
@@ -1076,7 +1076,7 @@ def default_host():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="把 stm32_framework 接入 STM32H7 CubeMX（CMake）宿主工程（README 第 1 节）")
+    ap = argparse.ArgumentParser(description="把 stm32_framework 接入 STM32H7 CubeMX（CMake）宿主工程（详见 docs/接入指南.md）")
     ap.add_argument("--host", type=Path, help="宿主工程根目录（默认：本库作为 submodule 所在的工程，否则当前目录）")
     ap.add_argument("--dry-run", action="store_true", help="只检查并打印将要做的修改，不写文件")
     ap.add_argument("--board-dir", default="user/board", help="板级配置目录，相对宿主根（默认 user/board）")
