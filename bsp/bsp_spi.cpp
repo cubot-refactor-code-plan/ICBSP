@@ -3,12 +3,12 @@
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
 
-#include "bsp_spi.hpp"
-#include "board_instances.hpp"
+#  include "board_instances.hpp"
+#  include "bsp_spi.hpp"
 
-#include <string.h>
+#  include <string.h>
 
-#include "task.h" // IWYU pragma: keep（xTaskGetSchedulerState）
+#  include "task.h" // IWYU pragma: keep（xTaskGetSchedulerState）
 
 
 // ---------------- 内部工具 ----------------
@@ -63,11 +63,18 @@ extern "C"
   void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    if (false) {}
-#define X(name) \
-    else if (hspi == name.handle()) { name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); }
+    if (false)
+    {
+    }
+
+#  define X(name)                                       \
+    else if (hspi == name.handle())                     \
+    {                                                   \
+      name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); \
+    }
     BSP_SPI_INSTANCES(X)
-#undef X
+#  undef X
+
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
@@ -75,20 +82,23 @@ extern "C"
   void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    if (false) {}
-#define X(name) \
-    else if (hspi == name.handle()) { name.on_error_isr(&xHigherPriorityTaskWoken); }
+    if (false)
+    {
+    }
+
+#  define X(name)                                   \
+    else if (hspi == name.handle())                 \
+    {                                               \
+      name.on_error_isr(&xHigherPriorityTaskWoken); \
+    }
     BSP_SPI_INSTANCES(X)
-#undef X
+#  undef X
+
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 }
 
 // ----------------
-
-
-// ----------------
-
 
 // ---------------- 总线：构造与初始化 ----------------
 
@@ -316,7 +326,7 @@ void BspSpi::on_txrx_cplt_isr(BaseType_t *pxHigherPriorityTaskWoken)
 void BspSpi::on_error_isr(BaseType_t *pxHigherPriorityTaskWoken)
 {
   _xfer_error = true;
-  _error_cnt = _error_cnt + 1U;
+  _error_cnt  = _error_cnt + 1U;
   if (_done != nullptr)
   {
     xSemaphoreGiveFromISR(_done, pxHigherPriorityTaskWoken);
