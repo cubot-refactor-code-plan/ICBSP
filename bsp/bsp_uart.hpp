@@ -73,7 +73,7 @@ using it  = uart_detail::ItTransport;
 
 
 /** @brief 串口收发模式 */
-enum class UartDirection : uint8_t
+enum class UartDir : uint8_t
 {
   RxOnly = 0, ///< 只接收
   TxOnly,     ///< 只发送
@@ -105,12 +105,12 @@ public:
    * @brief 串口配置
    *
    * @note 聚合体：可用指定初始化器 `{.huart = &huartX, .mode = ..., .baudrate = ...}`
-   *       （必须按声明顺序），也兼容原来的位置初始化 `{&huartX, UartDirection::TxRx, 115200U}`。
+   *       （必须按声明顺序），也兼容原来的位置初始化 `{&huartX, UartDir::TxRx, 115200U}`。
    */
   struct Config
   {
     UART_HandleTypeDef *huart    = nullptr;        ///< UART 句柄
-    UartDirection            mode     = UartDirection::TxRx; ///< 收发模式
+    UartDir            mode     = UartDir::TxRx; ///< 收发模式
     uint32_t            baudrate = 115200U;        ///< 波特率 (bit/s)，TX 卡死判定要用它算一包发完要多久
   };
 
@@ -154,12 +154,12 @@ public:
    *       只有常量初始化才不会让每个包含该头文件的 TU 都生成一份构造代码。
    */
   constexpr BspUartT(const Config &cfg) :
-    _huart(cfg.huart), _rx_should_run(cfg.mode != UartDirection::TxOnly), _mode(cfg.mode), _baudrate(cfg.baudrate)
+    _huart(cfg.huart), _rx_should_run(cfg.mode != UartDir::TxOnly), _mode(cfg.mode), _baudrate(cfg.baudrate)
   {
   }
 
   /**
-   * @brief 按 UartDirection 创建流缓冲区/锁，并启动接收
+   * @brief 按 UartDir 创建流缓冲区/锁，并启动接收
    *
    * @note 必须在调度器启动之后调用，因为里面要创建 FreeRTOS 对象。
    *       可以重复调用：开头会先把上一次的资源释放掉。
@@ -307,7 +307,7 @@ private:
   SemaphoreHandle_t    _printf_lock      = nullptr; ///< printf 锁：保护实例共用的格式化缓冲区
 
   bool     _rx_should_run = true;       ///< 是否希望 RX 在收；某次失败不会把它永久置成 false
-  UartDirection _mode;                       ///< 收发模式
+  UartDir _mode;                       ///< 收发模式
   uint32_t _baudrate;                   ///< 波特率 (bit/s)，TX 卡死判定要用它算阈值
   uint8_t  _rx_buffer[RX_SIZE]       = {}; ///< 接收暂存区
   uint8_t  _tx_buffer[TX_SIZE]       = {}; ///< 发送暂存区
@@ -336,13 +336,13 @@ private:
   /** @brief 当前配置是否启用发送 */
   bool _tx_enabled() const
   {
-    return _mode != UartDirection::RxOnly;
+    return _mode != UartDir::RxOnly;
   }
 
   /** @brief 当前配置是否启用接收 */
   bool _rx_enabled() const
   {
-    return _mode != UartDirection::TxOnly;
+    return _mode != UartDir::TxOnly;
   }
 
   /**
