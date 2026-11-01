@@ -15,15 +15,16 @@
 
 ```text
 stm32-framework/
-├─ bsp/          CAN、UART、SPI、PWM、GPIO、Key、Encoder、DWT
-├─ service/      Status / EventState、Online、CAN 收发节点、fault_record、system
-├─ tasks/        sys_task、can_rx_task、can_tx_task
-├─ device/       DjiMotor、DeviceMotor、Servo、R9DS、Emm_V5、BMI088、Buzzer
-├─ protocol/     emmv5_protocol（帧编解码）
-├─ algorithm/    PID、QuaternionPID、VQF、Quaternion、Matrix、RLS
+├─ code/         库源码（分层见 docs/code/）
+│  ├─ bsp/       CAN、UART、SPI、PWM、GPIO、Key、Encoder、DWT
+│  ├─ service/   Status / EventState、Online、CAN 收发节点、fault_record、system
+│  ├─ device/    DjiMotor、DeviceMotor、Servo、R9DS、Emm_V5、BMI088、Buzzer
+│  ├─ protocol/  emmv5_protocol（帧编解码）
+│  ├─ algorithm/ PID、QuaternionPID、VQF、Quaternion、Matrix、RLS
+│  └─ tasks/     sys_task、can_rx_task、can_tx_task
 ├─ templates/    宿主接入模板（board、app、链接脚本、FreeRTOS 钩子、.vscode、Flash）
-├─ tools/        integrate.py：自动接入 CubeMX 工程
-├─ docs/         接入指南、常用接口、编码规范、器件手册、历史测试记录
+├─ tools/        integrate.py（自动接入）、draw_diagrams.py（画架构图）
+├─ docs/         接入指南、常用接口、编辑器配置、代码层说明、架构图、器件手册
 └─ CMakeLists.txt
 ```
 
@@ -64,6 +65,7 @@ python3 third_party/stm32-framework/tools/integrate.py             # 执行
 | 文档                                      | 内容                                                               |
 | ----------------------------------------- | ------------------------------------------------------------------ |
 | [docs/接入指南.md](docs/接入指南.md)       | 硬性要求逐条解释、CubeMX 设置、自动/手动接入、自查清单、常见问题   |
+| [docs/code/](docs/code/)                   | 代码层索引：分层依赖图、启动顺序图、依赖矩阵、六层文档             |
 | [docs/常用接口.md](docs/常用接口.md)       | UART / CAN / 电机 / PID / 系统状态的使用示例                       |
 | [docs/编辑器配置.md](docs/编辑器配置.md)   | `.vscode/settings.json` 各项作用；outline++ 分区正则逐段拆解       |
 | [docs/编码规范.md](docs/编码规范.md)       | 命名、分层、注释格式                                               |
