@@ -1,412 +1,754 @@
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
-
-// 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本文件不参与编译
-#ifdef HAL_FDCAN_MODULE_ENABLED
-
 #include "bsp_can.hpp"
+#include "board_instances.hpp"
+
 #include <string.h>
 
 
-/* ==================== 中断回调函数 ==================== */
+// 宿主没在 CubeMX 里开 FDCAN 时整套驱动不参与编译
+#ifdef HAL_FDCAN_MODULE_ENABLED
 
+// ---------------- 模板实例化 ----------------
+
+// 显式实例化：按项目实际使用的缓冲深度生成（与 bsp_cfg.cpp 的实例保持一致）
+template class BspCanT<16, 16>;
+
+// ----------------
+// ---------------- 中断回调函数 ----------------
+
+// HAL 的 FDCAN 回调没有实例参数，只能按 hfdcanX 查表。
+// 新增 CAN 时要同步改这里的分发分支，以及 bsp_cfg.cpp 的实例定义。
 extern "C"
 {
   /**
-   * @brief FDCAN接收FIFO0中断回调
+   * @brief FDCAN 接收 FIFO0 中断回调
+   *
+   * @note HAL 在调用本回调前已把 RxFifo0ITs 里的标志全部写 1 清除，
+   *       所以这里是这些事件唯一的处理机会。RF0N/RF0W/RF0F/RF0L 四位共用本回调。
    */
   void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
   {
-    // 按句柄查登记表；没有登记的 FDCAN（宿主工程自己管理的）直接忽略
-    if (RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE)
-    {
-      BspCan *can = BspCan::find(hfdcan);
-      if (can != nullptr)
-      {
-        can->process_fifo0_isr();
-      }
-    }
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+#define X(name) \
+    if (hfdcan == name.handle()) { name.process_fifo0_isr(RxFifo0ITs, &xHigherPriorityTaskWoken); }
+    BSP_CAN_INSTANCES(X)
+#undef X
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
-  /**
-   * @brief FDCAN发送 FIFO 变空回调，用于继续排空软件发送缓冲区
-   */
   void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    BspCan *can = BspCan::find(hfdcan);
-    if (can != nullptr)
-    {
-      can->trigger_tx_from_isr(&xHigherPriorityTaskWoken);
-    }
-
+#define X(name) \
+    if (hfdcan == name.handle()) { name.trigger_tx_from_isr(&xHigherPriorityTaskWoken); }
+    BSP_CAN_INSTANCES(X)
+#undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
-}
 
-
-/* ==================== 实例登记表 ==================== */
-
-BspCan  *BspCan::_registry[BspCan::MAX_INSTANCES] = {};
-uint32_t BspCan::_registry_num                    = 0U;
-
-uint32_t BspCan::instance_count()
-{
-  return _registry_num;
-}
-
-BspCan *BspCan::instance_at(uint32_t index)
-{
-  return (index < _registry_num) ? _registry[index] : nullptr;
-}
-
-/** @brief 线性查找（最多 3 项），ISR 中调用 */
-BspCan *BspCan::find(const FDCAN_HandleTypeDef *hfdcan)
-{
-  for (uint32_t i = 0U; i < _registry_num; ++i)
+  void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
   {
-    if (_registry[i]->_hfdcan == hfdcan)
-    {
-      return _registry[i];
-    }
+#define X(name) \
+    if (hfdcan == name.handle()) { name.process_error_isr(ErrorStatusITs); }
+    BSP_CAN_INSTANCES(X)
+#undef X
   }
-  return nullptr;
 }
 
-/** @brief 登记本实例；同一句柄只允许一个实例，重复登记自己无副作用 */
-Status BspCan::register_self()
+
+// ----------------
+// ---------------- 类函数实现 ----------------
+
+/** @brief 先停外设并关中断，再释放软件资源（原析构函数内容） */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::deinit()
+{
+  _reset_hardware();
+  _cleanup_resources();
+}
+
+/**
+ * @brief 初始化：复位外设、创建收发消息缓冲与 TX 锁、配置滤波器并启动
+ *
+ * @return Status OK=成功；BAD_ARG=句柄为空；IO_ERROR=资源创建或硬件启动失败
+ *
+ * @note 可重复调用：开头先 _reset_hardware() + _cleanup_resources()；任一步失败都走
+ *       _rollback_init()，不留下半初始化状态。
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+Status BspCanT<RX_DEPTH, TX_DEPTH>::init()
 {
   if (_hfdcan == nullptr)
   {
-    return Status::BAD_ARG;
+    return Status::BAD_ARG; // 句柄非法，后续所有 HAL 调用都不可用
   }
-  for (uint32_t i = 0U; i < _registry_num; ++i)
-  {
-    if (_registry[i] == this)
-    {
-      return Status::OK;
-    }
-    if (_registry[i]->_hfdcan == _hfdcan)
-    {
-      return Status::BAD_ARG; // 两个实例绑定同一条总线：回调只会交给其中一个，属于配置错误
-    }
-  }
-  if (_registry_num >= MAX_INSTANCES)
-  {
-    return Status::FULL;
-  }
-  _registry[_registry_num] = this;
-  ++_registry_num;
-  return Status::OK;
-}
 
+  // 可重复调用：先复位外设，再重建软件资源，最后重新配置/启动硬件
+  _reset_hardware();
+  _cleanup_resources();
 
-/* ==================== 类函数实现 ==================== */
+  // 诊断计数清零（重复初始化 = 重新计数）：Diagnostics 每个字段都有默认值 0，
+  // 整份赋一个空对象即可，不再逐字段写 15 行
+  diagnostics         = Diagnostics {};
+  _recovery_started   = 0;
+  _recovery_attempted = 0;
 
-BspCan::BspCan(const Config &cfg)
-
-  : _tx_message_buffer(nullptr),
-    rx_head(nullptr),
-    tx_head(nullptr),
-    _rx_message_buffer(nullptr),
-    _rx_return_buffer(nullptr),
-    _hfdcan(cfg.hfdcan),
-    _name(cfg.name),
-    _work_mode(cfg.mode)
-{
-}
-
-BspCan::~BspCan()
-{
-  // 先从登记表摘除，回调与库任务就不会再碰到本实例
-  for (uint32_t i = 0U; i < _registry_num; ++i)
-  {
-    if (_registry[i] == this)
-    {
-      for (uint32_t j = i + 1U; j < _registry_num; ++j)
-      {
-        _registry[j - 1U] = _registry[j];
-      }
-      --_registry_num;
-      _registry[_registry_num] = nullptr;
-      break;
-    }
-  }
-  if (_hfdcan != nullptr)
-  {
-    HAL_FDCAN_Stop(_hfdcan);
-  }
-  if (_rx_message_buffer != nullptr)
-  {
-    vMessageBufferDelete(_rx_message_buffer);
-    _rx_message_buffer = nullptr;
-  }
-  if (_tx_message_buffer != nullptr)
-  {
-    vMessageBufferDelete(_tx_message_buffer);
-    _tx_message_buffer = nullptr;
-  }
-  if (_rx_return_buffer != nullptr)
-  {
-    vMessageBufferDelete(_rx_return_buffer);
-    _rx_return_buffer = nullptr;
-  }
-}
-
-Status BspCan::init()
-{
-  // 登记要早于打开中断：HAL 回调与库任务靠登记表找到本实例
-  const Status reg = register_self();
-  if (reg != Status::OK)
-    return reg; // BAD_ARG：句柄为空或已被别的实例占用；FULL：登记表满
-
-  // 创建接收消息缓冲区（每条消息另占 4 字节长度头；深度见 hardware_config.h）
-  _rx_message_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4) * CAN_RX_QUEUE_FRAMES);
+  // 创建接收消息缓冲区（深度见 RX_QUEUE_DEPTH；满即丢并计数，不做流控）
+  _rx_message_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4) * RX_QUEUE_DEPTH);
   if (_rx_message_buffer == nullptr)
+  {
+    _rollback_init();
     return Status::IO_ERROR;
+  }
 
-  // 分发任务写入、receive() 的唯一消费者读取。
-  _rx_return_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4) * CAN_RX_RETURN_FRAMES);
+  _rx_return_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4) * RX_QUEUE_DEPTH);
   if (_rx_return_buffer == nullptr)
   {
-    vMessageBufferDelete(_rx_message_buffer);
-    _rx_message_buffer = nullptr;
+    _rollback_init();
     return Status::IO_ERROR;
   }
 
-  // 创建发送消息缓冲区
-  _tx_message_buffer = xMessageBufferCreate((sizeof(CanTxMsg) + 4) * CAN_TX_QUEUE_FRAMES);
+  // 创建发送消息缓冲区（深度见 TX_QUEUE_DEPTH）
+  _tx_message_buffer = xMessageBufferCreate((sizeof(CanTxMsg) + 4) * TX_QUEUE_DEPTH);
   if (_tx_message_buffer == nullptr)
   {
-    vMessageBufferDelete(_rx_message_buffer);
-    _rx_message_buffer = nullptr;
-    vMessageBufferDelete(_rx_return_buffer);
-    _rx_return_buffer = nullptr;
+    _rollback_init();
     return Status::IO_ERROR;
   }
 
-  // 配置过滤器
-  if (config_filter() != Status::OK)
+  // 创建 TX 启动锁
+  _tx_lock = xSemaphoreCreateMutex();
+  if (_tx_lock == nullptr)
+  {
+    _rollback_init();
     return Status::IO_ERROR;
+  }
 
-  // 启动硬件
-  if (start_hardware() != Status::OK)
+  // 配滤波 + 启动外设 + 打开接收/错误状态通知
+  if (_configure_hardware() != Status::OK)
+  {
+    _rollback_init();
     return Status::IO_ERROR;
-
-  // 开启接收和发送 FIFO 变空中断。TX_COMPLETE 需要指定 TXBTIE buffer
-  // 位；FIFO 模式下传入 BufferIndexes=0 不会产生发送完成回调。
-  if (start_reception() != Status::OK)
-    return Status::IO_ERROR;
+  }
 
   return Status::OK;
 }
 
-Status BspCan::send(uint32_t std_id, uint8_t *data)
+/** @brief 硬件是否可用（只看构造时传入的句柄是否为空） */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+bool BspCanT<RX_DEPTH, TX_DEPTH>::is_ready() const
 {
+  return _hfdcan != nullptr;
+}
+
+/**
+ * @brief 发送一帧标准帧（8 字节，非阻塞，入队后由中断送入硬件）
+ *
+ * @param std_id 标准帧 ID（11 位，0x000~0x7FF）
+ * @param data   8 字节数据
+ * @return Status OK=已入发送缓冲；FULL=缓冲满；BUSY=总线不可用；
+ *                BAD_ARG=参数非法；NOT_INIT=未初始化
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+Status BspCanT<RX_DEPTH, TX_DEPTH>::send(uint32_t std_id, const uint8_t *data)
+{
+  // 标准帧 ID 只有 11 位，超范围直接拒绝（否则会被硬件截断成另一个 ID）
   if (data == nullptr || std_id > 0x7FFU)
+  {
     return Status::BAD_ARG;
-  if (_tx_message_buffer == nullptr)
+  }
+  if (_tx_message_buffer == nullptr || _hfdcan == nullptr)
+  {
     return Status::NOT_INIT;
+  }
+  // Bus-Off / 恢复流程中帧发不到总线上，直接拒绝，由调用方决定是否重试
+  const bool bus_usable = _hfdcan->State == HAL_FDCAN_STATE_BUSY && !diagnostics.recovering && (_hfdcan->Instance->PSR & FDCAN_PSR_BO) == 0U && (_hfdcan->Instance->CCCR & FDCAN_CCCR_INIT) == 0U;
+  if (!bus_usable)
+  {
+    return Status::BUSY;
+  }
 
   CanTxMsg txMsg;
   txMsg.std_id = std_id;
-  memcpy(txMsg.data, data, 8);
+  memcpy(txMsg.data, data, sizeof(txMsg.data));
 
-  // 与 ISR 消费、sys_task 清队列串行化，避免 MessageBuffer 多读者竞争。
-  taskENTER_CRITICAL();
-  if (!tx_available())
+  // 放入发送缓冲区（不阻塞）
+  const size_t sent = xMessageBufferSend(_tx_message_buffer, &txMsg, sizeof(CanTxMsg), 0);
+
+  if (sent != sizeof(CanTxMsg))
   {
-    taskEXIT_CRITICAL();
-    return Status::BUSY;
+    diagnostics.tx_buf_full = diagnostics.tx_buf_full + 1; // 缓冲满，这一帧被丢掉
+    return Status::FULL;
   }
-  const size_t sent = xMessageBufferSend(_tx_message_buffer, &txMsg, sizeof(txMsg), 0);
-  trigger_tx();
-  taskEXIT_CRITICAL();
-  return sent == sizeof(txMsg) ? Status::OK : Status::FULL;
+
+  // 入队成功才尝试发送（有锁，漏发由 tx_recover() 补发）
+  (void)_start_transmission();
+  return Status::OK;
 }
 
-Status BspCan::receive(CanRxMsg *msg, uint32_t timeout)
+/** @brief 从接收缓冲区取一帧（timeout_ms：0=不等待，portMAX_DELAY=一直等） */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+Status BspCanT<RX_DEPTH, TX_DEPTH>::receive(CanRxMsg *msg, uint32_t timeout_ms)
 {
   if (msg == nullptr)
+  {
     return Status::BAD_ARG;
-  if (_rx_return_buffer == nullptr)
-    return Status::NOT_INIT;
+  }
+  if (_hfdcan == nullptr || _rx_message_buffer == nullptr)
+  {
+    return Status::NOT_INIT; // 与 send() 保持一致，句柄/缓冲缺一不可
+  }
 
-  size_t received = xMessageBufferReceive(_rx_return_buffer, msg, sizeof(CanRxMsg), timeout);
+  // portMAX_DELAY 不能直接丢给 pdMS_TO_TICKS（会溢出），单独处理
+  const TickType_t wait = (timeout_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+
+  // 有分发任务时优先读回退缓冲；没有任务或回退为空时再读原始缓冲
+  if (_rx_return_buffer != nullptr)
+  {
+    const size_t returned = xMessageBufferReceive(_rx_return_buffer, msg, sizeof(CanRxMsg), wait);
+    if (returned > 0)
+    {
+      return Status::OK;
+    }
+  }
+  const size_t received = xMessageBufferReceive(_rx_message_buffer, msg, sizeof(CanRxMsg), 0);
   return (received > 0) ? Status::OK : Status::TIMEOUT;
 }
 
-Status BspCan::config_filter()
+/** @brief 接收任务专用：从原始接收缓冲取一帧（不经过回退缓冲） */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+Status BspCanT<RX_DEPTH, TX_DEPTH>::read_raw(CanRxMsg *msg, uint32_t timeout_ms)
 {
-  FDCAN_FilterTypeDef sFilterConfig;
-  sFilterConfig.IdType       = FDCAN_STANDARD_ID;
-  sFilterConfig.FilterIndex  = 0;
-  sFilterConfig.FilterType   = FDCAN_FILTER_RANGE;
-  sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  sFilterConfig.FilterID1    = 0x000;
-  sFilterConfig.FilterID2    = 0x7FF;
-
-  if (HAL_FDCAN_ConfigFilter(_hfdcan, &sFilterConfig) != HAL_OK)
-    return Status::IO_ERROR;
-
-  // 远程帧直接由硬件拒收：本驱动只处理 8 字节数据帧，没有任何地方消费远程帧。
-  // 注意 HAL 的 FDCAN_FILTER_REMOTE 意思是“远程帧按数据帧一样过滤”（即接收），拒收要用 FDCAN_REJECT_REMOTE ——
-  // 原来用的 FILTER_REMOTE 让远程帧带着无意义的数据进了 receive() 的回退缓冲（2026-10-17 实测）。
-  if (HAL_FDCAN_ConfigGlobalFilter(_hfdcan,
-                                   FDCAN_ACCEPT_IN_RX_FIFO0,
-                                   FDCAN_ACCEPT_IN_RX_FIFO0,
-                                   FDCAN_REJECT_REMOTE,
-                                   FDCAN_REJECT_REMOTE)
-      != HAL_OK)
+  if (msg == nullptr)
   {
-    return Status::IO_ERROR;
+    return Status::BAD_ARG;
   }
-  return Status::OK;
-}
-
-Status BspCan::start_hardware()
-{
-  if (HAL_FDCAN_Start(_hfdcan) != HAL_OK)
-    return Status::IO_ERROR;
-  return Status::OK;
-}
-
-Status BspCan::start_reception()
-{
-  // 开启FIFO0新消息中断
-  if (HAL_FDCAN_ActivateNotification(_hfdcan, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
-    return Status::IO_ERROR;
-
-  // 软件发送缓冲区积压时，在硬件 FIFO 发送完后继续排空。
-  if (HAL_FDCAN_ActivateNotification(_hfdcan, FDCAN_IT_TX_FIFO_EMPTY, 0) != HAL_OK)
-    return Status::IO_ERROR;
-
-  return Status::OK;
-}
-
-/**
- * @brief 触发一次发送（任务上下文调用）
- */
-/**
- * @brief 硬件 TX FIFO / 队列还有空位
- *
- * @note 用 TXFQS.TFQF（满标志）判断，FIFO 模式与队列模式都有效。原来用 HAL_FDCAN_GetTxFifoFreeLevel()
- *       读 TFFL，而 TFFL 在 Tx Queue 模式（CubeMX TxFifoQueueMode = Queue，TXBC.TFQM = 1）下恒读 0 ——
- *       配成队列模式时本驱动一帧都发不出去（2026-10-17 运行中切到队列模式实测）。
- */
-bool BspCan::tx_hw_has_room() const
-{
-  return (_hfdcan->Instance->TXFQS & FDCAN_TXFQS_TFQF) == 0U;
-}
-
-void BspCan::trigger_tx()
-{
-  if (_tx_message_buffer == nullptr)
-    return;
-
-  taskENTER_CRITICAL();
-  if (tx_available() && tx_hw_has_room())
+  if (_rx_message_buffer == nullptr)
   {
-    CanTxMsg txMsg;
-    size_t   len = xMessageBufferReceive(_tx_message_buffer, &txMsg, sizeof(CanTxMsg), 0);
-    if (len > 0)
-    {
-      FDCAN_TxHeaderTypeDef txHeader;
-      txHeader.Identifier          = txMsg.std_id;
-      txHeader.IdType              = FDCAN_STANDARD_ID;
-      txHeader.TxFrameType         = FDCAN_DATA_FRAME;
-      txHeader.DataLength          = FDCAN_DLC_BYTES_8;
-      txHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-      txHeader.BitRateSwitch       = FDCAN_BRS_OFF;
-      txHeader.FDFormat            = FDCAN_CLASSIC_CAN;
-      txHeader.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
-      txHeader.MessageMarker       = 0;
+    return Status::NOT_INIT;
+  }
+  const TickType_t wait = (timeout_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+  const size_t received = xMessageBufferReceive(_rx_message_buffer, msg, sizeof(CanRxMsg), wait);
+  return (received > 0) ? Status::OK : Status::TIMEOUT;
+}
 
-      if (HAL_FDCAN_AddMessageToTxFifoQ(_hfdcan, &txHeader, txMsg.data) != HAL_OK)
-        diagnostics.tx_dropped = diagnostics.tx_dropped + 1U;
+/** @brief 接收任务专用：把没有节点认领的帧放回回退缓冲 */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+bool BspCanT<RX_DEPTH, TX_DEPTH>::return_frame(const CanRxMsg &msg)
+{
+  if (_rx_return_buffer == nullptr)
+  {
+    return false;
+  }
+  if (xMessageBufferSend(_rx_return_buffer, &msg, sizeof(msg), 0) != sizeof(msg))
+  {
+    diagnostics.rx_return_dropped = diagnostics.rx_return_dropped + 1U;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief TX 恢复：软件缓冲有帧、硬件 FIFO 有空位，但发送中断处于关闭状态时补一次发送
+ *
+ * @return true=本次确实恢复了一次
+ *
+ * @note 正常发送由 TX-FIFO-EMPTY 中断驱动；本函数只处理中断没触发的情况
+ *       （写 FIFO 失败，或开关中断时丢了一次唤醒）。
+ *       Bus-Off 期间直接返回，总线恢复交给 service_recovery()。
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+bool BspCanT<RX_DEPTH, TX_DEPTH>::tx_recover()
+{
+  if (_hfdcan == nullptr)
+  {
+    return false;
+  }
+
+  // Bus-Off 时帧发不到总线上，只能滞留在软件缓冲里，以下检查无意义
+  FDCAN_ProtocolStatusTypeDef ps = {};
+  if (HAL_FDCAN_GetProtocolStatus(_hfdcan, &ps) == HAL_OK && ps.BusOff != 0U)
+  {
+    return false;
+  }
+
+  // 判断是否有帧待发、FIFO 是否有空位、发送中断是否处于关闭状态
+  const bool has_pending   = (_tx_message_buffer != nullptr) && (!xMessageBufferIsEmpty(_tx_message_buffer));
+  const bool fifo_has_room = (HAL_FDCAN_GetTxFifoFreeLevel(_hfdcan) > 0);
+  const bool it_was_off    = ((_hfdcan->Instance->IE & FDCAN_IT_TX_FIFO_EMPTY) == 0U);
+
+  // 缓冲被 ISR 搬空后中断会被关掉；若关掉发生在某次入队之后，这里重新打开。
+  _update_tx_empty_it();
+
+  if (!(has_pending && fifo_has_room))
+  {
+    return false; // 无帧待发或 FIFO 已满，不需要干预
+  }
+
+  if (!_start_transmission(0))
+  {
+    return false; // 拿不到锁或 FIFO 又满了，下轮再试
+  }
+
+  if (it_was_off)
+  {
+    // 诊断：中断确实处于关闭状态，记 1 次丢唤醒（正常抢占不计数）
+    diagnostics.tx_stall_recover = diagnostics.tx_stall_recover + 1;
+  }
+  return true;
+}
+
+/**
+ * @brief 总线恢复：Bus-Off 时按寄存器流程重启收发（非阻塞）
+ *
+ * @return Status OK=总线可用，BUSY=仍在恢复中，NOT_INIT=未初始化
+ *
+ * @note 只动硬件，不重新初始化外设、不清 message RAM、不动软件收发缓冲：
+ *       进入 Bus-Off 时先把硬件里未发出的旧帧请求取消（避免恢复瞬间把过期控制帧发出去），
+ *       并清掉软件缓冲里的积压帧；随后清 CCCR.INIT 让 M_CAN 自行重同步。
+ * @note 限流：两次动作之间至少间隔 100 ms，避免总线长期故障时反复打断恢复序列。
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+Status BspCanT<RX_DEPTH, TX_DEPTH>::service_recovery()
+{
+  if (_hfdcan == nullptr || _tx_message_buffer == nullptr || _rx_message_buffer == nullptr || _hfdcan->State != HAL_FDCAN_STATE_BUSY)
+  {
+    return Status::NOT_INIT;
+  }
+
+  const TickType_t now = xTaskGetTickCount();
+
+  // 整个恢复流程在一个临界区里完成：排除发送任务/ISR 与接收任务
+  taskENTER_CRITICAL();
+
+  const bool bus_off = (_hfdcan->Instance->PSR & FDCAN_PSR_BO) != 0U;
+  if (bus_off && !diagnostics.recovering)
+  {
+    diagnostics.recovering     = true;
+    diagnostics.bus_off_events = diagnostics.bus_off_events + 1;
+    _recovery_started          = now;
+    _recovery_attempted        = now - pdMS_TO_TICKS(100U);
+    // 均为非阻塞缓冲
+    xMessageBufferReset(_tx_message_buffer);
+    xMessageBufferReset(_rx_message_buffer);
+    if (_rx_return_buffer != nullptr) { xMessageBufferReset(_rx_return_buffer); }
+    // 取消硬件中旧控制帧，取消请求在重新启动后由硬件完成。
+    _hfdcan->Instance->TXBCR = _hfdcan->Instance->TXBRP;
+  }
+
+  if (diagnostics.recovering)
+  {
+    // 只在硬件再次置 INIT 时启动恢复，避免反复打断 129x11 位恢复序列。
+    if ((_hfdcan->Instance->CCCR & FDCAN_CCCR_INIT) != 0U && now - _recovery_attempted >= pdMS_TO_TICKS(100U))
+    {
+      _hfdcan->Instance->TXBCR = _hfdcan->Instance->TXBRP;
+      CLEAR_BIT(_hfdcan->Instance->CCCR, FDCAN_CCCR_INIT);
+      _recovery_attempted           = now;
+      diagnostics.recovery_attempts = diagnostics.recovery_attempts + 1;
+    }
+    // 先等旧发送请求彻底取消，才允许新的控制帧入队。
+    if (!bus_off && (_hfdcan->Instance->CCCR & FDCAN_CCCR_INIT) == 0U && _hfdcan->Instance->TXBRP == 0U)
+    {
+      diagnostics.recovering         = false;
+      diagnostics.recovery_successes = diagnostics.recovery_successes + 1;
+      const TickType_t elapsed       = now - _recovery_started;
+      if (elapsed > diagnostics.recovery_max_ticks)
+      {
+        diagnostics.recovery_max_ticks = elapsed;
+      }
+    }
+    else if (now - _recovery_attempted >= pdMS_TO_TICKS(100U))
+    {
+      // 尚未取消的发送请求继续请求取消，不忙等、不重新初始化外设。
+      _hfdcan->Instance->TXBCR = _hfdcan->Instance->TXBRP;
     }
   }
+
+  const bool recovering = diagnostics.recovering;
   taskEXIT_CRITICAL();
+
+  return recovering ? Status::BUSY : Status::OK;
+}
+
+// ----------------
+// ---------------- ISR 入口 ----------------
+
+/**
+ * @brief FIFO0 中断处理：按事件位分发 + 循环排空硬件 FIFO（ISR）
+ *
+ * @param its 本次触发的中断位（RF0N / RF0L 等，由 HAL 传入）
+ * @param pxHigherPriorityTaskWoken 中断处理后可能唤醒的高优先级任务
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::process_fifo0_isr(uint32_t its, BaseType_t *pxHigherPriorityTaskWoken)
+{
+  if (_hfdcan == nullptr || _rx_message_buffer == nullptr)
+  {
+    return; // 未初始化
+  }
+
+  // FIFO0 溢出丢帧
+  if ((its & FDCAN_IT_RX_FIFO0_MESSAGE_LOST) != 0U)
+  {
+    diagnostics.rx_lost = diagnostics.rx_lost + 1;
+  }
+
+  // 没有新帧则返回
+  if ((its & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) == 0U)
+  {
+    return;
+  }
+
+  uint32_t read_cnt = 0U;
+
+  // HAL_FDCAN_GetRxMessage 按 DLC 拷贝 DLCtoBytes[] 个字节（DLC=15 时为 64 字节）
+  // 而 CanRxMsg::data 只有 8 字节，故先用 64 字节缓冲接收，再把合法长度的帧拷进去。
+  constexpr uint32_t CAN_RX_RAW_BYTES = 64U;
+  uint8_t            raw[CAN_RX_RAW_BYTES];
+
+  // 单次中断最多搬运的帧数，取硬件 FIFO 深度
+  const uint32_t drain_max = _hfdcan->Init.RxFifo0ElmtsNbr;
+
+  // RF0N 是"写入一帧"的事件标志，HAL 已在回调前清除：若本次只读一帧，
+  // FIFO 里剩下的帧不会再触发中断，所以这里一次把 FIFO 读空。
+  while (HAL_FDCAN_GetRxFifoFillLevel(_hfdcan, FDCAN_RX_FIFO0) > 0U)
+  {
+    if (read_cnt >= drain_max)
+    {
+      break; // 达到单次上限，剩余帧等下次中断再搬
+    }
+
+    CanRxMsg rxMsg;
+    if (HAL_FDCAN_GetRxMessage(_hfdcan, FDCAN_RX_FIFO0, &rxMsg.header, raw) != HAL_OK)
+    {
+      break; // 读失败立即跳出，避免死循环
+    }
+    read_cnt++;
+
+    // 只支持经典 CAN 的 8 字节帧：DLC > 8（FD 帧或非法 DLC）直接丢弃并计数
+    if (rxMsg.header.DataLength > FDCAN_DLC_BYTES_8)
+    {
+      diagnostics.rx_len_drop = diagnostics.rx_len_drop + 1;
+      continue;
+    }
+    memcpy(rxMsg.data, raw, sizeof(rxMsg.data));
+
+    // 软件缓冲满时只丢弃并计数，不退出循环：硬件 FIFO 仍要读空，
+    // 否则 FIFO 满后不再产生 RF0N，剩下的帧会一直留在 FIFO 里。
+    if (xMessageBufferSendFromISR(_rx_message_buffer, &rxMsg, sizeof(CanRxMsg), pxHigherPriorityTaskWoken) == 0U)
+    {
+      diagnostics.rx_dropped = diagnostics.rx_dropped + 1;
+    }
+
+    // 循环内不 yield，搬完统一在回调返回前让出
+  }
 }
 
 /**
- * @brief 触发一次发送（ISR上下文调用）
+ * @brief TX FIFO 变空续传（ISR，由 TX FIFO Empty 中断调用）
+ *
+ * @note 这里不加 _tx_lock：本回调只在「硬件 TX FIFO 刚变空」时被调用，
+ *       且任务不可能在中断执行期间运行；即使与任务侧的 _start_transmission()
+ *       发生空位检查的 TOCTOU，写入失败也会回滚到软件缓冲（见下方），不会丢帧。
+ *
  * @param pxHigherPriorityTaskWoken 需初始化为pdFALSE，若唤醒高优先级任务则置为pdTRUE
  */
-void BspCan::trigger_tx_from_isr(BaseType_t *pxHigherPriorityTaskWoken)
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::trigger_tx_from_isr(BaseType_t *pxHigherPriorityTaskWoken)
 {
-  if (_tx_message_buffer == nullptr)
-    return;
+  if (_tx_message_buffer == nullptr || _hfdcan == nullptr)
+  {
+    return; // 未初始化
+  }
 
-  if (tx_available() && tx_hw_has_room())
+  if (HAL_FDCAN_GetTxFifoFreeLevel(_hfdcan) > 0)
   {
     CanTxMsg txMsg;
     size_t   len = xMessageBufferReceiveFromISR(_tx_message_buffer, &txMsg, sizeof(CanTxMsg), pxHigherPriorityTaskWoken);
     if (len > 0)
     {
       FDCAN_TxHeaderTypeDef txHeader;
-      txHeader.Identifier          = txMsg.std_id;
-      txHeader.IdType              = FDCAN_STANDARD_ID;
-      txHeader.TxFrameType         = FDCAN_DATA_FRAME;
-      txHeader.DataLength          = FDCAN_DLC_BYTES_8;
-      txHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-      txHeader.BitRateSwitch       = FDCAN_BRS_OFF;
-      txHeader.FDFormat            = FDCAN_CLASSIC_CAN;
-      txHeader.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
-      txHeader.MessageMarker       = 0;
+      _fill_tx_header(txHeader, txMsg);
 
       if (HAL_FDCAN_AddMessageToTxFifoQ(_hfdcan, &txHeader, txMsg.data) != HAL_OK)
-        diagnostics.tx_dropped = diagnostics.tx_dropped + 1U;
+      {
+        // 写入失败：把刚取出的帧写回软件缓冲，避免丢帧；
+        // 恢复动作由巡检任务（sys_task）完成。
+        (void)xMessageBufferSendFromISR(_tx_message_buffer, &txMsg, sizeof(CanTxMsg), pxHigherPriorityTaskWoken);
+        diagnostics.tx_dropped = diagnostics.tx_dropped + 1;
+      }
     }
+  }
+
+  // 按缓冲现状开关中断：缓冲空了就关掉，避免 FIFO 每次变空都进中断。
+  // ISR 里用 _set_tx_empty_it()：任务不能在中断执行期间运行，无需临界区。
+  _set_tx_empty_it(!xMessageBufferIsEmpty(_tx_message_buffer));
+}
+
+/**
+ * @brief 错误状态中断（ISR）：只累加计数，不做恢复动作
+ * @param its 本次错误状态中断位（HAL 已按 IR & IE 过滤，只可能是 BO / EP / EW）
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::process_error_isr(uint32_t its)
+{
+  // 注意：IR.BO 是「状态变化」事件，进入与退出 Bus-Off 各触发一次
+  if ((its & FDCAN_IT_BUS_OFF) != 0U)
+  {
+    diagnostics.bus_off_events = diagnostics.bus_off_events + 1;
+  }
+  if ((its & FDCAN_IT_ERROR_PASSIVE) != 0U)
+  {
+    diagnostics.err_passive = diagnostics.err_passive + 1;
+  }
+  if ((its & FDCAN_IT_ERROR_WARNING) != 0U)
+  {
+    diagnostics.err_warning = diagnostics.err_warning + 1;
+  }
+}
+
+// ----------------
+// ---------------- 私有实现 ----------------
+
+/**
+ * @brief 开关 TX-FIFO-EMPTY 中断（可在 ISR 中调用，函数内不含临界区）
+ *
+ * @param enable true=打开，false=关闭
+ *
+ * @return true=已按预期写入；false=句柄为空，或 HAL 被占用（HAL_BUSY）未写入
+ *
+ * @note 用途：软件缓冲里还有帧、但硬件 TX FIFO 已满，需要等 FIFO 有空位时继续发送。
+ *       所以使能状态跟随软件缓冲：有帧就开，没帧就关。
+ *       一直开着的问题是：FIFO 每次变空都会进中断（即使没有帧要发）；
+ *       如果 IR.TFE 是电平型标志（FIFO 空就置位），还会持续触发中断。
+ *
+ * @note 本函数不含临界区：任务侧调用要走 _update_tx_empty_it()，
+ *       ISR 侧不需要（任务不会在中断执行期间运行）。
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+bool BspCanT<RX_DEPTH, TX_DEPTH>::_set_tx_empty_it(bool enable)
+{
+  if (_hfdcan == nullptr)
+  {
+    return false; // 未初始化
+  }
+
+  const HAL_StatusTypeDef st = enable
+                                 ? HAL_FDCAN_ActivateNotification(_hfdcan, FDCAN_IT_TX_FIFO_EMPTY, 0)
+                                 : HAL_FDCAN_DeactivateNotification(_hfdcan, FDCAN_IT_TX_FIFO_EMPTY);
+
+  if (st != HAL_OK)
+  {
+    diagnostics.tx_it_fail = diagnostics.tx_it_fail + 1; // 诊断：中断开关未写入（等巡检补开）
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief 任务上下文：根据软件缓冲是否还有帧，开关 TX-FIFO-EMPTY 中断（临界区保护）
+ *
+ * @note "判断缓冲是否为空"和"写 IE 寄存器"必须作为一个整体执行。若中间被 FDCAN 中断抢占，
+ *       中断里刚使能的 TX_FIFO_EMPTY 会被任务写回的旧值覆盖，中断变成关闭状态，
+ *       缓冲里的帧只能等下一次 tx_recover() 补发（不丢帧，但延迟一个周期）。
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::_update_tx_empty_it()
+{
+  if (_hfdcan == nullptr || _tx_message_buffer == nullptr)
+  {
+    return;
+  }
+
+  taskENTER_CRITICAL();
+  _set_tx_empty_it(!xMessageBufferIsEmpty(_tx_message_buffer));
+  taskEXIT_CRITICAL();
+}
+
+/**
+ * @brief 尝试向硬件 TX FIFO 写入一帧（任务上下文）
+ *
+ * @param wait 取锁等待时间，单位 ticks；send() 传 portMAX_DELAY，巡检传 0
+ * @return true=本次确实写入了一帧
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+bool BspCanT<RX_DEPTH, TX_DEPTH>::_start_transmission(TickType_t wait)
+{
+  if (_tx_lock == nullptr)
+  {
+    return false; // 互斥量未创建
+  }
+
+  // "检查空位 → 取帧 → 写硬件 FIFO" 三步要作为一个整体，否则多个任务（或被中断抢占）
+  // 可能同时通过空位检查，后写入的会失败并丢帧。
+  // wait=0（巡检）时取不到锁就返回，不阻塞周期任务。
+  if (xSemaphoreTake(_tx_lock, wait) != pdTRUE)
+  {
+    return false;
+  }
+
+  bool started = false;
+
+  if (_tx_message_buffer != nullptr && _hfdcan != nullptr && HAL_FDCAN_GetTxFifoFreeLevel(_hfdcan) > 0)
+  {
+    CanTxMsg txMsg;
+    size_t   len = xMessageBufferReceive(_tx_message_buffer, &txMsg, sizeof(CanTxMsg), 0);
+    if (len > 0)
+    {
+      FDCAN_TxHeaderTypeDef txHeader;
+      _fill_tx_header(txHeader, txMsg);
+
+      if (HAL_FDCAN_AddMessageToTxFifoQ(_hfdcan, &txHeader, txMsg.data) != HAL_OK)
+      {
+        // 写入失败：帧已从软件缓冲取出，要放回去，否则丢帧。
+        // 刚取出 1 帧，缓冲至少有 1 帧空间，放回不会失败。
+        (void)xMessageBufferSend(_tx_message_buffer, &txMsg, sizeof(CanTxMsg), 0);
+        diagnostics.tx_dropped = diagnostics.tx_dropped + 1;
+      }
+      else
+      {
+        started = true;
+      }
+    }
+  }
+
+  xSemaphoreGive(_tx_lock);
+
+  // 无论本次是否写入成功，都根据缓冲现状更新中断使能：
+  // 例如 FIFO 满导致本次没写成功，但缓冲里还有帧，中断要保持打开。
+  _update_tx_empty_it();
+
+  return started;
+}
+
+/** @brief 构造 8 字节经典帧的发送头（任务与 ISR 共用，避免两处不一致） */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::_fill_tx_header(FDCAN_TxHeaderTypeDef &header, const CanTxMsg &msg)
+{
+  header.Identifier          = msg.std_id;
+  header.IdType              = FDCAN_STANDARD_ID;
+  header.TxFrameType         = FDCAN_DATA_FRAME;
+  header.DataLength          = FDCAN_DLC_BYTES_8;
+  header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+  header.BitRateSwitch       = FDCAN_BRS_OFF;
+  header.FDFormat            = FDCAN_CLASSIC_CAN;
+  header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
+  header.MessageMarker       = 0;
+}
+
+/** @brief 释放所有已创建的 FreeRTOS 资源（消息缓冲区、锁） */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::_cleanup_resources()
+{
+  // 释放接收消息缓冲区
+  if (_rx_message_buffer != nullptr)
+  {
+    vMessageBufferDelete(_rx_message_buffer);
+    _rx_message_buffer = nullptr;
+  }
+
+  if (_rx_return_buffer != nullptr)
+  {
+    vMessageBufferDelete(_rx_return_buffer);
+    _rx_return_buffer = nullptr;
+  }
+
+  // 释放发送消息缓冲区
+  if (_tx_message_buffer != nullptr)
+  {
+    vMessageBufferDelete(_tx_message_buffer);
+    _tx_message_buffer = nullptr;
+  }
+
+  // 释放 TX 启动锁
+  if (_tx_lock != nullptr)
+  {
+    vSemaphoreDelete(_tx_lock);
+    _tx_lock = nullptr;
   }
 }
 
 /**
- * @brief FIFO0 中断处理（从硬件FIFO读取并放入Message Buffer）
+ * @brief 停止外设并关闭本驱动使用的全部中断（可重复调用）
+ *
+ * @note 先关中断再停外设，避免关闭过程中仍有中断进来。
+ *       HAL_FDCAN_Stop() 会置 CCCR.INIT/CCE 并等其生效（State 变为 READY），
+ *       它不清空硬件 TX FIFO：重启后 FIFO 里残留的帧可能被重发一次
+ *       （AutoRetransmission=ENABLE）；软件收发缓冲不受影响。
+ *
+ * @note 未初始化时（State 已是 READY）Stop 返回 HAL_ERROR，属于正常情况。
  */
-void BspCan::process_fifo0_isr()
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::_reset_hardware()
 {
-  if (_hfdcan == nullptr || _rx_message_buffer == nullptr)
-    return;
-
-  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-  // HAL_FDCAN_GetRxMessage 按 DLC 查表拷贝 DLCtoBytes[] 个字节（DLC 9~15 → 12~64 字节），
-  // 而经典 CAN 允许 DLC 为 9~15（数据仍是 8 字节），CanRxMsg::data 只有 8 字节。
-  // 直接读进 rxMsg.data 会写穿中断栈：实测一帧 DLC=15 就让返回地址被帧数据覆盖、进 MemManage。
-  // 所以先读进 64 字节缓冲，只把 DLC ≤ 8 的帧拷进 CanRxMsg。
-  constexpr uint32_t CAN_RX_RAW_BYTES = 64U;
-  uint8_t            raw[CAN_RX_RAW_BYTES];
-
-  // 新消息中断可能合并多帧；读取本次积压快照，避免只取一帧导致 FIFO 长期满载。
-  const uint32_t pending = HAL_FDCAN_GetRxFifoFillLevel(_hfdcan, FDCAN_RX_FIFO0);
-  for (uint32_t i = 0; i < pending; ++i)
+  if (_hfdcan == nullptr)
   {
-    CanRxMsg rxMsg = {};
-    if (HAL_FDCAN_GetRxMessage(_hfdcan, FDCAN_RX_FIFO0, &rxMsg.header, raw) != HAL_OK)
-      break;
-
-    // 只支持 8 字节经典帧：DLC > 8 的帧丢弃并计数（帧已从硬件 FIFO 取出，不会堵住 FIFO）
-    if (rxMsg.header.DataLength > FDCAN_DLC_BYTES_8)
-    {
-      diagnostics.rx_len_drop = diagnostics.rx_len_drop + 1U;
-      continue;
-    }
-    // 只拷 DLC 个字节：raw 是栈上的缓冲，DLC < 8 时后面是上一帧 / 其他函数留下的内容，
-    // 原来固定拷 8 字节会把这些旧数据带进 data[DLC..7]（2026-10-17 实测）。rxMsg 已清零，尾部保持 0。
-    static const uint32_t dlc_codes[9] = {FDCAN_DLC_BYTES_0, FDCAN_DLC_BYTES_1, FDCAN_DLC_BYTES_2,
-                                          FDCAN_DLC_BYTES_3, FDCAN_DLC_BYTES_4, FDCAN_DLC_BYTES_5,
-                                          FDCAN_DLC_BYTES_6, FDCAN_DLC_BYTES_7, FDCAN_DLC_BYTES_8};
-    uint32_t len = 0;
-    while (len < 8U && dlc_codes[len] != rxMsg.header.DataLength)
-      ++len;
-    memcpy(rxMsg.data, raw, len);
-
-    if (xMessageBufferSendFromISR(_rx_message_buffer, &rxMsg, sizeof(rxMsg),
-                                  &xHigherPriorityTaskWoken) != sizeof(rxMsg))
-      diagnostics.rx_dropped = diagnostics.rx_dropped + 1U;
+    return;
   }
-  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+  (void)HAL_FDCAN_DeactivateNotification(_hfdcan, FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_MESSAGE_LOST | FDCAN_IT_TX_FIFO_EMPTY | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_PASSIVE | FDCAN_IT_ERROR_WARNING);
+  (void)HAL_FDCAN_Stop(_hfdcan);
 }
+
+/** @brief 初始化失败收尾：复位外设 + 释放软件资源 */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+void BspCanT<RX_DEPTH, TX_DEPTH>::_rollback_init()
+{
+  _reset_hardware(); // 先停外设、关中断，再释放缓冲
+  _cleanup_resources();
+}
+
+/**
+ * @brief 配置滤波器、启动外设、打开接收与错误状态中断
+ *
+ * @note 必须在 _reset_hardware() 之后调用：Stop 已置 CCCR.INIT/CCE，
+ *       此时才能写 message RAM（滤波器）。
+ *
+ * @note 不使用 TX_COMPLETE 中断：FIFO 模式下 BufferIndexes 传 0 不会产生发送完成回调，
+ *       发送流程只靠 FIFO 中断驱动。
+ */
+template <size_t RX_DEPTH, size_t TX_DEPTH>
+Status BspCanT<RX_DEPTH, TX_DEPTH>::_configure_hardware()
+{
+  // 滤波器：标准帧全 ID 收进 RX FIFO0（本驱动不做 ID 级过滤）
+  FDCAN_FilterTypeDef sFilterConfig = {}; // 未用到的字段也清零，避免 HAL 版本差异踩到脏值
+  sFilterConfig.IdType              = FDCAN_STANDARD_ID;
+  sFilterConfig.FilterIndex         = 0;
+  sFilterConfig.FilterType          = FDCAN_FILTER_RANGE;
+  sFilterConfig.FilterConfig        = FDCAN_FILTER_TO_RXFIFO0;
+  sFilterConfig.FilterID1           = 0x000;
+  sFilterConfig.FilterID2           = 0x7FF;
+
+  if (HAL_FDCAN_ConfigFilter(_hfdcan, &sFilterConfig) != HAL_OK)
+  {
+    return Status::IO_ERROR;
+  }
+
+  if (HAL_FDCAN_ConfigGlobalFilter(_hfdcan, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
+  {
+    return Status::IO_ERROR;
+  }
+
+  if (HAL_FDCAN_Start(_hfdcan) != HAL_OK)
+  {
+    return Status::IO_ERROR;
+  }
+
+  // FIFO0 新消息 + FIFO0 溢出丢帧
+  if (HAL_FDCAN_ActivateNotification(_hfdcan, FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_MESSAGE_LOST, 0) != HAL_OK)
+  {
+    return Status::IO_ERROR;
+  }
+
+  // 总线错误状态（Bus-Off / 错误被动 / 错误警告）：只计数，恢复动作在任务侧
+  if (HAL_FDCAN_ActivateNotification(_hfdcan, FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_PASSIVE | FDCAN_IT_ERROR_WARNING, 0) != HAL_OK)
+  {
+    return Status::IO_ERROR;
+  }
+
+  // TX-FIFO-EMPTY 不在此处打开，由 _set_tx_empty_it()/_update_tx_empty_it() 按需开关
+  return Status::OK;
+}
+
+// ----------------
 
 #endif // HAL_FDCAN_MODULE_ENABLED

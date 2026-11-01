@@ -7,7 +7,23 @@
 #include "task.h"
 
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
-#  include "can_tx_node.hpp" // CanTxNode::count()
+#  include "board_instances.hpp"
+#  include "can_tx_node.hpp" // CanTxNodeT::count_for()
+
+namespace
+{
+bool has_tx_nodes()
+{
+#define X(name)                                  \
+  if (CanTxNodeT<decltype(name)>::count_for(name) > 0U) \
+  {                                              \
+    return true;                                 \
+  }
+  BSP_CAN_INSTANCES(X)
+#undef X
+  return false;
+}
+} // namespace
 #endif
 
 
@@ -24,6 +40,7 @@ extern "C" void system_init(void)
 #if SYS_TASK_ENABLE
   configASSERT(xTaskCreate(sys_task, "sys", SYS_TASK_STACK, NULL, SYS_TASK_PRIORITY, NULL) == pdPASS);
 #endif
+
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
   configASSERT(xTaskCreate(can_rx_task, "can_rx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL) == pdPASS);
 #endif
@@ -31,9 +48,10 @@ extern "C" void system_init(void)
 
 extern "C" void system_start(void)
 {
+
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
-  // 发送节点在 board_init() 里注册完；没有节点就不创建 can_tx 任务
-  if (CanTxNode::count() > 0U)
+  // 发送节点在 board_init() 里注册完；任意一个实例有发送节点才创建 can_tx 任务
+  if (has_tx_nodes())
   {
     configASSERT(xTaskCreate(can_tx_task, "can_tx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL) == pdPASS);
   }
