@@ -1,0 +1,68 @@
+#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "hardware_config.h"
+
+// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_RX_ENABLE=0 时，本文件不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
+
+#include "can_rx_node.hpp"
+#include "system.hpp"
+
+extern "C" void can_rx_task(void *argument)
+{
+  (void)argument;
+  SysFlagWaitRunning();
+  CanRxNode::frozen = true;
+  static_assert(configTICK_RATE_HZ == 1000U, "can_rx_task requires a 1 kHz tick");
+  // 总线来自 BspCan 的登记表（各实例 init() 时登记，运行态之前已定型），库里不引用板级实例
+  TickType_t wake_time = xTaskGetTickCount();
+  for (;;)
+  {
+    if ((osEventFlagsGet(sysEvent) & SYS_FLAG_RUNNING_BIT) != 0U)
+    {
+      for (uint32_t bus = 0U; bus < BspCan::instance_count(); ++bus)
+      {
+        BspCan *const can = BspCan::instance_at(bus);
+        if (can->_rx_message_buffer == nullptr || can->_rx_return_buffer == nullptr)
+        {
+          continue;
+        }
+        // 即使没有节点也要转发原始帧，保证 receive() 仍可使用。
+        // 每轮每条总线最多处理 CAN_RX_DISPATCH_PER_TICK 帧（默认 16），避免某条总线持续占用任务；
+        // 要高于总线满载帧率（1 Mbps 约 8~9 帧/ms），否则接收队列必然溢出。
+        for (uint32_t i = 0; i < CAN_RX_DISPATCH_PER_TICK; ++i)
+        {
+          CanRxMsg rx = {};
+          if (xMessageBufferReceive(can->_rx_message_buffer, &rx, sizeof(rx), 0U) != sizeof(rx))
+          {
+            break;
+          }
+          bool consumed = false;
+          if ((rx.header.IdType == FDCAN_STANDARD_ID || rx.header.IdType == FDCAN_EXTENDED_ID) &&
+              rx.header.RxFrameType == FDCAN_DATA_FRAME && rx.header.FDFormat == FDCAN_CLASSIC_CAN &&
+              rx.header.DataLength == FDCAN_DLC_BYTES_8)
+          {
+            for (CanRxNode *node = can->rx_head; node != nullptr; node = node->next)
+            {
+              if (node->_can_id == rx.header.Identifier && node->_id_type == rx.header.IdType)
+              {
+                consumed = node->_callback(node->_context, rx) == Status::OK;
+                break;
+              }
+            }
+          }
+          // 没有rx_node收取这帧数据，这帧数据归还回bsp_can，可由bsp_can.receive
+          if (!consumed && xMessageBufferSend(can->_rx_return_buffer, &rx, sizeof(rx), 0U) != sizeof(rx))
+          {
+            // 回退消费者滞后时丢弃本帧并记录 FULL，不阻塞其他节点的解算。
+            can->diagnostics.rx_return_dropped = can->diagnostics.rx_return_dropped + 1U;
+            SysFlagSet(Status::FULL);
+          }
+        }
+      }
+    }
+    vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1U));
+  }
+}
+
+
+#endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE

@@ -1,0 +1,121 @@
+#include "bsp_cfg.hpp"
+#include "device_cfg.hpp" // IWYU pragma: keep (device_init)
+
+#include "FreeRTOS.h" // IWYU pragma: keep (configASSERT)
+
+/**
+ * @brief 板级整体的初始化
+ *
+ * @note  必须在 FreeRTOS 内核启动后调用（因为大部分 BSP 驱动内部创建 RTOS 对象）。
+ *        目前除了串口的模板实例化需要在 bsp_uart.cpp 中定义，其他 BSP 全局实例化都在 bsp_cfg.cpp 中定义。
+ *        外设初始化完后调用 device_init()，设备层初始化也收在 board_init() 里。
+ *        当前已初始化的外设一览：
+ *
+ *        ✅ CAN1/2/3   → bsp_can1/2/3.init()  [Message Buffer 收发]
+ *        ✅ USART1     → bsp_uart1.init()     [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ USART3     → bsp_uart3.init()     [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ UART4      → bsp_uart4.init()     [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ UART5      → bsp_uart5.init()     [IDLE RX DMA，无发送功能]
+ *        ✅ UART7      → bsp_uart7.init()     [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ UART8      → bsp_uart8.init()     [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ UART9      → bsp_uart9.init()     [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ USART10    → bsp_uart10.init()    [IDLE RX DMA + FreeRTOS stream buffer]
+ *        ✅ GPIO       → MX_GPIO_Init()       [BspGpio 仅封装]
+ *        ✅ KEY (PA15) → key_user.init(...)   [纯软件轮询消抖，无 ISR，使用rtos进行轮询：200ms轮询 → 200ms消抖, 1s长按]
+ *
+ */
+void board_init()
+{
+  // 每条 init() 单独一行断言：失败就地停机，fault_record 记下的行号直接指出是哪一路没起来
+  // ── FreeRTOS 驱动的 CAN ──
+  configASSERT(bsp_can1.init() == Status::OK);
+  configASSERT(bsp_can2.init() == Status::OK);
+  configASSERT(bsp_can3.init() == Status::OK);
+
+  // ── FreeRTOS 驱动的 UART ──
+  configASSERT(bsp_uart1.init() == Status::OK);
+  configASSERT(bsp_uart3.init() == Status::OK);
+  configASSERT(bsp_uart4.init() == Status::OK);
+  configASSERT(bsp_uart5.init() == Status::OK);
+  configASSERT(bsp_uart7.init() == Status::OK);
+  configASSERT(bsp_uart8.init() == Status::OK);
+  configASSERT(bsp_uart9.init() == Status::OK);
+  configASSERT(bsp_uart10.init() == Status::OK);
+
+  // ── 按键（纯软件轮询消抖，200ms 轮询 → 200ms 消抖, 1s 长按）──
+  configASSERT(key_user.init({KEY_GPIO_Port, KEY_Pin, true, 1U, 5U}) == Status::OK); // 200ms×1 消抖, 200ms×5=1s 长按
+
+  // ── 蜂鸣器 PWM（TIM12 CH2 PB15；先清 CCR 再启动 → 上电 0% 占空比，不响）──
+  configASSERT(bsp_pwm_buzzer.init() == Status::OK);
+
+  // ── 设备层（当前只有板载蜂鸣器，构造即可用）──
+  device_init();
+}
+
+
+/* ==================== CAN ==================== */
+
+/**
+ * @brief 全局实例化
+ * @param CAN句柄
+ * @param 实例名称（用于资源命名）
+ * @param CAN工作模式（默认正常模式）
+ */
+BspCan bsp_can1({&hfdcan1, "CAN1"});
+BspCan bsp_can2({&hfdcan2, "CAN2"});
+BspCan bsp_can3({&hfdcan3, "CAN3"});
+
+
+/* ==================== UART 但模板实例化需要在BspUart中实现 ==================== */
+
+/**
+ * @brief 全局实例化
+ * @param 第一个串口句柄
+ * @param 第二个是是否启用发送逻辑
+ * @param 第三个是波特率：只给发送侧算“一包发完要多久”、判 TX 卡死用，必须与 CubeMX（usart.c）一致
+ * @note 这个 __attribute__((section(".dma_buffer"))) 是把他放到dtcm区域外，在.ld格式文件下实现的
+ *
+ */
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart1({&huart1, true, 115200U});
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart3({&huart3, true, 115200U});
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart4({&huart4, true, 115200U});
+///< UART5 仅接收：CubeMX 未配 TX DMA，发送功能关闭（transmit_enable=false）
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart5({&huart5, false, 115200U});
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart7({&huart7, true, 921600U});
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart8({&huart8, true, 115200U});
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart9({&huart9, true, 115200U});
+__attribute__((section(".dma_buffer"))) BspUart<128> bsp_uart10({&huart10, true, 921600U});
+
+
+/* ==================== GPIO 输出引脚 ==================== */
+
+///< 电源控制
+BspGpio power_24v_2({POWER_24V_2_GPIO_Port, POWER_24V_2_Pin}); // PC13
+BspGpio power_24v_1({POWER_24V_1_GPIO_Port, POWER_24V_1_Pin}); // PC14
+BspGpio power_5v({POWER_5V_GPIO_Port, POWER_5V_Pin});          // PC15
+
+///< IMU 片选
+BspGpio gyro_acc_cs({GYRO_ACC_CS_GPIO_Port, GYRO_ACC_CS_Pin});    // PC0
+BspGpio gyro_gyro_cs({GYRO_GYRO_CS_GPIO_Port, GYRO_GYRO_CS_Pin}); // PC3
+
+///< BTB 扩展 IO
+BspGpio btb_gpio({BTB_GPIO_GPIO_Port, BTB_GPIO_Pin}); // PE14
+
+
+/* ==================== 蜂鸣器 ==================== */
+
+/**
+ * @brief 无源蜂鸣器 PWM：TIM12 CH2 PB15
+ *
+ * @note 参数取自 CubeMX（tim.c 的 MX_TIM12_Init）：定时器时钟 275 MHz（APB1 137.5 MHz × 2）、
+ *       PSC = 24-1、ARR = 2000-1。这几个数必须与 CubeMX 一致，否则频率换算是错的；
+ *       旧 bsp_buzzer 按 6 MHz 计数时钟换算，实际是 275 MHz / 24 ≈ 11.46 MHz，音调偏高约 1.9 倍。
+ */
+BspPwm bsp_pwm_buzzer({&htim12, TIM_CHANNEL_2, 275000000UL, 23U, 1999U});
+
+
+/* ==================== 按键 ==================== */
+
+///< 用户按键 PA15, 低有效
+BspKey key_user;
+
