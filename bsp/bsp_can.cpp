@@ -28,8 +28,9 @@ extern "C"
   void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if (false) {}
 #define X(name) \
-    if (hfdcan == name.handle()) { name.process_fifo0_isr(RxFifo0ITs, &xHigherPriorityTaskWoken); }
+    else if (hfdcan == name.handle()) { name.process_fifo0_isr(RxFifo0ITs, &xHigherPriorityTaskWoken); }
     BSP_CAN_INSTANCES(X)
 #undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -38,8 +39,9 @@ extern "C"
   void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
   {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if (false) {}
 #define X(name) \
-    if (hfdcan == name.handle()) { name.trigger_tx_from_isr(&xHigherPriorityTaskWoken); }
+    else if (hfdcan == name.handle()) { name.trigger_tx_from_isr(&xHigherPriorityTaskWoken); }
     BSP_CAN_INSTANCES(X)
 #undef X
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -47,8 +49,9 @@ extern "C"
 
   void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
   {
+    if (false) {}
 #define X(name) \
-    if (hfdcan == name.handle()) { name.process_error_isr(ErrorStatusITs); }
+    else if (hfdcan == name.handle()) { name.process_error_isr(ErrorStatusITs); }
     BSP_CAN_INSTANCES(X)
 #undef X
   }

@@ -26,8 +26,9 @@ extern "C"
   void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   {
     BaseType_t woken = pdFALSE;
+    if (false) {}
 #define X(name) \
-    if (huart == name.handle()) { name.on_idle_isr(Size, &woken); }
+    else if (huart == name.handle()) { name.on_idle_isr(Size, &woken); }
     BSP_UART_INSTANCES(X)
 #undef X
     portYIELD_FROM_ISR(woken);
@@ -36,8 +37,9 @@ extern "C"
   void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   {
     BaseType_t woken = pdFALSE;
+    if (false) {}
 #define X(name) \
-    if (huart == name.handle()) { name.start_transmission_from_isr(&woken); }
+    else if (huart == name.handle()) { name.start_transmission_from_isr(&woken); }
     BSP_UART_INSTANCES(X)
 #undef X
     portYIELD_FROM_ISR(woken);
@@ -45,8 +47,9 @@ extern "C"
 
   void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   {
+    if (false) {}
 #define X(name) \
-    if (huart == name.handle()) { name.on_error_isr(); }
+    else if (huart == name.handle()) { name.on_error_isr(); }
     BSP_UART_INSTANCES(X)
 #undef X
   }
