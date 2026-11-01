@@ -27,23 +27,23 @@ enable_language(C CXX ASM)
 add_library(stm32_framework OBJECT)
 
 file(GLOB_RECURSE STM32_FRAMEWORK_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/bsp/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/service/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/tasks/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/device/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/protocol/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/bsp/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/service/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/tasks/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/device/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/protocol/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/algorithm/*.cpp
 )
 target_sources(stm32_framework PRIVATE ${STM32_FRAMEWORK_SOURCES})
 
 # 库里不包含任何板级头文件：HAL 回调与库任务按 board_instances.hpp 的实例清单逐个展开
 target_include_directories(stm32_framework PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/bsp
-    ${CMAKE_CURRENT_SOURCE_DIR}/service
-    ${CMAKE_CURRENT_SOURCE_DIR}/tasks
-    ${CMAKE_CURRENT_SOURCE_DIR}/device
-    ${CMAKE_CURRENT_SOURCE_DIR}/protocol
-    ${CMAKE_CURRENT_SOURCE_DIR}/algorithm
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/bsp
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/service
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/tasks
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/device
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/protocol
+    ${CMAKE_CURRENT_SOURCE_DIR}/code/algorithm
 )
 
 # HAL / CMSIS / FreeRTOS 的头文件与宏都来自 CubeMX 的 stm32cubemx（INTERFACE）目标
