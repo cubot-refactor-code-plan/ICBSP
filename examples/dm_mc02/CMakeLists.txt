@@ -1,0 +1,102 @@
+cmake_minimum_required(VERSION 3.22)
+
+#
+# This file is generated only once,
+# and is not re-generated if converter is called multiple times.
+#
+# User is free to modify the file as much as necessary
+#
+
+# Setup compiler settings
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+
+# Define the build type
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug")
+endif()
+
+# Set the project name
+set(CMAKE_PROJECT_NAME DM_MC02)
+
+# Enable compile command to ease indexing with e.g. clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
+
+# Core project settings
+project(${CMAKE_PROJECT_NAME})
+message("Build type: " ${CMAKE_BUILD_TYPE})
+
+# Enable CMake support for ASM and C languages
+enable_language(C ASM)
+
+# Create an executable object type
+add_executable(${CMAKE_PROJECT_NAME})
+
+# Add STM32CubeMX generated sources
+add_subdirectory(cmake/stm32cubemx)
+
+# Link directories setup
+target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined library search paths
+)
+
+# Add sources to executable
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user sources here
+)
+
+# Add include paths
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined include paths
+)
+
+# Add project symbols (macros)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined symbols
+)
+
+# Remove wrong libob.a library dependency when using cpp files
+list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
+
+# Add linked libraries
+
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    stm32cubemx
+    # Add user defined libraries
+)
+
+
+##### User #####
+
+# 接入 stm32_framework：本仓库根就是库，示例用相对路径接入；
+# 用户工程里写 add_subdirectory(third_party/stm32-framework) 即可（第二个参数只有库目录不在本工程之下时才需要）
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/stm32_framework)
+target_include_directories(stm32_framework PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/user/board)  # 库自身也要看到 hardware_config.h
+
+# 板级用户代码：user/board（实例配置）、user/app（入口、任务、测试）、user/module
+file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/*.cpp
+)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/board
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/module
+)
+
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    stm32_framework
+)
+
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS ON
+)
+
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)
+
+##### User #####
+
