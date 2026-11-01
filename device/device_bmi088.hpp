@@ -40,7 +40,7 @@
  *
  *   // 5) 取数据（任意任务）：snapshot() 拷一份同一帧的数据
  *   ImuData d;
- *   imu_bmi088.snapshot(d);             // d.gyro.yaw / pitch / roll rad/s，d.acc.x / y / z m/s²，d.euler_angle 度，d.quaternion w/x/y/z
+ *   imu_bmi088.snapshot(d);  // d.gyro.yaw / pitch / roll rad/s，d.acc.x / y / z m/s²，d.euler_angle 度，d.quaternion w/x/y/z
  *   float t = imu_bmi088.temperature(); // °C
  *
  *   // 6) 想跟着数据节奏走（例如姿态解算）：attach_task() 后，每刷新一次就收到 UPDATED_BIT
