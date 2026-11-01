@@ -35,20 +35,14 @@
 #include <stdint.h>
 
 /**
- * @brief pid_print() 用的打印串口类型
- *
- * @note 换别的串口类型（中断收发 / 别的缓冲大小）时只改这一行，
- *       并在 bsp_uart.cpp 补对应的显式实例化，否则链接期会报 undefined reference。
- */
-using MotorUart = BspUartT<uart_detail::DmaTransport, 128, 128>;
-
-
-/**
  * @brief 电机设备类
+ *
+ * @tparam Uart 打印 JustFloat 用的串口类型（BspUartT<...>）
  *
  * @note 生命周期：init() 一次 → 每拍 update(dt_s)；init() 前 update() 安全返回 false。
  */
-class DeviceMotor
+template <typename Uart>
+class DeviceMotorT
 {
 public:
   // ---------------- 配置 ----------------
@@ -92,17 +86,17 @@ public:
 
     PID::Config pid {}; ///< 速度环参数（默认全 0，靠实机标定）
 
-    MotorUart *uart = nullptr; ///< 打印串口（nullptr = pid_print() 什么也不发）
+    Uart *uart = nullptr; ///< 打印串口（nullptr = pid_print() 什么也不发）
   };
 
   // ----------------
   // ---------------- 公有接口 ----------------
 
   /** @brief 默认构造：未绑定，init() 返回 BAD_ARG */
-  DeviceMotor() = default;
+  DeviceMotorT() = default;
 
   /** @brief 构造：只保存配置（不碰硬件） */
-  explicit DeviceMotor(const Config &cfg);
+  explicit DeviceMotorT(const Config &cfg);
 
   /**
    * @brief 初始化：校验绑定与机械参数、算出 counts_per_cm、把两路 PWM 归 0

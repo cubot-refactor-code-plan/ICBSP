@@ -2,6 +2,11 @@
 
 #include <string.h>
 
+// ---------------- 模板实例化 ----------------
+
+// 显式实例化：必须覆盖宿主的 board_cfg.cpp 里用到的串口类型
+template class DeviceMotorT<BspUartT<uart_detail::DmaTransport, 128, 128>>;
+
 namespace
 {
 /** @brief 圆周率：本文件只用来做一次「直径 → 周长」换算，不必引 <cmath> */
@@ -12,7 +17,8 @@ constexpr float PI_F = 3.14159265358979f;
 // ---------------- 构造 ----------------
 
 /** @brief 构造：保存配置并按配置构造速度环（PID 的参数是构造时定下来的） */
-DeviceMotor::DeviceMotor(const Config &cfg) : _config(cfg), _pid(cfg.pid)
+template <typename Uart>
+DeviceMotorT<Uart>::DeviceMotorT(const Config &cfg) : _config(cfg), _pid(cfg.pid)
 {
 }
 
@@ -23,7 +29,8 @@ DeviceMotor::DeviceMotor(const Config &cfg) : _config(cfg), _pid(cfg.pid)
 /**
  * @brief 初始化：校验绑定与机械参数 → 算 counts_per_cm → 两路 PWM 归 0
  */
-Status DeviceMotor::init()
+template <typename Uart>
+Status DeviceMotorT<Uart>::init()
 {
   if (!is_bound())
     return Status::BAD_ARG;
@@ -62,14 +69,16 @@ Status DeviceMotor::init()
 }
 
 /** @brief 纯速度模式：只记目标，真正出力等 update() */
-void DeviceMotor::set_speed(float cm_s)
+template <typename Uart>
+void DeviceMotorT<Uart>::set_speed(float cm_s)
 {
   _mode        = Mode::SPEED;
   _target_cm_s = cm_s;
 }
 
 /** @brief 速度+时间模式：remaining 用秒记，按 update() 传入的 dt 递减（不依赖 tick 精度） */
-void DeviceMotor::set_speed_time(float cm_s, uint32_t duration_ms)
+template <typename Uart>
+void DeviceMotorT<Uart>::set_speed_time(float cm_s, uint32_t duration_ms)
 {
   _mode        = Mode::SPEED_TIME;
   _target_cm_s = cm_s;
@@ -77,7 +86,8 @@ void DeviceMotor::set_speed_time(float cm_s, uint32_t duration_ms)
 }
 
 /** @brief 停止（刹车）：模式置 STOP、清积分、两路拉满做短路制动 */
-void DeviceMotor::stop()
+template <typename Uart>
+void DeviceMotorT<Uart>::stop()
 {
   if (!is_bound())
     return;
@@ -97,7 +107,8 @@ void DeviceMotor::stop()
  * @note 顺序固定：读增量 → 算速度 → （计时模式）扣时间 → PID → 限幅输出。
  *       停止模式下不跑 PID，但照样读增量，保证 speed_cm_s() 一直有效（手转电机能看数）。
  */
-bool DeviceMotor::update(float dt_s)
+template <typename Uart>
+bool DeviceMotorT<Uart>::update(float dt_s)
 {
   if (!_initialized || dt_s <= 0.0f)
     return false;
@@ -150,7 +161,8 @@ bool DeviceMotor::update(float dt_s)
 }
 
 /** @brief JustFloat 打印：只组帧 + 交给串口，什么时候调由调用方决定 */
-void DeviceMotor::pid_print()
+template <typename Uart>
+void DeviceMotorT<Uart>::pid_print()
 {
   if (_config.uart == nullptr)
     return;
@@ -172,7 +184,8 @@ void DeviceMotor::pid_print()
 // ---------------- 私有实现 ----------------
 
 /** @brief 带符号占空比 → H 桥两路：任何时刻最多一路非 0（H 桥直通保护） */
-void DeviceMotor::_apply_output(float pct)
+template <typename Uart>
+void DeviceMotorT<Uart>::_apply_output(float pct)
 {
   if (_config.invert)
     pct = -pct;
@@ -204,7 +217,8 @@ void DeviceMotor::_apply_output(float pct)
 }
 
 /** @brief 短路制动：两路都给满占空比，逻辑输出记为 0 */
-void DeviceMotor::_brake()
+template <typename Uart>
+void DeviceMotorT<Uart>::_brake()
 {
   _config.pwm_a->set_duty(100.0f);
   _config.pwm_b->set_duty(100.0f);
