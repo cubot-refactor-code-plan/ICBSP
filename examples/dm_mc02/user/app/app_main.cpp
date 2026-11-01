@@ -1,4 +1,4 @@
-#include "api_main.h"
+#include "app_main.h"
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "main.h"     // IWYU pragma: keep
 #include "task.h"
@@ -29,22 +29,18 @@
  *       用于创建FreeRTOS任务和初始化外设驱动
  *
  *       初始化顺序（见 service/system.hpp）：
- *         1. system_init()   —— 库入口：系统事件组 + 库任务（CAN 收发、系统维护）
- *         2. bsp_init()     —— 本板外设实例 init()（实例在 init() 时登记进库的登记表）
- *         3. device_init()  —— 本板设备
- *         4. 创建业务任务与测试任务
- *         5. system_start()  —— 置运行位，放行所有任务
+ *         1. system_init()   —— 库入口：系统事件组 + sys / can_rx 任务（先等运行态）
+ *         2. board_init()    —— 本板外设与设备实例 init()
+ *         3. 创建业务任务与测试任务
+ *         4. system_start()  —— 有发送节点才建 can_tx，再置运行位
  */
-void all_init()
+void app_init()
 {
-  // 库入口：建系统事件组、创建库任务（CAN 收发、系统维护；它们先等运行态）
+  // 库入口：建系统事件组、创建 sys / can_rx（它们先等运行态）
   system_init();
 
-  /* 初始化BSP设备 */
-  bsp_init();
-
-  /* 初始化设备 */
-  device_init();
+  /* 初始化本板外设与设备 */
+  board_init();
 
 #if APP_TEST_CAN_RECOVERY_ENABLED
   can_recovery_test_init();

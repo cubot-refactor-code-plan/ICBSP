@@ -1,5 +1,5 @@
 /**
- * @file api_main.h
+ * @file app_main.h
  * @author Rh
  * @brief 应用层与STM32和FreeRTOS底层的接口，放置最直接运行的任务
  * @version 0.1
@@ -11,13 +11,13 @@
  *
  * @note 使用说明：
  *
- *          - all_init()：在FreeRTOS初始化阶段(MX_FREERTOS_Init)中调用，用于初始化外设和创建任务
+ *          - app_init()：在FreeRTOS初始化阶段(MX_FREERTOS_Init)中调用，用于初始化外设和创建任务
  *          - StartDefaultTask()：默认任务，创建各业务任务并循环运行
  *          - 业务任务声明见 app_task.hpp，测试任务声明见 app_test.hpp
  */
 
-#ifndef __API_MAIN_H__
-#define __API_MAIN_H__
+#ifndef __APP_MAIN_H__
+#define __APP_MAIN_H__
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "semphr.h"
@@ -33,7 +33,7 @@ extern "C"
   /**
    * @brief FreeRTOS后的相关初始化
    */
-  void all_init(void);
+  void app_init(void);
 
 
   /* ==================== 任务函数声明 ==================== */
@@ -50,4 +50,4 @@ extern "C"
 #endif
 
 
-#endif // __API_MAIN_H__
+#endif // __APP_MAIN_H__

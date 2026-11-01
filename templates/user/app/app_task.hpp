@@ -1,13 +1,12 @@
 /**
- * @file demo_task.hpp
- * @brief 示例业务（模板）：两个不依赖任何外设的任务，演示 user_init() 怎样创建多个业务任务
+ * @file app_task.hpp
+ * @brief 示例业务：两个不依赖任何外设的任务（heartbeat / monitor）
  *
- * @details 接入后即可编译运行，GDB 挂接查看 user_alive_count / user_monitor 确认任务在跑；
- *          写自己的业务后删掉本文件与 demo_task.cpp，并去掉 user_init() 里对应的两行。
+ * @details 不自动创建；需要时在 app_main.cpp 里 xTaskCreate。
  */
 
-#ifndef __DEMO_TASK_HPP__
-#define __DEMO_TASK_HPP__
+#ifndef __APP_TASK_HPP__
+#define __APP_TASK_HPP__
 
 #include <stdint.h>
 
@@ -41,4 +40,4 @@ void heartbeat_task(void *argument);
  */
 void monitor_task(void *argument);
 
-#endif // __DEMO_TASK_HPP__
+#endif // __APP_TASK_HPP__

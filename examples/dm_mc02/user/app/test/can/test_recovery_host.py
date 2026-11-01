@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Compile the production recovery state machine against fake registers/RTOS.
-Run: python3 examples/dm_mc02/app/test/can/test_recovery_host.py
+Run: python3 examples/dm_mc02/user/app/test/can/test_recovery_host.py
 """
 from pathlib import Path
 import subprocess
 import tempfile
 
-root = Path(__file__).resolve().parents[5]  # 仓库根（库所在处）
+# 仓库根：向上找到含 bsp/bsp_can_recovery.cpp 的目录，目录层级变了也不用改
+root = next(p for p in Path(__file__).resolve().parents if (p / "bsp" / "bsp_can_recovery.cpp").is_file())
 header = r'''
 #pragma once
 #include <cstdint>
 #include <cassert>
-#include "hardware_config_defaults.hpp"
+#include "hardware_config.h"
 static_assert(CAN_BUSOFF_RETRY_MS == 100, "test expects the default 100 ms retry interval");
 using TickType_t = uint32_t;
 extern TickType_t tick;
@@ -79,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix='can-recovery-') as directory:
     (path/'bsp_can.hpp').write_text(header)
     # 库源文件先包含 stm32h7xx_hal.h 取 HAL 模块开关，按 FDCAN 已开启处理
     (path/'stm32h7xx_hal.h').write_text('#pragma once\n#define HAL_FDCAN_MODULE_ENABLED\n')
-    (path/'hardware_config_defaults.hpp').write_text((root/'service/hardware_config_defaults.hpp').read_text())  # 真实默认值
+    (path/'hardware_config.h').write_text('#pragma once\n#define CAN_BUSOFF_RETRY_MS 100\n')  # 测试只用到这个配置项
     (path/'recovery.cpp').write_text((root/'bsp/bsp_can_recovery.cpp').read_text())
     (path/'test.cpp').write_text(test)
     subprocess.run(['g++','-std=c++11','-Wall','-Wextra','-Werror',str(path/'recovery.cpp'),str(path/'test.cpp'),'-o',str(path/'test')],check=True)

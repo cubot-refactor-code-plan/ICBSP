@@ -24,7 +24,7 @@ Status BspCan::service_recovery()
   if (bus_off && !diagnostics.recovering)
   {
     diagnostics.recovering = true;
-    ++diagnostics.bus_off_events;
+    diagnostics.bus_off_events = diagnostics.bus_off_events + 1U;
     _recovery_started = now;
     _recovery_attempted = now - pdMS_TO_TICKS(CAN_BUSOFF_RETRY_MS); // 首次立即尝试
     // 均为非阻塞缓冲；此临界区排除发送任务/ISR 与接收任务。
@@ -42,14 +42,14 @@ Status BspCan::service_recovery()
       _hfdcan->Instance->TXBCR = _hfdcan->Instance->TXBRP;
       CLEAR_BIT(_hfdcan->Instance->CCCR, FDCAN_CCCR_INIT);
       _recovery_attempted = now;
-      ++diagnostics.recovery_attempts;
+      diagnostics.recovery_attempts = diagnostics.recovery_attempts + 1U;
     }
     // 先等旧发送请求彻底取消，才允许新的控制帧入队。
     if (!bus_off && (_hfdcan->Instance->CCCR & FDCAN_CCCR_INIT) == 0U &&
         _hfdcan->Instance->TXBRP == 0U)
     {
       diagnostics.recovering = false;
-      ++diagnostics.recovery_successes;
+      diagnostics.recovery_successes = diagnostics.recovery_successes + 1U;
       const TickType_t elapsed = now - _recovery_started;
       if (elapsed > diagnostics.recovery_max_ticks)
         diagnostics.recovery_max_ticks = elapsed;

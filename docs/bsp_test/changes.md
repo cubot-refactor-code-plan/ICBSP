@@ -1,6 +1,8 @@
 # 测试过程中的代码与配置改动
 
-按时间顺序记录。库（`third_party/stm32_bsp`）的改动单独提交在 submodule 里，这里写提交号。
+按时间顺序记录。库（`third_party/stm32-framework`）的改动单独提交在 submodule 里，这里写提交号。
+
+> 2026-11-01 起 `service/hardware_config_defaults.hpp` 已删除，配置统一在宿主 `user/board/hardware_config.h`；下文出现的旧文件名是当时的记录。
 
 ## 1. CubeMX：RS485 两路串口（2026-10-17）
 
@@ -61,7 +63,7 @@ USER CODE 段、链接脚本、`FreeRTOSConfig.h`、`freertos.c` 未受影响；
 | 11 | 浸泡挪到最前的实验开关 `BSP_TEST_SOAK_FIRST`（定位 -O2 卡死用） | — |
 | 物理 | `case_unplug` 用 `tx_req = 0` 停发送端，而发送任务的 `--tx_req` 不是原子操作，0 被覆盖回去，P2 后 runner 卡住（当时用调试器写 0 解除） | 改为独立的 `tx_abort` 标志（**只编译验证，未上板复跑**） |
 
-## 3. 库（`third_party/stm32_bsp`）修复
+## 3. 库（`third_party/stm32-framework`）修复
 
 代码改动已由用户提交到 submodule：`d32a996`（`[fix]通信驱动bug修复`）；README 的文档更新留给下一次提交。每项都有上板回归。
 
@@ -111,7 +113,7 @@ USER CODE 段、链接脚本、`FreeRTOSConfig.h`、`freertos.c` 未受影响；
 
 ## 7. SPI2 / BMI088：库实现与测试（2026-10-27 ~ 10-28，记录见 `spi_bmi088.md`）
 
-库（`third_party/stm32_bsp`）：
+库（`third_party/stm32-framework`）：
 
 | 编号 | 文件 | 内容 |
 | --- | --- | --- |

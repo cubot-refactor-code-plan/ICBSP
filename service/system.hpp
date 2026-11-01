@@ -1,7 +1,7 @@
 /**
  * @file system.hpp
  * @author ChoseB
- * @brief stm32_bsp 的入口：建系统状态、创建库自带的后台任务、置运行态
+ * @brief stm32_framework 的入口：建系统状态、创建库自带的后台任务、置运行态
  * @version 0.1
  * @date 2026-10-17
  *
@@ -9,19 +9,18 @@
  *
  * @details 宿主工程在 freertos.c 的 MX_FREERTOS_Init()（USER CODE 段）里按顺序调用：
  *
- *            system_init();    // 1. 建系统事件组 + 创建库任务（调度器启动前不会运行）
+ *            system_init();    // 1. 建系统事件组 + 创建 sys / can_rx（调度器启动前不会运行）
  *            board_init();     // 2. 用户：各外设实例 init()、设备 init()、注册 CAN 节点等
- *            user_init();      // 3. 用户：创建业务任务（templates/user/：每个业务一行 xTaskCreate 断言，入口先调 SysFlagWaitRunning()）
- *            system_start();   // 4. 置运行位：前面有初始化失败记录就在这里停机（fault_record 记下行号）
+ *            system_start();   // 3. 有发送节点才建 can_tx，然后置运行位
  *
- *          库任务（都按 1 kHz 节拍，见各自实现；CAN 两个任务只在宿主工程开了 FDCAN 时创建）：
+ *          任务体在 tasks/：sys / can_rx / can_tx；业务任务由用户在 user/app/task/ 里创建。
  *            - sys_task    CAN Bus-Off 恢复、每 10 ms 串口收发补救、推进 Online 离线计时；
  *            - can_rx_task 把各 CAN 收到的帧按 ID 分发给接收节点，没人要的进回退缓冲；
  *            - can_tx_task 按槽位聚合发送 CAN 控制帧（保底心跳 + 100 ms 指令有效期）；
- *              没有任何发送节点时自行退出。
- *          它们遍历 BspCan / BspUartBase 的实例登记表，不引用任何板级实例。
+ *              在 system_start() 里检查 CanTxNode::count()，没有发送节点时不创建。
+ *          任务体在 tasks/，它们遍历 BspCan / BspUartBase 的实例登记表，不引用任何板级实例。
  *
- * @note 任务优先级与栈深等可配置项见 hardware_config_defaults.hpp，在宿主工程的 hardware_config.h 里覆盖。
+ * @note 任务优先级与栈深等可配置项见宿主 user/board/hardware_config.h。
  */
 
 #ifndef __SYSTEM_HPP__

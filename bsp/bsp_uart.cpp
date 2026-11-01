@@ -505,7 +505,7 @@ Status BspUart<BUFFER_SIZE>::send(const uint8_t *data, size_t size, uint32_t tim
   // 未全部入队说明有字节被丢弃（调用方通常只检查返回码），累加计数
   if (bytes_written < size)
   {
-    _tx_drop_bytes += static_cast<uint32_t>(size - bytes_written);
+    _tx_drop_bytes = _tx_drop_bytes + static_cast<uint32_t>(size - bytes_written);
   }
 
   if (written != nullptr)
@@ -658,7 +658,7 @@ bool BspUart<BUFFER_SIZE>::tx_recover()
     {
       if (repair_dma_handle(_huart->hdmatx))
       {
-        _tx_dma_repair_cnt++; // 通道空闲但 DMA 句柄卡在非 READY：复位后才能再启动
+        _tx_dma_repair_cnt = _tx_dma_repair_cnt + 1U; // 通道空闲但 DMA 句柄卡在非 READY：复位后才能再启动
       }
       restarted             = start_chunk(false, nullptr);
       _tx_idle_pending_seen = false;
@@ -691,7 +691,7 @@ bool BspUart<BUFFER_SIZE>::tx_recover()
       (void)HAL_UART_AbortTransmit(_huart); // 阻塞版 HAL，只能在任务上下文调用
       if (repair_dma_handle(_huart->hdmatx))
       {
-        _tx_dma_repair_cnt++;
+        _tx_dma_repair_cnt = _tx_dma_repair_cnt + 1U;
       }
       settle_chunk();
       restarted = start_chunk(false, nullptr);
@@ -702,7 +702,7 @@ bool BspUart<BUFFER_SIZE>::tx_recover()
 
   if (restarted)
   {
-    _tx_stall_rec_cnt++; // 诊断：恢复成功一次
+    _tx_stall_rec_cnt = _tx_stall_rec_cnt + 1U; // 诊断：恢复成功一次
   }
   return restarted;
 }
@@ -745,7 +745,7 @@ bool BspUart<BUFFER_SIZE>::rx_recover()
   abort_reception();
   if (repair_dma_handle(_huart->hdmarx))
   {
-    _rx_dma_repair_cnt++; // 句柄卡在 ERROR：HAL 自己恢复不了，这里复位
+    _rx_dma_repair_cnt = _rx_dma_repair_cnt + 1U; // 句柄卡在 ERROR：HAL 自己恢复不了，这里复位
   }
   const bool armed = arm_reception();
   if (has_irq)
@@ -757,7 +757,7 @@ bool BspUart<BUFFER_SIZE>::rx_recover()
     return false; // 仍失败，下个周期再试（_rx_should_run 保持为 true）
   }
 
-  _rx_error_cnt++; // 诊断：确实重建了一次
+  _rx_error_cnt = _rx_error_cnt + 1U; // 诊断：确实重建了一次
   return true;
 }
 
@@ -806,7 +806,7 @@ void BspUart<BUFFER_SIZE>::on_idle_isr(uint16_t size, BaseType_t *pxHigherPriori
     // 流缓冲区满时 SendFromISR 只会写入一部分，剩余字节被丢弃。
     // 累加诊断计数记录丢弃的字节数（正常应恒为 0）。
     size_t pushed = xStreamBufferSendFromISR(_rx_stream_buffer, _rx_dma_buffer, size, pxHigherPriorityTaskWoken);
-    _rx_drop_bytes += static_cast<uint32_t>(size - pushed);
+    _rx_drop_bytes = _rx_drop_bytes + static_cast<uint32_t>(size - pushed);
   }
 
   // 重新启动接收。若失败也不在此重试（阻塞）
@@ -833,7 +833,7 @@ void BspUart<BUFFER_SIZE>::start_transmission_from_isr(BaseType_t *pxHigherPrior
   const bool tx_channel_idle = (_huart->gState == HAL_UART_STATE_READY);
   if (!tx_channel_idle)
   {
-    _tx_isr_skip_cnt++;
+    _tx_isr_skip_cnt = _tx_isr_skip_cnt + 1U;
     return; // 数据仍在流缓冲区，等巡检重新启动发送（tx_recover函数）
   }
 
@@ -863,7 +863,7 @@ void BspUart<BUFFER_SIZE>::on_error_isr()
   // HAL 在 DMA 出错时会停掉对应通道，gState 离开 READY → 记一次 TX 侧故障
   if (_huart->gState != HAL_UART_STATE_READY)
   {
-    _tx_error_cnt++;
+    _tx_error_cnt = _tx_error_cnt + 1U;
   }
 }
 
@@ -987,7 +987,7 @@ bool BspUart<BUFFER_SIZE>::arm_reception()
   // 启动多字节 DMA 接收（IDLE 模式）；HAL 会自动清 IDLE 标志并使能 IDLE 中断
   if (HAL_UARTEx_ReceiveToIdle_DMA(_huart, _rx_dma_buffer, BUFFER_SIZE) != HAL_OK)
   {
-    _rx_arm_fail_cnt++; // 诊断：启动失败计数（正常应恒为 0）
+    _rx_arm_fail_cnt = _rx_arm_fail_cnt + 1U; // 诊断：启动失败计数（正常应恒为 0）
     return false;       // 启动失败：由调用方决定重试或上报
   }
   _rx_should_run = true;
@@ -1089,7 +1089,7 @@ bool BspUart<BUFFER_SIZE>::start_chunk(bool from_isr, BaseType_t *pxHigherPriori
     de_release();
     _tx_chunk_active       = false;
     _tx_last_activity_tick = now;
-    _tx_start_fail_cnt++;
+    _tx_start_fail_cnt = _tx_start_fail_cnt + 1U;
     return false;
   }
 

@@ -1,5 +1,5 @@
 #include "system.hpp"
-#include "hardware_config_defaults.hpp"
+#include "hardware_config.h"
 #include "bsp_can.hpp"  // 未开 FDCAN 时为空
 #include "bsp_uart.hpp" // 未开 UART 时为空
 
@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 
+#if SYS_TASK_ENABLE
 
 volatile uint32_t sys_loop_count = 0U;       ///< 维护任务循环次数（调试观察）
 volatile Status   sys_online_status = Status::NOT_INIT; ///< 最近一次 Online::update() 的结果
@@ -29,14 +30,14 @@ extern "C" void sys_task(void *argument)
   TickType_t wake_time = xTaskGetTickCount();
   for (;;)
   {
-#ifdef HAL_FDCAN_MODULE_ENABLED
+#if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
     // CAN 硬件 Bus-Off 自恢复：遍历 BspCan 登记表（各实例 init() 时登记）
     for (uint32_t i = 0U; i < BspCan::instance_count(); ++i)
     {
       (void)BspCan::instance_at(i)->service_recovery();
     }
 #endif
-#ifdef HAL_UART_MODULE_ENABLED
+#if defined(HAL_UART_MODULE_ENABLED) && UART_PATROL_ENABLE
     // 串口补救：卡死的发送续发 + 停摆的接收重建（ISR 只计数，恢复只能在任务侧做），遍历 BspUart 登记表
     if ((sys_loop_count % UART_PATROL_PERIOD) == 0U)
     {
@@ -50,7 +51,9 @@ extern "C" void sys_task(void *argument)
 #endif
     // 在线情况更新
     sys_online_status = Online::update();
-    ++sys_loop_count;
+    sys_loop_count = sys_loop_count + 1U;
     vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1U));
   }
 }
+
+#endif // SYS_TASK_ENABLE

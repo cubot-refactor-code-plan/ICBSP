@@ -1,5 +1,5 @@
-# STM32_BSP：可作为 git submodule 接入的 STM32H7 板级库
-![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/STM32_BSP)[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+# stm32-framework：可作为 git submodule 接入的 STM32H7 板级库
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/stm32-framework)[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![](https://img.shields.io/badge/chip-STM32H7xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C/C++-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake_v3.22.1-blue.svg) 
 
 > 分支 `mini-bsp`。目标：从 DM-MC02 整车工程里提炼出一个库，**任何 STM32H7 CubeMX 工程**都能把它作为 git submodule 接入。
@@ -31,14 +31,14 @@
 ### 1.2 接入 submodule
 
 ```bash
-git submodule add git@github.com:cubot-refactor-code-plan/STM32_BSP.git Middlewares/Third_Party/STM32_BSP # SSH格式
+git submodule add git@github.com:cubot-refactor-code-plan/stm32-framework.git Middlewares/Third_Party/stm32-framework # SSH格式
 ```
 
-**自动接入**：`tools/integrate.py` 按本节与 1.3 完成宿主工程的适配——检查 1.1 的 CubeMX 前提，改链接脚本、`FreeRTOSConfig.h` / `freertos.c` 的 USER CODE 段、根 `CMakeLists.txt`，复制 `templates/` 的 `board_cfg.*`、`app_main.*`、`hardware_config.h`，在宿主根目录建 `user/`（复制 `templates/user/`：业务任务初始化 `user_init()` 与示例业务，`app_init()` 第 3 步只调它），并配置 clangd（见本节末条）。所有片段从 `templates/` 读取；每步先判断是否已完成，可重复运行（例如 CubeMX 重新生成后）；只改内容仍是 CubeMX 默认的 USER CODE 段，已有自定义内容就报错并指出要手动合并的位置；有任何错误就不写任何文件；保持各文件原行尾。
+**自动接入**：`tools/integrate.py` 按本节与 1.3 完成宿主工程的适配——检查 1.1 的 CubeMX 前提，改链接脚本、`FreeRTOSConfig.h` / `freertos.c` 的 USER CODE 段、根 `CMakeLists.txt`，复制 `templates/user/board`、`templates/user/app`、`templates/user/app/task` 与 `hardware_config.h` 到 `user/board`，建 `user/board`、`user/app/task`、`user/module`，并配置 clangd（见本节末条）。`app_init()` 只调 `system_init()` / `board_init()` / `system_start()`；`StartDefaultTask()` 在 `user/app/app_main.cpp` 空循环。所有片段从 `templates/` 读取；每步先判断是否已完成，可重复运行；只改内容仍是 CubeMX 默认的 USER CODE 段，已有自定义内容就报错并指出要手动合并的位置；有任何错误就不写任何文件；保持各文件原行尾。
 
 ```bash
-python3 third_party/stm32_bsp/tools/integrate.py --dry-run   # 在宿主工程根目录：只检查并打印 diff
-python3 third_party/stm32_bsp/tools/integrate.py             # 执行；--help 看 --app-dir / --user-dir / --linker-script / --ram-region 等选项
+python3 third_party/stm32-framework/tools/integrate.py --dry-run   # 在宿主工程根目录：只检查并打印 diff
+python3 third_party/stm32-framework/tools/integrate.py             # 执行；--help 看 --board-dir / --app-dir / --user-dir / --linker-script / --ram-region 等选项
 ```
 
 复制来的 `board_cfg.*` 是 DM-MC02 的句柄与参数：脚本对照本工程 CubeMX 生成的代码，提示不存在的句柄、波特率与 PSC / ARR 不一致，但定时器时钟与具体用哪些外设仍需手动改。2026-10-17 实测：在接入前的全新 CubeMX 工程上运行，结果与按下文手动接入一致（只有链接脚本与 `freertos.c` 里的注释措辞不同），编译 0 warning；再次运行全部跳过。
@@ -46,20 +46,21 @@ python3 third_party/stm32_bsp/tools/integrate.py             # 执行；--help �
 手动接入的步骤如下。在 CubeMX 生成的根 `CMakeLists.txt` 末尾接入库，并加上自己的应用源文件：
 
 ```cmake
-add_subdirectory(third_party/stm32_bsp)
-target_link_libraries(${CMAKE_PROJECT_NAME} stm32_bsp)
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE app/board_cfg.cpp app/app_main.cpp)   # 从 templates/ 复制来的
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE app)
+add_subdirectory(third_party/stm32-framework)
+target_include_directories(stm32_framework PRIVATE user/board)  # 库自身也要看到 hardware_config.h
+target_link_libraries(${CMAKE_PROJECT_NAME} stm32_framework)
+target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_20)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user/board user/app user/module)
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)  # BspUart::printf 打印浮点需要（nano.specs）
 
-# 业务代码：user/ 下的 .c / .cpp 自动收集（templates/user/ 复制来的），新增业务文件不用改 CMake
+# 业务代码：user/ 下的 .c / .cpp 自动收集，新增业务文件不用改 CMake
 file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/user/*.c ${CMAKE_CURRENT_SOURCE_DIR}/user/*.cpp)
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
 ```
 
-- 库按 C++11 编译，并链接 `stm32cubemx` 取 HAL / FreeRTOS 的头文件与宏，所以宿主工程不需要再配 include 路径；CubeMX 生成的 `project()` 默认已启用 C++，应用的 `.cpp` 直接加进可执行目标即可（已实测）。
-- `stm32_bsp` 是 **OBJECT 库**：库里有覆盖 HAL / FreeRTOS 弱符号的强定义（`HAL_*Callback`、钩子调用的 `fault_on_*`），做成静态库时这些成员不会被链接器拉进来，会静默失效。
+- 库按 **C++20** 编译，并链接 `stm32cubemx` 取 HAL / FreeRTOS 的头文件与宏，所以宿主工程不需要再配 include 路径；应用目标也要启用 C++20（`target_compile_features(... cxx_std_20)`，`integrate.py` 会加）。
+- `stm32_framework` 是 **OBJECT 库**：库里有覆盖 HAL / FreeRTOS 弱符号的强定义（`HAL_*Callback`、钩子调用的 `fault_on_*`），做成静态库时这些成员不会被链接器拉进来，会静默失效。
 - 仓库根不能单独配置（会报错提示）；必须在 `add_subdirectory(cmake/stm32cubemx)` 之后接入。
 - 库只包含 `stm32h7xx_hal.h`，不包含 CubeMX 按外设生成的 `main.h` / `fdcan.h` / `usart.h` / `tim.h`，也不引用任何板级实例；句柄与引脚宏由用户的板级配置自己包含。
 - 示例 `examples/dm_mc02/CMakeLists.txt` 就是这样接入的（库目录在工程之上，所以多一个 binary 目录参数）。
@@ -72,7 +73,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
   ]
   ```
 
-  2026-10-17 在全新 CubeMX 宿主工程上实测（clangd 22.1.6 `--check`）：宿主 `Core/`、`app/` 与库源文件均 0 诊断。
+  2026-10-17 在全新 CubeMX 宿主工程上实测（clangd 22.1.6 `--check`）：宿主 `Core/`、`user/` 与库源文件均 0 诊断。
 
 ### 1.3 修改的配置（模板与片段都在 `templates/`，索引见 `templates/README.md`）
 
@@ -92,7 +93,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
 
 3. **`freertos.c`**（`templates/freertos_user_code.c`）：USER CODE 4 / 5 的钩子分别调 `fault_on_stack_overflow(pcTaskName)`、`fault_on_malloc_failed()`；`MX_FREERTOS_Init()` 的 USER CODE Init 段调 `app_init()`。
 
-4. **板级实例配置**（`templates/board_cfg.hpp` / `board_cfg.cpp`；完整例子 `examples/dm_mc02/app/board/`）：
+4. **板级实例配置**（`templates/user/board/board_cfg.hpp` / `board_cfg.cpp`；示例板对照 `examples/dm_mc02/user/board/`）：
 
    ```cpp
    #include "fdcan.h"   // 本工程 CubeMX 生成的句柄（库不包含这些头文件）
@@ -116,23 +117,30 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user)
    }
    ```
 
-5. **初始化入口**（`templates/app_main.cpp`；库入口声明在 `service/system.hpp`，C 文件也能调用）：
+5. **初始化入口**（`templates/user/app/app_main.cpp`；库入口声明在 `service/system.hpp`，C 文件也能调用）：
 
    ```cpp
+   extern "C" void StartDefaultTask(void *argument)  // 覆盖 freertos.c 的 weak 实现
+   {
+     (void)argument;
+     for (;;) { vTaskDelay(pdMS_TO_TICKS(1000)); }   // 空循环，保留任务
+   }
+
    extern "C" void app_init(void)   // freertos.c 的 MX_FREERTOS_Init() 里调用（调度器启动前）
    {
-     system_init();   // 库入口：建系统事件组，创建库任务 sys / can_rx / can_tx（没开 FDCAN 时只建 sys）
-     board_init();   // 外设实例 init()、设备 init()、注册 CAN 节点
-     user_init();    // 业务任务：user/user_main.cpp 里每个业务一行 configASSERT(xTaskCreate(...) == pdPASS)
-     system_start();  // 置运行位放行所有任务；初始化阶段有失败记录就在这里断言停机
+     system_init();   // 建系统事件组与 sys / can_rx
+     board_init();    // 外设实例 init()、设备 init()、注册 CAN 节点
+     system_start();  // 有发送节点才建 can_tx，然后置运行位
    }
    ```
 
-   业务代码放宿主根目录的 `user/`（`templates/user/`）：`user_main.*` 定义 `user_init()`，加业务就是新建 `user/xxx.hpp/.cpp`（任务入口第一句 `SysFlagWaitRunning()`）、在 `user_init()` 里加一行创建断言；`demo_task.*` 是两个不依赖外设的示例业务（心跳计数、堆余量监视），写自己的业务后删掉。
+   业务代码放 `user/app/task/`：任务入口第一句 `SysFlagWaitRunning()`，需要时在 `StartDefaultTask()` 里 `xTaskCreate`；`app_task.hpp` 声明的 `heartbeat` / `monitor` 是不自动创建的示例。
 
-   库任务都是 1 kHz：`sys_task`（CAN Bus-Off 恢复、串口收发补救巡检、Online 离线计时），`can_rx_task`（按 ID 分发到接收节点），`can_tx_task`（槽位聚合发送、保底心跳、指令有效期；没有发送节点时自行退出）。
+   库任务都在 `tasks/`，1 kHz：`sys_task`（CAN Bus-Off 恢复、串口巡检、Online），`can_rx_task`（按 ID 分发），`can_tx_task`（槽位聚合、保底心跳、指令有效期；`system_start()` 按 `CanTxNode::count()` 决定是否创建）。
 
-6. **可选：`hardware_config.h`**（`templates/hardware_config.h` 复制到 `Core/Inc/`，只取消注释想改的项）。库头文件 `service/hardware_config_defaults.hpp` 用 `__has_include` 在包含路径上找它，没写的项用默认值，越界在编译时报 `static_assert`；CMake 配置阶段打印“stm32_bsp: 使用配置 …”或“没找到 hardware_config.h，全部用默认值”。必须放在 stm32cubemx 的包含目录里（`Core/Inc/` 就是），库和应用代码才看到同一份配置。
+6. **必须：`hardware_config.h`**（`templates/hardware_config.h` 复制到 `user/board/`）。所有可调宏都在这里直接写成实际值，不再有默认值头文件；顶部已包含 `stm32h7xx_hal.h` / `FreeRTOS.h`，库和用户代码都包含同一份文件。越界在编译时报 `static_assert`。
+
+   功能开关：`SYS_TASK_ENABLE`、`CAN_RX_ENABLE`、`CAN_TX_ENABLE`、`UART_PATROL_ENABLE`。`HAL_FDCAN_MODULE_ENABLED` 未定义时自动把 CAN 收 / 发开关置 0，`HAL_UART_MODULE_ENABLED` 未定义时自动关闭串口巡检，不需要再改库代码。宿主需要给 `stm32_framework` 加 `user/board` 包含路径（`integrate.py` 会自动加）。
 
    | 宏 | 默认 | 含义 |
    | --- | --- | --- |
@@ -193,9 +201,9 @@ extern "C" void chassis_task(void *)
 | Algorithm | `matrix` | 定长单精度矩阵 `MatrixF32<ROWS, COLS>`：四则运算、转置、求逆（奇异时返回 false，相对阈值）、向量模长 / 归一化 / 点乘 / 叉乘、轴角 / Z-Y-X 欧拉角旋转矩阵。移植自 [yssickjgd/damiao_mc02_bsp](https://github.com/yssickjgd/damiao_mc02_bsp)（USTC-RoboWalker，经作者授权），**不适用本库的 MIT 许可证**；改动见文件头 | 主机侧与原作逐项对照（5000 组随机输入）、修复项与误用编译报错检查 |
 | Algorithm | `rls` | 带遗忘因子的递归最小二乘 `Rls<X_DIM, Y_DIM>`（多输出共用回归向量）：参数检查、tr(P) 上限防协方差爆炸、非有限样本丢弃、P 对称化与失正定重置，均计数 | 主机侧与双精度参考实现对照、静态辨识 / 参数突变跟踪 / 零激励 10 万步 / 单方向激励 / 100 万步长跑 |
 | Algorithm | `quaternion` | 姿态四元数运算：乘法 / 共轭、旋转向量、姿态误差（`error_to()`，无奇异点）、角速度积分、slerp、云台指向角（`pointing()`）、Z-Y-X 欧拉角、角度折回 | 主机侧数值自测（与参考公式、VQF 输出对照）, 暂未实测 |
-| Service | `system` / `hardware_config_defaults` | 库入口 `system_init()` / `system_start()` 与库任务 `sys_task`、`can_rx_task`、`can_tx_task`（遍历 `BspCan` / `BspUartBase` 登记表）；可配置项默认值与 `hardware_config.h` 读取 | 内部回环 + 串口跳线回归，默认 / 覆盖配置对比（2026-10-17） |
+| Service | `system` | 库入口 `system_init()` / `system_start()`；任务体在 `tasks/`（`sys` / `can_rx` / `can_tx`） | 内部回环 + 串口跳线回归 |
 
-属于示例板的代码在 `examples/dm_mc02/app/`：`board/bsp_cfg.*`、`board/device_cfg.*`（实例与初始化，包含本板 CubeMX 头文件）、`api_main`（`all_init()` 按上面的顺序调库入口）、`task/key_task`、`test/`。
+属于示例板的代码在 `examples/dm_mc02/user/`：`board/`（实例配置与 `board_init()`）、`app/`（`app_main` 入口、任务、测试）。
 
 已按 main 移除（2026-10-16）：TinyUSB / `bsp_usb`、QSPI 外置 Flash 与 XIP、EmmV5、协议层（DataPack / `protocol_uart`）、LCD 与菜单、达妙电机空声明、ADC1 与 CMSIS-DSP、`bsp_buzzer`（换成 `bsp_pwm` + `device_buzzer`）。CAN 节点分发层与 `DjiMotor` 按决定保留（可移植库需要一条总线挂多类设备）。
 
@@ -206,21 +214,22 @@ extern "C" void chassis_task(void *)
 ### 3.1 目录结构
 
 ```txt
-stm32_bsp/                    仓库根 = 库
-├─ CMakeLists.txt             stm32_bsp（OBJECT 库）；链接 stm32cubemx（INTERFACE）取 HAL / FreeRTOS
+stm32-framework/                    仓库根 = 库
+├─ CMakeLists.txt             stm32_framework（OBJECT 库）；链接 stm32cubemx（INTERFACE）取 HAL / FreeRTOS
 ├─ bsp/                       bsp_can（含 bsp_can_recovery）、bsp_uart、bsp_spi、bsp_pwm、bsp_key、bsp_gpio
-├─ service/                   system（库入口）与库任务 sys_task / can_rx_task / can_tx_task、hardware_config_defaults、status、fault_record、can_rx_node / can_tx_node、online_check、motor_definition、imu_definition
+├─ service/                   system（库入口）、status、fault_record、can_rx_node / can_tx_node、online_check、motor_definition、imu_definition
+├─ tasks/                     库任务：sys_task、can_rx_task、can_tx_task（system_init/system_start 创建）
 ├─ device/                    dji_motor、device_buzzer、device_bmi088
 ├─ algorithm/                 pid、vqf（姿态解算）、quaternion、matrix、rls
-├─ templates/                 接入用：hardware_config.h、board_cfg.*、app_main.*、user/（业务任务初始化与示例业务）、FreeRTOSConfig.h / freertos.c USER CODE 片段、链接脚本片段
+├─ templates/                 接入用：hardware_config.h、user/board/board_cfg.*、user/app/app_main.*、user/app/app_task.hpp、user/app/task/demo_task.cpp、FreeRTOSConfig.h / freertos.c USER CODE 片段、链接脚本片段
 ├─ tools/                     integrate.py：按 templates/ 自动接入宿主工程（1.2）
 ├─ docs/                      编码规范、器件手册、bsp_test/（UART / RS485 / CAN 实机测试记录 3.6，SPI / BMI088 3.7）
 └─ examples/
    └─ dm_mc02/                DM-MC02 板的 CubeMX 工程（git mv 进来，保留历史）
       ├─ DM_MC02.ioc、Core/、Drivers/、Middlewares/、startup、STM32H723xG_flash.ld、cmake/、CMakePresets.json
       ├─ Flash/、.vscode/
-      ├─ app/                 板级用户代码：board/（实例配置）、api_main、task/、test/，有自己的 CMakeLists（dm_mc02_app）
-      └─ CMakeLists.txt       add_subdirectory(../.. stm32_bsp) + add_subdirectory(app) 接入
+      ├─ user/                板级用户代码：board/（实例配置与 board_init）、app/（app_main、task/、test/）、module/
+      └─ CMakeLists.txt       add_subdirectory(../.. stm32_framework) + 收集 user/**/*.cpp、包含 user/board user/app user/module
 ```
 
 - `.ioc` 与 `Core/`、`Drivers/`、`Middlewares/` 一起搬，相对路径不变；已实测 CubeMX 6.18.1 在 `examples/dm_mc02/` 里重新生成正常（链接脚本内容保留、只改几行行尾；会把 `Drivers/CMSIS/DSP/` 拷回来，已加入 `.gitignore`）。
@@ -233,7 +242,7 @@ stm32_bsp/                    仓库根 = 库
 
 - 只支持 STM32H7（FDCAN、DMA Stream、RAM_D1）。
 - 假定 **D-Cache 关闭**；开启时 `.dma_buffer` 要配成 MPU 非缓存区。
-- 需要 FreeRTOS + CMSIS-RTOS v2；C++11；tick 1 kHz。
+- 需要 FreeRTOS + CMSIS-RTOS v2；C++20；tick 1 kHz。
 - `BspUart` 在 `init()` 里打开 UART 硬件 FIFO（2 Mbps 以上连续接收必需）。卡死恢复中止发送时，DMA FIFO 预读的字节与 UART TX FIFO 里的字节会丢（只在卡死恢复路径上）。
 - `BspUart` 的接收流缓冲区是模板参数的 2 倍（堆上），`Config::baudrate` 只用来估算卡死阈值，填错不再导致误判。
 - `BspUart` 软件 DE（`Config::de_port`）：启动 TX DMA 前拉高、TX 完成中断（TC）里没有下一段时拉低。释放比停止位晚一个中断响应时间（µs 级），对端应答不能比这更快；拉高到起始位之间没有收发器建立时间余量，约 1 Mbps 以上需实测。卡死恢复中止发送时最后一个字节可能被截断。
@@ -324,7 +333,7 @@ bash Flash/JLink_flash.sh            # J-Link（经 OpenOCD jlink 适配器，�
 
 - 探针配置见 `Flash/README.md`：固定 HID 后端；**不注册 OCTOSPI2 外置 Flash bank**（注册后 OpenOCD 在 program / reset 时会碰 OCTOSPI2，固件不重新初始化它时会把调试口卡死，需要重新上电）。
 - VS Code：编译 / 烧录 / 调试请打开 `examples/dm_mc02` 文件夹（`.vscode/` 在那里）：`Terminal: Run Task` 里有编译与烧录任务，调试配置 `cmsis-dap-debug`（Cortex-Debug + OpenOCD），外设寄存器描述 `Flash/STM32H723.svd`。在仓库根编辑库代码时，根目录的 `.clangd` 指向示例的 `build/Debug/compile_commands.json`（先编译一次示例）。
-- 测试开关在 `examples/dm_mc02/app/app_test.hpp`，默认全部为 0：Online 自检、CAN1 Bus-Off 恢复测试（见 `examples/dm_mc02/app/test/can/README.md`，含主机状态机测试 `python3 examples/dm_mc02/app/test/can/test_recovery_host.py`）。
+- 测试开关在 `examples/dm_mc02/user/app/app_test.hpp`，默认全部为 0：Online 自检、CAN1 Bus-Off 恢复测试（见 `examples/dm_mc02/user/app/test/can/README.md`，含主机状态机测试 `python3 examples/dm_mc02/user/app/test/can/test_recovery_host.py`）。
 - 查看故障现场：GDB 挂接后 `print fault_record`（种类、次数、文件行号、tick、IPSR、任务名）。
 
 示例板引脚取舍（DM-MC02）：SPI3 与串口 3 / 串口 5 引脚冲突，保留 U3、U5（舍弃 SPI3 与 RS485-3）；I2C1 与串口 4 复用，选串口 4。
@@ -334,7 +343,7 @@ bash Flash/JLink_flash.sh            # J-Link（经 OpenOCD jlink 适配器，�
 ## 5. 开发约定
 
 - 编码规范：`docs/编码规范.md`（命名、注释、`Config` 构造模式、分层、断言与初始化失败）。格式由 `.clang-format` 固定，手动执行。
-- C 调 C++ 只通过 `api_main.h` 转接一次（`main.c` / `freertos.c` → `all_init()` / 任务入口），HAL 与 FreeRTOS 回调用 `extern "C"`；库入口 `system.hpp` 本身是 `extern "C"`，C 文件也能直接调用。
+- C 调 C++ 只通过 `app_main.h` 转接一次（`main.c` / `freertos.c` → `app_init()` / 任务入口），HAL 与 FreeRTOS 回调用 `extern "C"`；库入口 `system.hpp` 本身是 `extern "C"`，C 文件也能直接调用。
 - 间接包含的头文件行尾加 `// IWYU pragma: keep`，避免 clangd 误报。
 - 很多文件是 CRLF 行尾：修改时保持原行尾，提交前用 `git diff --numstat` 与 `git diff --ignore-cr-at-eol --numstat` 对比，确认没有整文件的行尾改动。
 - CubeMX 重新生成后看一眼 `git status`：6.18.1 会改写链接脚本几行的行尾（内容不变，`git checkout` 还原即可），并拷回 `Drivers/CMSIS/DSP/`（已忽略）；链接脚本缺段时 CMake 配置阶段会直接报错。

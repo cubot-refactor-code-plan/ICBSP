@@ -2,9 +2,10 @@
 #define CAN_RX_NODE_HPP
 
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关来自 stm32h7xx_hal_conf.h）
+#include "hardware_config.h"
 
-// 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本模块整体不参与编译
-#ifdef HAL_FDCAN_MODULE_ENABLED
+// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_RX_ENABLE=0 时，本模块整体不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
 
 #include "bsp_can.hpp"
 
@@ -68,6 +69,6 @@ CanRxNode *regist(BspCan &can_item, uint32_t can_id, CanRxNode::Callback callbac
  */
 Status unregist(BspCan &can_item, CanRxNode *node);
 
-#endif // HAL_FDCAN_MODULE_ENABLED
+#endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE
 
 #endif // CAN_RX_NODE_HPP

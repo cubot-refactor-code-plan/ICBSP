@@ -34,7 +34,7 @@ Status SysFlagSet(Status statu)
 /**
  * @brief 初始化全部完成：置运行位
  * @return OK=已置运行位；NOT_SUPPORTED=此前有初始化失败记录（SysInitError），运行位不置；NOT_INIT=事件组未创建
- * @note 调用方（all_init）用 configASSERT 检查返回值：有失败记录就停机并留下现场，而不是带着半初始化的系统继续跑。
+ * @note 调用方（app_init）用 configASSERT 检查返回值：有失败记录就停机并留下现场，而不是带着半初始化的系统继续跑。
  */
 Status SysCompleteInit(void)
 {

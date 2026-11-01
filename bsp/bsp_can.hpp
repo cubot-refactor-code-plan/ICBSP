@@ -12,7 +12,7 @@
  *
  * @details 使用示例：
  *
- * @note 实例写在用户的板级配置里（示例：examples/dm_mc02/app/board/bsp_cfg.cpp），
+ * @note 实例写在用户的板级配置里（示例：examples/dm_mc02/user/board/bsp_cfg.cpp），
  *       在 system_init() 之后、system_start() 之前 init()；init() 时登记进 BspCan 登记表，
  *       HAL 回调与库的 CAN 任务靠它找到实例：
  *
@@ -42,7 +42,7 @@
 #include "message_buffer.h"
 #include "task.h"
 
-#include "hardware_config_defaults.hpp" // 可配置项（用户 hardware_config.h + 默认值）
+#include "hardware_config.h" // 唯一配置源（功能开关、队列深度等）
 #include "status.hpp"         // 统一状态码
 
 

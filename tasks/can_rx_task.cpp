@@ -1,7 +1,8 @@
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "hardware_config.h"
 
-// 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本文件不参与编译
-#ifdef HAL_FDCAN_MODULE_ENABLED
+// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_RX_ENABLE=0 时，本文件不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
 
 #include "can_rx_node.hpp"
 #include "system.hpp"
@@ -53,7 +54,7 @@ extern "C" void can_rx_task(void *argument)
           if (!consumed && xMessageBufferSend(can->_rx_return_buffer, &rx, sizeof(rx), 0U) != sizeof(rx))
           {
             // 回退消费者滞后时丢弃本帧并记录 FULL，不阻塞其他节点的解算。
-            ++can->diagnostics.rx_return_dropped;
+            can->diagnostics.rx_return_dropped = can->diagnostics.rx_return_dropped + 1U;
             SysFlagSet(Status::FULL);
           }
         }
@@ -64,4 +65,4 @@ extern "C" void can_rx_task(void *argument)
 }
 
 
-#endif // HAL_FDCAN_MODULE_ENABLED
+#endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE

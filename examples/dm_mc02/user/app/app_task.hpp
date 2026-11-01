@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2026
  *
  * @note 任务函数均以 extern "C" 声明（FreeRTOS 以 C 方式调用）。
- *       任务实现位于 User/App/task/，由 all_init() 统一创建。
+ *       任务实现位于 user/app/task/，由 app_init() 统一创建。
  */
 
 #ifndef __APP_TASK_HPP__

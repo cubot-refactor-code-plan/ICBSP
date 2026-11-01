@@ -1,12 +1,14 @@
 #include "bsp_cfg.hpp"
+#include "device_cfg.hpp" // IWYU pragma: keep (device_init)
 
 #include "FreeRTOS.h" // IWYU pragma: keep (configASSERT)
 
 /**
- * @brief bsp层整体的初始化
+ * @brief 板级整体的初始化
  *
  * @note  必须在 FreeRTOS 内核启动后调用（因为大部分 BSP 驱动内部创建 RTOS 对象）。
  *        目前除了串口的模板实例化需要在 bsp_uart.cpp 中定义，其他 BSP 全局实例化都在 bsp_cfg.cpp 中定义。
+ *        外设初始化完后调用 device_init()，设备层初始化也收在 board_init() 里。
  *        当前已初始化的外设一览：
  *
  *        ✅ CAN1/2/3   → bsp_can1/2/3.init()  [Message Buffer 收发]
@@ -22,7 +24,7 @@
  *        ✅ KEY (PA15) → key_user.init(...)   [纯软件轮询消抖，无 ISR，使用rtos进行轮询：200ms轮询 → 200ms消抖, 1s长按]
  *
  */
-void bsp_init()
+void board_init()
 {
   // 每条 init() 单独一行断言：失败就地停机，fault_record 记下的行号直接指出是哪一路没起来
   // ── FreeRTOS 驱动的 CAN ──
@@ -45,6 +47,9 @@ void bsp_init()
 
   // ── 蜂鸣器 PWM（TIM12 CH2 PB15；先清 CCR 再启动 → 上电 0% 占空比，不响）──
   configASSERT(bsp_pwm_buzzer.init() == Status::OK);
+
+  // ── 设备层（当前只有板载蜂鸣器，构造即可用）──
+  device_init();
 }
 
 

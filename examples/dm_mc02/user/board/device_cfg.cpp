@@ -6,7 +6,7 @@
 
 /* ==================== 全局实例化 ==================== */
 
-///< 板载无源蜂鸣器：构造即可用，没有 init()（PWM 通道由 bsp_init() 启动）
+///< 板载无源蜂鸣器：构造即可用，没有 init()（PWM 通道由 board_init() 启动）
 DeviceBuzzer buzzer(bsp_pwm_buzzer);
 
 

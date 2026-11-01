@@ -1,7 +1,8 @@
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "hardware_config.h"
 
-// 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本文件不参与编译
-#ifdef HAL_FDCAN_MODULE_ENABLED
+// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_TX_ENABLE=0 时，本文件不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
 
 #include "can_tx_node.hpp"
 #include "system.hpp"
@@ -15,20 +16,13 @@ extern "C" void can_tx_task(void *argument)
   CanTxNode::frozen = true;
   // 总线来自 BspCan 的登记表（各实例 init() 时登记，运行态之前已定型），库里不引用板级实例
   TickType_t wake_time = xTaskGetTickCount();
-  bool has_nodes = false;
   for (uint32_t bus = 0U; bus < BspCan::instance_count(); ++bus)
   {
     BspCan *const can = BspCan::instance_at(bus);
     for (CanTxNode *node = can->tx_head; node != nullptr; node = node->next)
     {
       node->last_send_tick = wake_time;
-      has_nodes = true;
     }
-  }
-  if (!has_nodes)
-  {
-    osThreadExit();
-    return;
   }
   for (;;)
   {
@@ -67,4 +61,4 @@ extern "C" void can_tx_task(void *argument)
   }
 }
 
-#endif // HAL_FDCAN_MODULE_ENABLED
+#endif // HAL_FDCAN_MODULE_ENABLED && CAN_TX_ENABLE

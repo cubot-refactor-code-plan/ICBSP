@@ -1,9 +1,9 @@
-# stm32_bsp 接口实机测试（2026-10-17）
+# stm32_framework 接口实机测试（2026-10-17）
 
 > 本目录是宿主工程 `MC02_with_submodule` 的 `docs/bsp_test/` 的副本（2026-10-17，2026-10-28 补 SPI / BMI088）。文中的路径都以**宿主工程根目录**为准：
-> `app/`、`Core/`、`CMakeLists.txt` 指宿主工程，`third_party/stm32_bsp/` 即本库。测试代码在宿主工程 `app/test/`，不在本库里。
+> `app/`、`Core/`、`CMakeLists.txt` 指宿主工程，`third_party/stm32-framework/` 即本库。测试代码在宿主工程 `app/test/`，不在本库里。
 
-对 submodule `third_party/stm32_bsp` 的 UART、RS485、CAN 接口在 DM-MC02 上做实机测试：常规用法、参数边界、满载、故障注入、长时间浸泡、物理插拔。
+对 submodule `third_party/stm32-framework` 的 UART、RS485、CAN 接口在 DM-MC02 上做实机测试：常规用法、参数边界、满载、故障注入、长时间浸泡、物理插拔。
 测试中发现的库问题当场修复并回归（库改动未提交，见 `changes.md`）；同时首次用 EmberProbe skill 烧写调试，与命令行方案对比（`flash_debug_eval.md`）。
 
 | 文件 | 内容 |
@@ -66,7 +66,7 @@ CAN 6 项（DLC 尾部旧数据、远程帧进入应用、回退丢帧无计数�
 
 | 问题 | 现状 | 建议 |
 | --- | --- | --- |
-| HAL V1.11.6 `HAL_DMA_Abort()` 读-改-写竞争，-O2 下在串口中断里卡死 | 宿主 TIM8 时基优先级改 4 后不卡死，命中时短暂丢数（-O2 浸泡 0.04%）；-O2 下 R03 偶发 1/1000 超时疑同源 | RX 改 DMA 循环模式（`third_party/stm32_bsp/undo.md`）；其他工程用本库前先检查 HAL 时基优先级 |
+| HAL V1.11.6 `HAL_DMA_Abort()` 读-改-写竞争，-O2 下在串口中断里卡死 | 宿主 TIM8 时基优先级改 4 后不卡死，命中时短暂丢数（-O2 浸泡 0.04%）；-O2 下 R03 偶发 1/1000 超时疑同源 | RX 改 DMA 循环模式（`third_party/stm32-framework/undo.md`）；其他工程用本库前先检查 HAL 时基优先级 |
 | CAN 总线被更高优先级流量占满时，本节点的周期帧堆满 TX 缓冲，高优先级帧也进不去（C06c/d） | 未改 | 发送节点同 ID 只保留最新值；总线负载规划 |
 | `printf()` 入队等 10 ms，满时发出半行并返回 TIMEOUT（U07） | 文档行为 | 调用方检查返回值或用 `send()` |
 | 卡死恢复中止发送时丢 DMA FIFO 与 UART TX FIFO 里的字节（U12b） | 已知限制，已写入文档 | 只影响故障恢复路径 |

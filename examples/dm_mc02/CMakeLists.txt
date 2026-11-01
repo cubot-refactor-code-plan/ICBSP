@@ -69,16 +69,31 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
 ##### User #####
 
-# 接入 stm32_bsp：本仓库根就是库，示例用相对路径接入；
-# 用户工程里写 add_subdirectory(third_party/stm32_bsp) 即可（第二个参数只有库目录不在本工程之下时才需要）
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/stm32_bsp)
+# 接入 stm32_framework：本仓库根就是库，示例用相对路径接入；
+# 用户工程里写 add_subdirectory(third_party/stm32-framework) 即可（第二个参数只有库目录不在本工程之下时才需要）
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/stm32_framework)
+target_include_directories(stm32_framework PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/user/board)  # 库自身也要看到 hardware_config.h
 
-# 板级用户代码（实例配置、api_main、任务、测试）
-add_subdirectory(app)
+# 板级用户代码：user/board（实例配置）、user/app（入口、任务、测试）、user/module
+file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/*.cpp
+)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/board
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/user/module
+)
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
-    stm32_bsp
-    dm_mc02_app
+    stm32_framework
+)
+
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS ON
 )
 
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)

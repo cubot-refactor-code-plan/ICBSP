@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """
-stm32_bsp 宿主工程自动接入：按 README 第 1 节把 CubeMX（CMake）工程改成能用本库的样子。
+stm32_framework 宿主工程自动接入：按 README 第 1 节把 CubeMX（CMake）工程改成能用本库的样子。
 
 用法（在宿主工程根目录，或用 --host 指定）：
 
-    python3 third_party/stm32_bsp/tools/integrate.py --dry-run   # 只检查并打印将要做的修改
-    python3 third_party/stm32_bsp/tools/integrate.py             # 执行
+    python3 third_party/stm32-framework/tools/integrate.py --dry-run   # 只检查并打印将要做的修改
+    python3 third_party/stm32-framework/tools/integrate.py             # 执行
 
 做的事（每一步都先判断是否已完成，已完成就跳过，可重复运行）：
   1. 检查 CubeMX 前提（README 1.1）：STM32H7、CMake 工具链、FreeRTOS CMSIS_V2、tick 1 kHz、栈溢出检查 2、分配失败钩子
   2. 链接脚本加 .dma_buffer / .noinit（templates/linker_sections.ld）
   3. FreeRTOSConfig.h 的 USER CODE 1：configASSERT → fault_on_assert（templates/FreeRTOSConfig_user_code.h）
   4. freertos.c 的 Includes / 4 / 5 / Init 段：钩子记录现场、调 app_init()（templates/freertos_user_code.c）
-  5. 复制 board_cfg.* / app_main.* 到应用目录（已存在的不覆盖），并对照本工程核对模板用到的句柄与参数
-  6. 在宿主根目录建 user/：复制 templates/user/（user_init() 与示例业务；user/user_main.cpp 已存在就整组跳过），
-     app_init() 第 3 步只调 user_init()，各业务的任务创建断言都写在 user_init() 里
-  7. 复制 hardware_config.h 到 Core/Inc/（已存在的不覆盖）
-  8. 根 CMakeLists.txt 末尾接入库与应用源文件；user/ 下的 .c / .cpp 自动收集
+  5. 复制 user/board/board_cfg.*、user/app/app_main.*、user/app/app_task.hpp、user/app/task/demo_task.cpp（已存在的不覆盖）
+  6. 核对模板用到的句柄与参数；业务任务写在 user/app/task/，示例不自动创建
+  7. 复制 hardware_config.h 到 user/board/（已存在的不覆盖）
+  8. 根 CMakeLists.txt 末尾接入库与 user/board、user/app、user/module 包含路径；user/ 下的 .c / .cpp 自动收集
   9. .vscode/settings.json 配置 clangd 的编译数据库目录与 query-driver
 
 所有片段都从 templates/ 读取，与模板保持一致。只改内容仍是 CubeMX 默认的 USER CODE 段；遇到已有自定义内容
@@ -35,9 +34,9 @@ from pathlib import Path
 
 LIB_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = LIB_ROOT / "templates"
-APP_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp", "app_main.h", "app_main.cpp")
-USER_TEMPLATES = TEMPLATES / "user"
-USER_MAIN = "user_main.cpp"  # 有它就认为 user/ 已建好：不再补其他文件（用户删掉的示例业务不会被加回来）
+BOARD_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp")
+APP_TEMPLATES = ("app_main.h", "app_main.cpp", "app_task.hpp")
+TASK_TEMPLATES = ("demo_task.cpp",)
 
 
 # ==================== 报告 ====================
@@ -312,7 +311,7 @@ def plan_linker(host, plan, rep, explicit, region):
         rep.error(step, f"{rel} 里 .data 之前的结构不认识，请按 templates/linker_sections.ld 手动添加")
         return
 
-    insert = ["", "  /* stm32_bsp：见 templates/linker_sections.ld（.dma_buffer 放 BspUart 实例，.noinit 放 fault_record） */"]
+    insert = ["", "  /* stm32_framework：见 templates/linker_sections.ld（.dma_buffer 放 BspUart 实例，.noinit 放 fault_record） */"]
     for i, name in enumerate(missing):
         if i:
             insert.append("")
@@ -433,78 +432,85 @@ def check_board_cfg(host, rep, board_cfg_text, app_rel):
         rep.warn(step, f"{h} 的定时器时钟模板写的是 {clk} Hz（DM-MC02），按本工程时钟树核对")
 
 
-def plan_app(host, plan, rep, app_dir):
+def plan_app(host, plan, rep, board_dir, app_dir):
     step = "应用模板"
+    board = host / board_dir
     app = host / app_dir
+    task = app / "task"
+    board_rel = board.relative_to(host).as_posix()
     app_rel = app.relative_to(host).as_posix()
     copied = []
+    for name in BOARD_TEMPLATES:
+        if not (board / name).exists():
+            plan.create(board / name, (TEMPLATES / "user" / "board" / name).read_text(encoding="utf-8"))
+            copied.append(f"{board_rel}/{name}")
     for name in APP_TEMPLATES:
-        if (app / name).exists():
-            continue
-        plan.create(app / name, (TEMPLATES / name).read_text(encoding="utf-8"))
-        copied.append(name)
+        if not (app / name).exists():
+            plan.create(app / name, (TEMPLATES / "user" / "app" / name).read_text(encoding="utf-8"))
+            copied.append(f"{app_rel}/{name}")
+    for name in TASK_TEMPLATES:
+        if not (task / name).exists():
+            plan.create(task / name, (TEMPLATES / "user" / "app" / "task" / name).read_text(encoding="utf-8"))
+            copied.append(f"{app_rel}/task/{name}")
     if copied:
-        rep.ok(step, f"复制 {', '.join(copied)} → {app_rel}/")
+        rep.ok(step, f"复制 {', '.join(copied)}")
     else:
-        rep.skip(step, f"{app_rel}/ 里已有 {', '.join(APP_TEMPLATES)}")
-    if "board_cfg.cpp" in copied:
-        check_board_cfg(host, rep, read_template("board_cfg.cpp"), app_rel)
-    if "app_main.cpp" not in copied and "user_init(" not in strip_comments((app / "app_main.cpp").read_text(encoding="utf-8")):
-        rep.warn(
-            step,
-            f"{app_rel}/app_main.cpp 没有调用 user_init()：手动改成 templates/app_main.cpp 的样子——"
-            '包含 "user_main.hpp"，第 3 步只调 user_init()，原来的任务创建移到 user_init() 里',
-        )
+        rep.skip(step, "board_cfg / app_main / app_task 已存在")
+    if (board / "board_cfg.cpp").exists():
+        check_board_cfg(host, rep, (board / "board_cfg.cpp").read_text(encoding="utf-8"), board_rel)
+    app_main = app / "app_main.cpp"
+    if app_main.exists() and "user_init(" in strip_comments(app_main.read_text(encoding="utf-8")):
+        rep.warn(step, f"{app_rel}/app_main.cpp 仍在调 user_init()：当前模板已改为 system_init/board_init/system_start")
 
 
-# ==================== 6. user/ ====================
+# ==================== 6. hardware_config.h ====================
 
 
-def plan_user(host, plan, rep, user_dir):
-    step = "user/"
-    user = host / user_dir
-    user_rel = user.relative_to(host).as_posix()
-    if (user / USER_MAIN).exists():
-        rep.skip(step, f"{user_rel}/{USER_MAIN} 已存在")
-        return
-    names = sorted(p.name for p in USER_TEMPLATES.iterdir() if p.is_file())
-    clash = [n for n in names if (user / n).exists()]
-    if clash:
-        rep.error(step, f"{user_rel}/ 里已有 {', '.join(clash)} 但没有 {USER_MAIN}：改名或删掉后重新运行")
-        return
-    for name in names:
-        plan.create(user / name, (USER_TEMPLATES / name).read_text(encoding="utf-8"))
-    rep.ok(step, f"复制 {', '.join(names)} → {user_rel}/（user_init() 创建两个示例业务任务，换成自己的业务）")
-
-
-# ==================== 7. hardware_config.h ====================
-
-
-def plan_hardware_config(host, plan, rep):
+def plan_hardware_config(host, plan, rep, board_dir):
     step = "hardware_config.h"
-    dst = host / "Core/Inc/hardware_config.h"
+    dst = host / board_dir / "hardware_config.h"
+    legacy = host / "Core/Inc/hardware_config.h"
     if dst.exists():
-        rep.skip(step, "Core/Inc/hardware_config.h 已存在")
+        text = dst.read_text(encoding="utf-8")
+        if "CAN_RX_ENABLE" not in text:
+            rep.warn(step, f"{board_dir}/hardware_config.h 是旧版（缺少 CAN_RX_ENABLE 等开关）：请按 templates/hardware_config.h 更新")
+        else:
+            rep.skip(step, f"{board_dir}/hardware_config.h 已存在")
+        if legacy.exists():
+            rep.warn(step, "Core/Inc/hardware_config.h 仍在旧位置：请删掉，否则两份配置会同时被包含")
+        return
+    if legacy.exists():
+        rep.warn(step, "检测到旧位置 Core/Inc/hardware_config.h：请手动移到 user/board/，脚本不自动复制以免产生两份配置")
         return
     plan.create(dst, (TEMPLATES / "hardware_config.h").read_text(encoding="utf-8"))
-    rep.ok(step, "复制到 Core/Inc/（全部默认值，按需取消注释）")
+    rep.ok(step, f"复制完整配置到 {board_dir}/（所有宏实际定义，按需修改）")
 
 
-# ==================== 8. 根 CMakeLists.txt ====================
+# ==================== 7. 根 CMakeLists.txt ====================
 
 
-def plan_cmake(host, plan, rep, app_dir, user_dir):
+def plan_cmake(host, plan, rep, board_dir, app_dir, user_dir):
     step = "CMakeLists.txt"
     tf = TextFile(host / "CMakeLists.txt")
     lib_rel = Path(os.path.relpath(LIB_ROOT, host)).as_posix()
+    board_rel = Path(os.path.relpath(host / board_dir, host)).as_posix()
     app_rel = Path(os.path.relpath(host / app_dir, host)).as_posix()
     user_rel = Path(os.path.relpath(host / user_dir, host)).as_posix()
     added = []
     if re.search(r"add_subdirectory\(\s*" + re.escape(lib_rel) + r"\b", tf.text):
         rep.skip(step, f"已有 add_subdirectory({lib_rel})")
     else:
-        tf.text = tf.text.rstrip("\n") + "\n" + lib_block(lib_rel, app_rel)
-        added.append(f"{lib_rel} 与 {app_rel}/ 的源文件")
+        tf.text = tf.text.rstrip("\n") + "\n" + lib_block(lib_rel, board_rel, app_rel, user_rel)
+        added.append(f"{lib_rel} 与 {user_rel}/ 的包含路径")
+    # 库自身也要看到 user/board/hardware_config.h：已接入库的老工程再运行时补上
+    if re.search(r"target_include_directories\(\s*stm32_framework\b[^)]*" + re.escape(board_rel) + r"(?=[\s)])", tf.text):
+        rep.skip(step, f"stm32_framework 已有 {board_rel} 包含路径")
+    else:
+        tf.text = tf.text.rstrip("\n") + (
+            f"\n# hardware_config.h 在 {board_rel}/：库自身也要看到\n"
+            f"target_include_directories(stm32_framework PRIVATE {board_rel})\n"
+        )
+        added.append(f"stm32_framework 的 {board_rel} 包含路径")
     # user/ 单独判断：已接入库的老工程再运行时也会补上
     if re.search(r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/" + re.escape(user_rel) + r"/\*\.cpp", tf.text):
         rep.skip(step, f"已自动收集 {user_rel}/ 的源文件")
@@ -516,13 +522,14 @@ def plan_cmake(host, plan, rep, app_dir, user_dir):
         rep.ok(step, f"末尾接入 {'、'.join(added)}")
 
 
-def lib_block(lib_rel, app_rel):
+def lib_block(lib_rel, board_rel, app_rel, user_rel):
     return (
-        f"\n# stm32_bsp：必须在 add_subdirectory(cmake/stm32cubemx) 之后接入（见 {lib_rel}/README.md 第 1 节）\n"
+        f"\n# stm32_framework：必须在 add_subdirectory(cmake/stm32cubemx) 之后接入（见 {lib_rel}/README.md 第 1 节）\n"
         f"add_subdirectory({lib_rel})\n"
-        "target_link_libraries(${CMAKE_PROJECT_NAME} stm32_bsp)\n"
-        f"target_sources(${{CMAKE_PROJECT_NAME}} PRIVATE {app_rel}/board_cfg.cpp {app_rel}/app_main.cpp)\n"
-        f"target_include_directories(${{CMAKE_PROJECT_NAME}} PRIVATE {app_rel})\n"
+        f"target_include_directories(stm32_framework PRIVATE {board_rel})  # 库自身也要看到 hardware_config.h\n"
+        "target_link_libraries(${CMAKE_PROJECT_NAME} stm32_framework)\n"
+        "target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_20)\n"
+        f"target_include_directories(${{CMAKE_PROJECT_NAME}} PRIVATE {board_rel} {app_rel} {user_rel}/module)\n"
         "target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)  # BspUart::printf 打印浮点需要（nano.specs）\n"
     )
 
@@ -536,7 +543,7 @@ def user_block(user_rel):
     )
 
 
-# ==================== 9. clangd ====================
+# ==================== 8. clangd ====================
 
 
 def preset_binary_dir(host, preset):
@@ -613,11 +620,12 @@ def default_host():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="把 stm32_bsp 接入 STM32H7 CubeMX（CMake）宿主工程（README 第 1 节）")
+    ap = argparse.ArgumentParser(description="把 stm32_framework 接入 STM32H7 CubeMX（CMake）宿主工程（README 第 1 节）")
     ap.add_argument("--host", type=Path, help="宿主工程根目录（默认：本库作为 submodule 所在的工程，否则当前目录）")
     ap.add_argument("--dry-run", action="store_true", help="只检查并打印将要做的修改，不写文件")
-    ap.add_argument("--app-dir", default="app", help="应用代码目录，相对宿主根（默认 app）")
-    ap.add_argument("--user-dir", default="user", help="业务代码目录，相对宿主根（默认 user）")
+    ap.add_argument("--board-dir", default="user/board", help="板级配置目录，相对宿主根（默认 user/board）")
+    ap.add_argument("--app-dir", default="user/app", help="应用代码目录，相对宿主根（默认 user/app）")
+    ap.add_argument("--user-dir", default="user", help="业务代码根目录，相对宿主根（默认 user）")
     ap.add_argument("--linker-script", help="链接脚本，相对宿主根（默认从 cmake/*.cmake 的 -T 参数找）")
     ap.add_argument("--ram-region", help="放 .dma_buffer / .noinit 的内存区（默认按地址找 0x24000000 起的 AXI SRAM，不论叫 RAM_D1 还是 RAM）")
     ap.add_argument("--preset", default="Debug", help="clangd 使用哪个 CMake 预设的编译数据库（默认 Debug）")
@@ -636,11 +644,10 @@ def main():
         plan_linker(host, plan, rep, args.linker_script, args.ram_region)
         plan_freertos_config(host, plan, rep)
         plan_freertos_c(host, plan, rep)
-        plan_app(host, plan, rep, args.app_dir)
-        plan_user(host, plan, rep, args.user_dir)
+        plan_app(host, plan, rep, args.board_dir, args.app_dir)
         if not args.no_hardware_config:
-            plan_hardware_config(host, plan, rep)
-        plan_cmake(host, plan, rep, args.app_dir, args.user_dir)
+            plan_hardware_config(host, plan, rep, args.board_dir)
+        plan_cmake(host, plan, rep, args.board_dir, args.app_dir, args.user_dir)
         if not args.no_vscode:
             plan_vscode(host, plan, rep, args.preset)
     rep.print()
@@ -658,8 +665,8 @@ def main():
     plan.apply()
     print(
         "\n已写入。下一步：\n"
-        f"  1. 按上面的 [注意] 核对 {args.app_dir}/board_cfg.*（句柄、波特率、PWM 参数）\n"
-        f"  2. 业务写在 {args.user_dir}/：每个业务的任务在 {args.user_dir}/user_main.cpp 的 user_init() 里加一行创建断言\n"
+        f"  1. 按上面的 [注意] 核对 {args.board_dir}/board_cfg.*（句柄、波特率、PWM 参数）\n"
+        f"  2. 业务任务写在 {args.app_dir}/task/；示例 heartbeat/monitor 不自动创建，需要时在 StartDefaultTask() 里 xTaskCreate\n"
         f"  3. cmake --preset {args.preset} && cmake --build --preset {args.preset}\n"
         "  4. VS Code 里 clangd: Restart language server"
     )

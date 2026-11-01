@@ -69,9 +69,9 @@
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "semphr.h"   // IWYU pragma: keep（总线锁、完成信号量）
 
-#include "bsp_gpio.hpp"                 // 片选引脚
-#include "hardware_config_defaults.hpp" // 可配置项（用户 hardware_config.h + 默认值）
-#include "status.hpp"                   // 统一状态码
+#include "bsp_gpio.hpp"       // 片选引脚
+#include "hardware_config.h" // 唯一配置源（功能开关、队列深度等）
+#include "status.hpp"         // 统一状态码
 
 
 /* ==================== 总线 ==================== */

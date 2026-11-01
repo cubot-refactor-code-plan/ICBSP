@@ -160,7 +160,7 @@ Status BspCan::init()
   if (reg != Status::OK)
     return reg; // BAD_ARG：句柄为空或已被别的实例占用；FULL：登记表满
 
-  // 创建接收消息缓冲区（每条消息另占 4 字节长度头；深度见 hardware_config_defaults.hpp）
+  // 创建接收消息缓冲区（每条消息另占 4 字节长度头；深度见 hardware_config.h）
   _rx_message_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4) * CAN_RX_QUEUE_FRAMES);
   if (_rx_message_buffer == nullptr)
     return Status::IO_ERROR;
@@ -323,7 +323,7 @@ void BspCan::trigger_tx()
       txHeader.MessageMarker       = 0;
 
       if (HAL_FDCAN_AddMessageToTxFifoQ(_hfdcan, &txHeader, txMsg.data) != HAL_OK)
-        ++diagnostics.tx_dropped;
+        diagnostics.tx_dropped = diagnostics.tx_dropped + 1U;
     }
   }
   taskEXIT_CRITICAL();
@@ -356,7 +356,7 @@ void BspCan::trigger_tx_from_isr(BaseType_t *pxHigherPriorityTaskWoken)
       txHeader.MessageMarker       = 0;
 
       if (HAL_FDCAN_AddMessageToTxFifoQ(_hfdcan, &txHeader, txMsg.data) != HAL_OK)
-        ++diagnostics.tx_dropped;
+        diagnostics.tx_dropped = diagnostics.tx_dropped + 1U;
     }
   }
 }
@@ -389,7 +389,7 @@ void BspCan::process_fifo0_isr()
     // 只支持 8 字节经典帧：DLC > 8 的帧丢弃并计数（帧已从硬件 FIFO 取出，不会堵住 FIFO）
     if (rxMsg.header.DataLength > FDCAN_DLC_BYTES_8)
     {
-      ++diagnostics.rx_len_drop;
+      diagnostics.rx_len_drop = diagnostics.rx_len_drop + 1U;
       continue;
     }
     // 只拷 DLC 个字节：raw 是栈上的缓冲，DLC < 8 时后面是上一帧 / 其他函数留下的内容，
@@ -404,7 +404,7 @@ void BspCan::process_fifo0_isr()
 
     if (xMessageBufferSendFromISR(_rx_message_buffer, &rxMsg, sizeof(rxMsg),
                                   &xHigherPriorityTaskWoken) != sizeof(rxMsg))
-      ++diagnostics.rx_dropped;
+      diagnostics.rx_dropped = diagnostics.rx_dropped + 1U;
   }
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }

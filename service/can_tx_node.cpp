@@ -1,7 +1,8 @@
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "hardware_config.h"
 
-// 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本文件不参与编译
-#ifdef HAL_FDCAN_MODULE_ENABLED
+// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_TX_ENABLE=0 时，本文件不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
 
 #include "can_tx_node.hpp"
 #include <new>
@@ -10,6 +11,11 @@
 
 uint8_t    CanTxNode::node_num = 0;
 bool       CanTxNode::frozen   = false;
+
+uint32_t CanTxNode::count()
+{
+  return static_cast<uint32_t>(node_num);
+}
 
 CanTxNode::CanTxNode(uint32_t can_id, uint8_t division) :
   txBuffer {},
@@ -225,4 +231,4 @@ Status CanTxNode::filldata(uint8_t data[], uint8_t slot)
   return Status::OK;
 }
 
-#endif // HAL_FDCAN_MODULE_ENABLED
+#endif // HAL_FDCAN_MODULE_ENABLED && CAN_TX_ENABLE

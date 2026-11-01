@@ -246,11 +246,11 @@ Status DeviceBmi088::refresh(uint32_t timeout_ms, uint32_t gyro_steps)
   const Status st = read_frame(timeout_ms, gyro_steps);
   if (st == Status::OK)
   {
-    ++_update_cnt;
+    _update_cnt = _update_cnt + 1U;
   }
   else
   {
-    ++_update_fail_cnt;
+    _update_fail_cnt = _update_fail_cnt + 1U;
   }
   _last_status = st;
   return st;
@@ -466,7 +466,7 @@ void DeviceBmi088::attach_task(TaskHandle_t task)
 
 void DeviceBmi088::on_acc_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken)
 {
-  ++_acc_drdy_cnt;
+  _acc_drdy_cnt = _acc_drdy_cnt + 1U;
   if (_worker != nullptr)
   {
     return; // 自动模式按陀螺仪节奏刷新，加速度计中断只计数
@@ -480,7 +480,7 @@ void DeviceBmi088::on_acc_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken)
 
 void DeviceBmi088::on_gyro_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken)
 {
-  ++_gyro_drdy_cnt;
+  _gyro_drdy_cnt = _gyro_drdy_cnt + 1U;
   TaskHandle_t worker = _worker;
   if (worker != nullptr)
   {

@@ -257,7 +257,7 @@ Status BspSpi::lock(uint32_t timeout_ms)
   }
   if (xSemaphoreTake(_lock, ms_to_ticks(timeout_ms)) != pdTRUE)
   {
-    ++_lock_timeout_cnt;
+    _lock_timeout_cnt = _lock_timeout_cnt + 1U;
     return Status::TIMEOUT;
   }
   return Status::OK;
@@ -318,7 +318,7 @@ Status BspSpi::transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint3
 
     if (bounced)
     {
-      ++_bounce_cnt;
+      _bounce_cnt = _bounce_cnt + 1U;
     }
     const Status st = use_dma ? transfer_dma(seg_tx, seg_rx, seg, timeout_ms) : transfer_poll(seg_tx, seg_rx, seg, timeout_ms);
     if (st != Status::OK)
@@ -339,16 +339,16 @@ Status BspSpi::transfer_poll(const uint8_t *tx, uint8_t *rx, size_t len, uint32_
   const HAL_StatusTypeDef hs = HAL_SPI_TransmitReceive(_hspi, tx, rx, static_cast<uint16_t>(len), timeout_ms);
   if (hs == HAL_OK)
   {
-    ++_poll_cnt;
+    _poll_cnt = _poll_cnt + 1U;
     return Status::OK;
   }
   if (hs == HAL_TIMEOUT)
   {
     // HAL 超时返回时已关掉 SPE、句柄回到 READY，下一次可以直接用
-    ++_timeout_cnt;
+    _timeout_cnt = _timeout_cnt + 1U;
     return Status::TIMEOUT;
   }
-  ++_error_cnt;
+  _error_cnt = _error_cnt + 1U;
   return Status::IO_ERROR;
 }
 
@@ -360,7 +360,7 @@ Status BspSpi::transfer_dma(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t
 
   if (HAL_SPI_TransmitReceive_DMA(_hspi, tx, rx, static_cast<uint16_t>(len)) != HAL_OK)
   {
-    ++_error_cnt;
+    _error_cnt = _error_cnt + 1U;
     return Status::IO_ERROR;
   }
 
@@ -368,7 +368,7 @@ Status BspSpi::transfer_dma(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t
   {
     // 停掉 DMA 与 SPI，句柄回到 READY；中止过程中若有完成 / 错误回调进来，信号量在下一次开始前清掉
     (void)HAL_SPI_Abort(_hspi);
-    ++_timeout_cnt;
+    _timeout_cnt = _timeout_cnt + 1U;
     return Status::TIMEOUT;
   }
 
@@ -376,7 +376,7 @@ Status BspSpi::transfer_dma(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t
   {
     return Status::IO_ERROR; // error_cnt 已在错误回调里累加
   }
-  ++_dma_cnt;
+  _dma_cnt = _dma_cnt + 1U;
   return Status::OK;
 }
 
@@ -396,7 +396,7 @@ void BspSpi::on_txrx_cplt_isr(BaseType_t *pxHigherPriorityTaskWoken)
 void BspSpi::on_error_isr(BaseType_t *pxHigherPriorityTaskWoken)
 {
   _xfer_error = true;
-  ++_error_cnt;
+  _error_cnt = _error_cnt + 1U;
   if (_done != nullptr)
   {
     xSemaphoreGiveFromISR(_done, pxHigherPriorityTaskWoken);
