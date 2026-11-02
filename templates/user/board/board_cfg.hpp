@@ -48,12 +48,6 @@
  *      少了这一步不报错、不告警，只是那个实例的 HAL 回调不会被分发、串口巡检也不管它
  *      ——表现是“数据收不到”，不是“编译失败”。
  *
- * 【本板 DMA 现状（决定串口能不能用 `uart_mode::dma`）】
- *
- *   RX + TX 都有 DMA ：USART1、USART3、UART4、UART7、UART8、UART9、USART10
- *   只有 RX 有 DMA   ：UART5
- *   没有 DMA         ：USART2
- *
  * 【加一个外设实例的完整步骤（以再加一路 CAN2 为例）】
  *
  *   1. CubeMX：开 FDCAN2 的 RX FIFO0 中断，确认经典 CAN 模式，重新生成
@@ -71,6 +65,8 @@
 #include "main.h"
 #include "tim.h"
 #include "usart.h"
+
+#include "hardware_config.h" // 库的全部开关/参数（含 UART_PRINT_ENABLE）
 
 #include "bsp_can.hpp"
 #include "bsp_dwt.hpp"
@@ -94,19 +90,30 @@ void board_init(void);
  *
  */
 inline BspCanT<16, 16> bsp_can1(
-    {.hfdcan = &hfdcan1,
-     .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
+  {.hfdcan = &hfdcan1,
+   .name   = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
 
 /**
  * USART1：调试串口，DMA 收发，115200（`print_uart` 用的就是它）
- *
  */
 inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
-    {.huart = &huart1,
-     .mode = UartDir::TxRx,
-     .baudrate = 115200U});
+  {.huart    = &huart1,
+   .mode     = UartDir::TxRx,
+   .baudrate = 115200U});
 
+/**
+ * 调试打印宏：任何包含本头文件的文件都能写 `print_uart("x=%d\r\n", x)`
+ *
+ * - 开（`UART_PRINT_ENABLE = 1`）：就是 `bsp_uart1.printf`，返回 Status（OK / TIMEOUT 半行 / BAD_ARG）
+ * - 关（`= 0`）：展开成 `((void)0)`，调用处不用改，但**参数不求值、不打印、不返回 Status**
+ * - 换调试串口：改上面那行实例即可，别处代码不用动
+ * - 内部有 printf 锁，多任务同时打印不会互相覆盖；单行超过 TX_SIZE(128 字节) 会被截断
+ */
+#if UART_PRINT_ENABLE
 #define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
+#else
+#define print_uart(...) ((void)0)
+#endif
 
 /**
  * DWT 计时基准（Cortex-M7 内核 CYCCNT，不占外设、不需要中断）
@@ -117,11 +124,11 @@ inline BspDwt bsp_dwt {};
  * 蜂鸣器 PWM：TIM12_CH2
  */
 inline BspPwm bsp_pwm_buzzer(
-    {.htim = &htim12,
-     .channel = TIM_CHANNEL_2,
-     .timer_clk_hz = 275000000UL,
-     .prescaler = 23U,
-     .period = 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
+  {.htim         = &htim12,
+   .channel      = TIM_CHANNEL_2,
+   .timer_clk_hz = 275000000UL,
+   .prescaler    = 23U,
+   .period       = 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
 
 
 /* ==================== */
