@@ -23,4 +23,6 @@ void heartbeat_task(void *argument);
  */
 void monitor_task(void *argument);
 
+/* ==================== */
+
 #endif // __APP_TASK_HPP__

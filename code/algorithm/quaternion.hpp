@@ -68,7 +68,7 @@ struct Quaternion
   double y; ///< 虚部 j
   double z; ///< 虚部 k
 
-  // ---------------- 构造 ----------------
+  /* ==================== 构造 ==================== */
 
   /** @brief 单位四元数（不旋转） */
   static Quaternion identity();
@@ -92,8 +92,8 @@ struct Quaternion
   /** @brief 写回数组 {w, x, y, z} */
   void to_array(double out[4]) const;
 
-  // ----------------
-  // ---------------- 基本运算 ----------------
+  /* ==================== */
+  /* ==================== 基本运算 ==================== */
 
   /** @brief Hamilton 乘法：(a * b).rotate(v) = a.rotate(b.rotate(v))，先转 b 再转 a */
   Quaternion operator*(const Quaternion &rhs) const;
@@ -110,8 +110,8 @@ struct Quaternion
   /** @brief 点积（两姿态的接近程度：|dot| = cos(夹角 / 2)） */
   double dot(const Quaternion &rhs) const;
 
-  // ----------------
-  // ---------------- 旋转 ----------------
+  /* ==================== */
+  /* ==================== 旋转 ==================== */
 
   /** @brief 旋转向量：机体系 → 世界系（q ⊗ v ⊗ q*） */
   Vector3 rotate(const Vector3 &v) const;
@@ -132,8 +132,8 @@ struct Quaternion
    */
   Vector3 rotation_vector() const;
 
-  // ----------------
-  // ---------------- 控制 ----------------
+  /* ==================== */
+  /* ==================== 控制 ==================== */
 
   /**
    * @brief 姿态误差：从本姿态转到 target 的旋转向量，表在本机体系（rad）
@@ -155,8 +155,8 @@ struct Quaternion
    */
   static Quaternion slerp(const Quaternion &a, const Quaternion &b, double t);
 
-  // ----------------
-  // ---------------- 取角 ----------------
+  /* ==================== */
+  /* ==================== 取角 ==================== */
 
   /**
    * @brief 机体上某轴在世界系的指向：水平角与仰角（云台用，不涉及 roll）
@@ -180,7 +180,7 @@ struct Quaternion
    */
   void to_euler_zyx(double &yaw, double &pitch, double &roll) const;
 
-  // ----------------
+  /* ==================== */
 };
 
 /**

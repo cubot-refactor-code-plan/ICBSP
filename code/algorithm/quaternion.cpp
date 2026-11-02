@@ -10,17 +10,17 @@ constexpr double SLERP_LERP  = 0.9995; ///< 两姿态 |dot| 高于它（夹角�
 } // namespace
 
 
-// ---------------- Vector3 ----------------
+/* ==================== Vector3 ==================== */
 
 double Vector3::norm() const
 {
   return sqrt(x * x + y * y + z * z);
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 构造 ----------------
+/* ==================== 构造 ==================== */
 
 Quaternion Quaternion::identity()
 {
@@ -63,10 +63,10 @@ void Quaternion::to_array(double out[4]) const
   out[3] = z;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 基本运算 ----------------
+/* ==================== 基本运算 ==================== */
 
 Quaternion Quaternion::operator*(const Quaternion &rhs) const
 {
@@ -101,10 +101,10 @@ double Quaternion::dot(const Quaternion &rhs) const
   return w * rhs.w + x * rhs.x + y * rhs.y + z * rhs.z;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 旋转 ----------------
+/* ==================== 旋转 ==================== */
 
 Vector3 Quaternion::rotate(const Vector3 &v) const
 {
@@ -150,10 +150,10 @@ Vector3 Quaternion::rotation_vector() const
   return {qx * k, qy * k, qz * k};
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 控制 ----------------
+/* ==================== 控制 ==================== */
 
 Vector3 Quaternion::error_to(const Quaternion &target) const
 {
@@ -190,10 +190,10 @@ Quaternion Quaternion::slerp(const Quaternion &a, const Quaternion &b, double t)
   return Quaternion {ka * a.w + kb * bb.w, ka * a.x + kb * bb.x, ka * a.y + kb * bb.y, ka * a.z + kb * bb.z}.normalized();
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 取角 ----------------
+/* ==================== 取角 ==================== */
 
 void Quaternion::pointing(const Vector3 &axis_body, double &yaw, double &elevation) const
 {
@@ -219,10 +219,10 @@ void Quaternion::to_euler_zyx(double &yaw, double &pitch, double &roll) const
   roll  = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 角度 ----------------
+/* ==================== 角度 ==================== */
 
 double angle_wrap_pi(double rad)
 {
@@ -234,4 +234,4 @@ double angle_diff(double target, double current)
   return angle_wrap_pi(target - current);
 }
 
-// ----------------
+/* ==================== */

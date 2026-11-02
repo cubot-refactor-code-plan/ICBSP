@@ -45,7 +45,7 @@
 class BspKey
 {
 public:
-  // ---------------- 公有接口 ----------------
+  /* ==================== 公有接口 ==================== */
 
   /** @brief 按键事件类型（一次"按下→松手"只会得到 PRESS+SHORT 或 PRESS+LONG） */
   enum class Event
@@ -131,9 +131,9 @@ public:
    */
   bool pressed() const { return _last_stable; }
 
-  // ----------------
+  /* ==================== */
 private:
-  // ---------------- 私有实现 ----------------
+  /* ==================== 私有实现 ==================== */
 
   GPIO_TypeDef *_port           = nullptr; ///< GPIO 端口指针
   uint16_t      _pin            = 0U;      ///< 引脚掩码
@@ -146,7 +146,7 @@ private:
   uint16_t _hold_cnt    = 0U;    ///< 按下保持计数
   bool     _long_fired  = false; ///< 本次按下周期内长按是否已触发
 
-  // ----------------
+  /* ==================== */
 };
 
 #endif // __BSP_KEY_HPP__

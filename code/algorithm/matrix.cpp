@@ -39,6 +39,7 @@ MatrixF32<3, 1> matrix_axis_z_3d()
 }
 
 
+/* ==================== */
 /* ==================== 旋转矩阵 ==================== */
 
 MatrixF32<2, 2> matrix_rotation_2d(float angle)
@@ -106,6 +107,7 @@ MatrixF32<3, 3> matrix_from_euler_zyx(float yaw, float pitch, float roll)
 }
 
 
+/* ==================== */
 /* ==================== 叉乘 ==================== */
 
 MatrixF32<3, 1> vector_cross_3d(const MatrixF32<3, 1> &a, const MatrixF32<3, 1> &b)
@@ -121,3 +123,5 @@ float vector_cross_2d(const MatrixF32<2, 1> &a, const MatrixF32<2, 1> &b)
 {
   return a[0][0] * b[1][0] - a[1][0] * b[0][0];
 }
+
+/* ==================== */

@@ -29,12 +29,13 @@ bool has_tx_nodes()
 #endif
 
 
-// ---------------- 全局系统状态 ----------------
+/* ==================== 全局系统状态 ==================== */
 
 EventState sys_state;
 
 
-// ---------------- 库入口 ----------------
+/* ==================== */
+/* ==================== 库入口 ==================== */
 
 
 // .dma_buffer 在链接脚本里是「RAM 运行、Flash 存初值」的可加载段；CubeMX 的启动文件只拷 .data，
@@ -100,11 +101,11 @@ extern "C" void system_start(void)
   {
     configASSERT(xTaskCreate(can_tx_task, "can_tx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL) == pdPASS);
   }
+
+/* ==================== */
+
 #endif
 
   // 有初始化失败记录（各注册函数调过 sys_state.init_error）就在这里停机，fault_record 记下本行
   configASSERT(sys_state.complete_init() == Status::OK);
 }
-
-
-// ----------------
