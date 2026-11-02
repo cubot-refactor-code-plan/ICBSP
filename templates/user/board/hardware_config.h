@@ -94,6 +94,19 @@
 /** @brief BspUart::printf() 取格式化缓冲锁、入队的等待上限 (ms) */
 #define UART_PRINTF_TIMEOUT_MS 10
 
+/**
+ * @brief 调试打印宏 print_uart() 的总开关（board_cfg.hpp 里定义）
+ *
+ * 【取值】1 = 正常调 `bsp_uart1.printf()`；0 = 展开成 `((void)0)`，调用处保持原样但**完全静默**
+ * 【为什么需要】发布固件、或这路串口改作业务通信用时，把调试输出一次性关掉，
+ *   不用去每个调用点加 `#if`；同时也避免 printf 在高速任务里阻塞
+ * 【代价】关掉后参数**不会被求值**，也**不再返回 Status**——调用处只能当语句用，
+ *   不要写 `if (print_uart(...) != Status::OK)` 或在参数里放有副作用的表达式
+ * 【Flash】省多少取决于有几个调用点：本工程 Debug 下实测 110 780 → 109 220 B（约 1.5 KB），
+ *   但 `BspUartT::printf` 本身还是编进库的（要给其它实例用），所以不要把这一项当减肥手段
+ */
+#define UART_PRINT_ENABLE 1
+
 /* ==================== */
 /* ==================== SPI ==================== */
 
@@ -130,6 +143,7 @@ static_assert(CAN_CMD_EXPIRE_MS > CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指�
 static_assert(CAN_BUSOFF_RETRY_MS >= 1, "hardware_config.h: CAN_BUSOFF_RETRY_MS 至少 1 ms");
 static_assert(UART_ENABLE_FIFO == 0 || UART_ENABLE_FIFO == 1, "hardware_config.h: UART_ENABLE_FIFO 取 0 或 1");
 static_assert(UART_PRINTF_TIMEOUT_MS >= 1, "hardware_config.h: UART_PRINTF_TIMEOUT_MS 至少 1 ms");
+static_assert(UART_PRINT_ENABLE == 0 || UART_PRINT_ENABLE == 1, "hardware_config.h: UART_PRINT_ENABLE 取 0 或 1");
 static_assert(SPI_DMA_BUFFER_SIZE >= 16 && SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: SPI_DMA_BUFFER_SIZE 取 16~65535");
 static_assert(SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
 static_assert(BMI088_TASK_STACK >= 128, "hardware_config.h: BMI088_TASK_STACK 至少 128 字");
