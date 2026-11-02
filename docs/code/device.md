@@ -77,12 +77,18 @@ DeviceMotor::PID_TARGET | DeviceMotor::PID_FEEDBACK | DeviceMotor::PID_OUTPUT | 
 ### DeviceServo
 
 ```cpp
-inline DeviceServo servo({.pwm = &bsp_pwm_servo, .min_pulse_us = 500.0f, .max_pulse_us = 2500.0f,
-                          .min_angle_deg = -90.0f, .max_angle_deg = 90.0f});
+inline DeviceServo servo({.pwm = &bsp_pwm_servo,
+                          .pulse_min_us = 500.0f,   // 角度 0 端的脉宽
+                          .pulse_max_us = 2500.0f,  // range_deg 端的脉宽
+                          .range_deg = 270.0f,      // 180° 舵机填 180
+                          .max_speed_dps = 300.0f,  // 0 = 不限速
+                          .max_accel_dps2 = 1500.0f,// 0 = 不限加速度
+                          .reversed = false,
+                          .trim_us = 0.0f});
 ```
 
 `init()` 后 `set_angle(deg)` 设目标，`update()` 周期调用做缓动，`off()` 关输出。
-角度会按配置限幅。
+角度按 `range_deg` 限幅，`set_pulse_us(us)` 可直接给脉宽。PWM 通道必须已配成 50 Hz / 20 ms。
 
 ### DeviceR9dsT&lt;Uart&gt;
 
