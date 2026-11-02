@@ -1,0 +1,16 @@
+---
+# ---- stm32_framework（integrate.py 添加）：库的 templates/ 不是编译单元 ----
+# 里面的 .hpp / .cpp 只是给宿主抄的样例，不参与构建。若让 clangd 也按工程配置解析它们：
+#   - 会冒出一堆假错误（模板没有你的 CubeMX 句柄、也没有宿主的上下文）
+#   - 同名文件互相干扰：templates/user/board/board_cfg.hpp 与宿主 user/board/board_cfg.hpp
+#     同名，跳转 / 补全容易指到模板那份
+# 所以这一段让模板目录：不用宿主的编译数据库、不进后台索引、不报诊断。
+# 想临时看模板里的补全/跳转，把这一段注释掉即可（改完 clangd 会自动重载）。
+If:
+  PathMatch: .*templates/.*
+CompileFlags:
+  CompilationDatabase: None
+Index:
+  Background: Skip
+Diagnostics:
+  Suppress: '*'
