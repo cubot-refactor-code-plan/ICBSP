@@ -1077,7 +1077,11 @@ def plan_flash(host, plan, rep, info):
 CLANGD = TEMPLATES / "clang"
 CLANGD_FILE = CLANGD / ".clangd"
 CLANGD_FLAGS = CLANGD / "compile_flags.yaml"
+CLANGD_IGNORE = CLANGD / "ignore_templates.yaml"
 CLANG_FORMAT = LIB_ROOT / ".clang-format"
+
+# 用来判断宿主 .clangd 里是否已经有"templates/ 排除段"
+TEMPLATE_GUARD = "PathMatch: .*templates/.*"
 
 
 def plan_clang(host, plan, rep, info):
@@ -1089,8 +1093,10 @@ def plan_clang(host, plan, rep, info):
     - `.clangd` 只填 CompilationDatabase（指向该预设的构建目录）。
       --query-driver 是 clangd 自己的命令行参数，写进 CompileFlags 会被转给编译器并报
       drv_unknown_argument，所以它只由 templates/vscode/settings.json 的 clangd.arguments 负责。
-      宿主已经有手写 `.clangd` 时**不覆盖**：没有 CompileFlags 就把这一段补在最前面，
-      已有 CompileFlags 就用 [注意] 提示手动改（避免动别人写好的配置）。
+    - 再追加一段 `If: PathMatch: .*templates/.*`，让库的 templates/ 不用宿主编译数据库、
+      不进后台索引、不报诊断（模板与宿主有同名文件，留着会互相干扰补全与跳转）。
+      宿主已经有手写 `.clangd` 时**不覆盖**：缺 CompileFlags 就补在最前面，缺排除段就补在末尾，
+      已有 CompileFlags 但目录不符就用 [注意] 提示手动改（避免动别人写好的配置）。
     """
     step = "clangd"
 
@@ -1108,28 +1114,42 @@ def plan_clang(host, plan, rep, info):
     dst = host / ".clangd"
     if not dst.exists():
         plan.create(dst, render_template(CLANGD_FILE, info))
-        rep.ok(step, f"新建 .clangd（编译数据库 {info['COMPILE_COMMANDS_DIR']}；query-driver 留给 .vscode/settings.json）")
+        rep.ok(
+            step,
+            f"新建 .clangd（编译数据库 {info['COMPILE_COMMANDS_DIR']}；templates/ 不参与索引）",
+        )
         return
 
     tf = TextFile(dst)
+    changed = False
+
     if info["COMPILE_COMMANDS_DIR"] in tf.text:
         rep.skip(step, f".clangd 已存在（编译数据库 {info['COMPILE_COMMANDS_DIR']}）")
-        return
-    if re.search(r"^CompileFlags\s*:", tf.text, re.M):
+    elif re.search(r"^CompileFlags\s*:", tf.text, re.M):
         rep.warn(
             step,
             f".clangd 已有 CompileFlags 但没指向 {info['COMPILE_COMMANDS_DIR']}："
             "把 CompilationDatabase 改成该目录（换过预设时一定要改，否则索引的是旧构建）",
         )
-        return
-    # 宿主的手写配置里没有 CompileFlags：把这一段补在最前面，其余保持原样
-    block = render_template(CLANGD_FLAGS, info)
-    tf.text = block + "\n" + tf.text.lstrip("\n")
-    plan.edit(tf)
-    rep.ok(
-        step,
-        f"在已有 .clangd 顶部补 CompileFlags（编译数据库 {info['COMPILE_COMMANDS_DIR']}），原有配置未改动",
-    )
+    else:
+        # 宿主的手写配置里没有 CompileFlags：把这一段补在最前面，其余保持原样
+        tf.text = render_template(CLANGD_FLAGS, info) + "\n" + tf.text.lstrip("\n")
+        changed = True
+        rep.ok(
+            step,
+            f"在已有 .clangd 顶部补 CompileFlags（编译数据库 {info['COMPILE_COMMANDS_DIR']}），原有配置未改动",
+        )
+
+    if TEMPLATE_GUARD in tf.text:
+        rep.skip(step, "templates/ 已排除（不进后台索引、不报诊断）")
+    else:
+        # 追加在末尾并自带 `---`：不与宿主原有的 Diagnostics 等段落同文档，避免重复键
+        tf.text = tf.text.rstrip("\n") + "\n\n" + render_template(CLANGD_IGNORE, info)
+        changed = True
+        rep.ok(step, "在 .clangd 末尾追加 templates/ 排除段（不用编译数据库、不索引、不报诊断）")
+
+    if changed:
+        plan.edit(tf)
 
 
 # ==================== 入口 ====================
