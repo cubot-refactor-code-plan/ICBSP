@@ -21,7 +21,8 @@ stm32_framework 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX�
      的 Mcu.Name；宿主 Flash/ 下有 SVD 才写 svdFile，没有就不写并提示一次
  10. 复制 Flash/ 烧录脚本（templates/Flash）：脚本运行时自己在 build/ 下递归找 .elf，不需要传路径
  11. 生成 .clang-format（沿用库根目录那一份，Language: Cpp 只作用于 C++）与 .clangd
-     （templates/clang：CompilationDatabase 指向该预设的构建目录 + 本机交叉工具链的 query-driver）。
+     （templates/clang：CompilationDatabase 指向该预设的构建目录；--query-driver 是 clangd 命令行参数，
+     写进 .clangd 会被当成编译器参数报错，所以只留给 .vscode/settings.json）。
      两者都已存在时不覆盖，只校对内容是否还对得上
 
 所有片段都从 templates/ 读取，与模板保持一致。只改内容仍是 CubeMX 默认的 USER CODE 段；遇到已有自定义内容
@@ -1085,8 +1086,9 @@ def plan_clang(host, plan, rep, info):
 
     - `.clang-format` 直接用库根目录那一份：唯一来源，不在 templates 里再存一份，避免两处不同步。
       它带 `Language: Cpp`，只格式 C++，CubeMX 生成的 Core/Src/*.c 不会被改。
-    - `.clangd` 按 CMakePresets 的 binaryDir 填 CompilationDatabase，按本机工具链位置填
-      --query-driver；缺了这两项 clangd 就会把 Cortex-M 工程标成一片红。
+    - `.clangd` 只填 CompilationDatabase（指向该预设的构建目录）。
+      --query-driver 是 clangd 自己的命令行参数，写进 CompileFlags 会被转给编译器并报
+      drv_unknown_argument，所以它只由 templates/vscode/settings.json 的 clangd.arguments 负责。
       宿主已经有手写 `.clangd` 时**不覆盖**：没有 CompileFlags 就把这一段补在最前面，
       已有 CompileFlags 就用 [注意] 提示手动改（避免动别人写好的配置）。
     """
@@ -1106,7 +1108,7 @@ def plan_clang(host, plan, rep, info):
     dst = host / ".clangd"
     if not dst.exists():
         plan.create(dst, render_template(CLANGD_FILE, info))
-        rep.ok(step, f"新建 .clangd（编译数据库 {info['COMPILE_COMMANDS_DIR']}，query-driver {info['QUERY_DRIVER']}）")
+        rep.ok(step, f"新建 .clangd（编译数据库 {info['COMPILE_COMMANDS_DIR']}；query-driver 留给 .vscode/settings.json）")
         return
 
     tf = TextFile(dst)
@@ -1126,8 +1128,7 @@ def plan_clang(host, plan, rep, info):
     plan.edit(tf)
     rep.ok(
         step,
-        f"在已有 .clangd 顶部补 CompileFlags（编译数据库 {info['COMPILE_COMMANDS_DIR']}，"
-        f"query-driver {info['QUERY_DRIVER']}），原有配置未改动",
+        f"在已有 .clangd 顶部补 CompileFlags（编译数据库 {info['COMPILE_COMMANDS_DIR']}），原有配置未改动",
     )
 
 

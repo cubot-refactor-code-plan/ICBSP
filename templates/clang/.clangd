@@ -10,15 +10,15 @@
 #   注意：本文件与 .vscode/settings.json 里的 clangd.arguments 是两处配置，保持一致即可；
 #   只想留一处时，删掉另一处对应的那一项。
 #
-# 【--query-driver】允许 clangd 调用交叉工具链，取到它内置的宏和系统头（stdint.h、core_cm7.h 等）。
-#   不写会报“找不到 stdint.h”“未知的 __ARM_ARCH”；路径写错表现一样，所以脚本填的是本机实际位置。
-#   多套工具链用逗号分隔，支持通配符。
+# 【--query-driver 不能写在这里】它是 clangd 自己的命令行参数，写进 CompileFlags 会被当成编译器
+#   参数转给 arm-none-eabi-gcc，报 Unknown argument（诊断码 drv_unknown_argument）。
+#   正确位置是启动 clangd 的地方：VS Code 的 "clangd.arguments"，或命令行
+#   clangd --query-driver=/path/to/arm-none-eabi-*。不设它会报“找不到 stdint.h”。
 #
-# 【-Wno-unknown-warning-option】编解码里出现 GCC 专有的告警选项时不刷屏。
+# 【-Wno-unknown-warning-option】编译数据库里出现 GCC 专有的告警选项时不刷屏。
 CompileFlags:
   CompilationDatabase: {{COMPILE_COMMANDS_DIR}}
   Add:
-    - --query-driver={{QUERY_DRIVER}}
     - -Wno-unknown-warning-option
 
 Diagnostics:
