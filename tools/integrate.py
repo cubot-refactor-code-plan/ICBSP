@@ -1079,11 +1079,13 @@ CLANGD_FILE = CLANGD / ".clangd"
 CLANGD_FLAGS = CLANGD / "compile_flags.yaml"
 CLANGD_IGNORE = CLANGD / "ignore_templates.yaml"
 CLANGD_THIRDPARTY = CLANGD / "ignore_thirdparty.yaml"
+CLANGD_CORE_INC = CLANGD / "ignore_core_inc.yaml"
 CLANG_FORMAT = LIB_ROOT / ".clang-format"
 
 # 用来判断宿主 .clangd 里已有哪些屏蔽段
 TEMPLATE_GUARD = "PathMatch: .*templates/.*"
 THIRDPARTY_GUARD = ".*Middlewares/Third_Party/FreeRTOS/.*"
+CORE_INC_GUARD = "PathMatch: .*Core/Inc/.*"
 
 
 def plan_clang(host, plan, rep, info):
@@ -1156,6 +1158,13 @@ def plan_clang(host, plan, rep, info):
         tf.text = tf.text.rstrip("\n") + "\n\n" + render_template(CLANGD_THIRDPARTY, info)
         changed = True
         rep.ok(step, "在 .clangd 末尾追加第三方库段（只屏蔽 Drivers/ 与 FreeRTOS 的诊断，保留索引）")
+
+    if CORE_INC_GUARD in tf.text:
+        rep.skip(step, "Core/Inc 已屏蔽诊断（保留索引）")
+    else:
+        tf.text = tf.text.rstrip("\n") + "\n\n" + render_template(CLANGD_CORE_INC, info)
+        changed = True
+        rep.ok(step, "在 .clangd 末尾追加 Core/Inc 段（CubeMX 生成的头文件不报诊断）")
 
     if changed:
         plan.edit(tf)
