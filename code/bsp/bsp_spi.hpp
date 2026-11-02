@@ -85,7 +85,8 @@
 class BspSpi
 {
 public:
-  // ---------------- 配置 ----------------
+/* ==================== */
+  /* ==================== 配置 ==================== */
 
   /** @brief 总线配置（聚合，可用指定初始化：{.hspi = &hspi2, .use_dma = true}） */
   struct Config
@@ -106,8 +107,8 @@ public:
     uint32_t lock_timeout_cnt; ///< 等总线锁超时的次数
   };
 
-  // ----------------
-  // ---------------- 构造与初始化 ----------------
+  /* ==================== */
+  /* ==================== 构造与初始化 ==================== */
 
   /** @brief 构造函数（只做赋值，FreeRTOS 资源创建推迟到 init()） */
   BspSpi(const Config &cfg);
@@ -134,8 +135,8 @@ public:
   /** @brief 是否已 init() 成功 */
   bool is_init() const;
 
-  // ----------------
-  // ---------------- 事务接口（多数情况用 BspSpiDevice，不直接调这些） ----------------
+  /* ==================== */
+  /* ==================== 事务接口（多数情况用 BspSpiDevice，不直接调这些） ==================== */
 
   /**
    * @brief 取总线锁（同一任务不可重入）
@@ -165,8 +166,8 @@ public:
    */
   Status transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
 
-  // ----------------
-  // ---------------- ISR 入口（HAL 回调按句柄查表后调用） ----------------
+  /* ==================== */
+  /* ==================== ISR 入口（HAL 回调按句柄查表后调用） ==================== */
 
   /** @brief DMA 传输完成（HAL_SPI_TxRxCpltCallback）：释放完成信号量 */
   void on_txrx_cplt_isr(BaseType_t *pxHigherPriorityTaskWoken);
@@ -174,8 +175,8 @@ public:
   /** @brief 传输出错（HAL_SPI_ErrorCallback）：记错误并释放完成信号量，等待方返回 IO_ERROR */
   void on_error_isr(BaseType_t *pxHigherPriorityTaskWoken);
 
-  // ----------------
-  // ---------------- 查询 ----------------
+  /* ==================== */
+  /* ==================== 查询 ==================== */
 
   /** @brief 绑定的 SPI 句柄 */
   SPI_HandleTypeDef *handle() const
@@ -186,10 +187,10 @@ public:
   /** @brief 读诊断计数 */
   Diag diag() const;
 
-  // ----------------
+  /* ==================== */
 
 private:
-  // ---------------- 私有实现 ----------------
+  /* ==================== 私有实现 ==================== */
 
   /** @brief 一段轮询传输（HAL_SPI_TransmitReceive） */
   Status transfer_poll(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms);
@@ -220,7 +221,7 @@ private:
   uint8_t _tx_bounce[SPI_DMA_BUFFER_SIZE]; ///< DMA 发送弹跳缓冲（也用来放 0xFF 填充）
   uint8_t _rx_bounce[SPI_DMA_BUFFER_SIZE]; ///< DMA 接收弹跳缓冲（也用来丢弃收到的字节）
 
-  // ----------------
+  /* ==================== */
 };
 
 
@@ -238,7 +239,8 @@ private:
 class BspSpiDevice
 {
 public:
-  // ---------------- 配置 ----------------
+/* ==================== */
+  /* ==================== 配置 ==================== */
 
   /** @brief 设备配置（聚合，可用指定初始化：{.cs_port = ..., .cs_pin = ...}） */
   struct Config
@@ -249,8 +251,8 @@ public:
     uint8_t       read_dummy = 0U;      ///< 读寄存器时地址后面跟的无效字节数
   };
 
-  // ----------------
-  // ---------------- 构造与初始化 ----------------
+  /* ==================== */
+  /* ==================== 构造与初始化 ==================== */
 
   /** @brief 必须绑定一条总线，禁用默认构造 */
   BspSpiDevice() = delete;
@@ -268,8 +270,8 @@ public:
    */
   Status init();
 
-  // ----------------
-  // ---------------- 传输 ----------------
+  /* ==================== */
+  /* ==================== 传输 ==================== */
 
   /**
    * @brief 一次片选内的全双工传输
@@ -312,8 +314,8 @@ public:
   /** @brief 写 1 个寄存器 */
   Status write_reg8(uint8_t reg, uint8_t value, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
 
-  // ----------------
-  // ---------------- 手动事务用 ----------------
+  /* ==================== */
+  /* ==================== 手动事务用 ==================== */
 
   /** @brief 所在总线（手动事务：bus().lock() → select() → bus().transfer_locked() … → deselect() → bus().unlock()） */
   BspSpi &bus() const
@@ -333,7 +335,7 @@ public:
     _cs.set();
   }
 
-  // ----------------
+  /* ==================== */
 
 private:
   /**

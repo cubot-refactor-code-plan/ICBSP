@@ -12,7 +12,7 @@
 #include "vqf.hpp"
 
 
-// ---------------- 寄存器表（BMI088 数据手册 BST-BMI088-DS001） ----------------
+/* ==================== 寄存器表（BMI088 数据手册 BST-BMI088-DS001） ==================== */
 
 namespace
 {
@@ -59,10 +59,10 @@ constexpr uint32_t ATTITUDE_MAX_GYRO_STEPS = 10U;
 constexpr double RAD_TO_DEG = 180.0 / PI_D; ///< imu_definition.hpp 的 PI 是 float，精度不够
 } // namespace
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 构造与初始化 ----------------
+/* ==================== 构造与初始化 ==================== */
 
 DeviceBmi088::DeviceBmi088(BspSpiDevice &acc, BspSpiDevice &gyro, const Config &cfg) : _acc(acc), _gyro(gyro), _cfg(cfg)
 {
@@ -232,10 +232,10 @@ Status DeviceBmi088::init()
   return Status::OK;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 读数 ----------------
+/* ==================== 读数 ==================== */
 
 Status DeviceBmi088::update(uint32_t timeout_ms)
 {
@@ -404,10 +404,10 @@ void DeviceBmi088::solve_attitude(ImuData &data, uint32_t gyro_steps)
   data.euler_angle.roll  = data.euler_radian.roll * RAD_TO_DEG;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 自动刷新任务 ----------------
+/* ==================== 自动刷新任务 ==================== */
 
 void DeviceBmi088::task_entry(void *argument)
 {
@@ -455,10 +455,10 @@ void DeviceBmi088::run()
   }
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 数据就绪中断 ----------------
+/* ==================== 数据就绪中断 ==================== */
 
 void DeviceBmi088::attach_task(TaskHandle_t task)
 {
@@ -495,10 +495,10 @@ void DeviceBmi088::on_gyro_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken)
   }
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 私有工具 ----------------
+/* ==================== 私有工具 ==================== */
 
 void DeviceBmi088::delay_ms(uint32_t ms)
 {
@@ -531,6 +531,6 @@ Status DeviceBmi088::write_verify(BspSpiDevice &dev, uint8_t reg, uint8_t value,
   return ((back & mask) == (value & mask)) ? Status::OK : Status::IO_ERROR;
 }
 
-// ----------------
+/* ==================== */
 
 #endif // HAL_SPI_MODULE_ENABLED

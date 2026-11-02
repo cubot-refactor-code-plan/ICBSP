@@ -27,9 +27,7 @@
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
 #include "task.h"          // IWYU pragma: keep（tskIDLE_PRIORITY）
 
-/* ==================================================================
- * ① 功能开关：关掉就不编译对应代码、也不创建对应任务
- * ================================================================== */
+/* ==================== ① 功能开关：关掉就不编译对应代码、也不创建对应任务 ==================== */
 
 /** @brief 系统维护任务 sys_task：CAN Bus-Off 恢复、串口补救、Online 计时 */
 #define SYS_TASK_ENABLE 1
@@ -53,6 +51,7 @@
 #  define UART_PATROL_ENABLE 0
 #endif
 
+/* ==================== */
 /* ==================== 库任务（system_init() 创建） ==================== */
 
 /** @brief 系统维护任务 sys_task 的优先级：高于业务任务，低于 CAN 收发任务 */
@@ -65,6 +64,7 @@
 /** @brief CAN 收 / 发任务栈深（字）：接收节点回调在 can_rx_task 里同步执行，回调用栈多就加大 */
 #define CAN_TASK_STACK 512
 
+/* ==================== */
 /* ==================== CAN ==================== */
 
 /** @brief 每路 CAN 的接收队列深度（帧）：ISR 写入，can_rx_task 每毫秒取走 */
@@ -86,6 +86,7 @@
 /** @brief Bus-Off 恢复的重试间隔 (ms) */
 #define CAN_BUSOFF_RETRY_MS 100
 
+/* ==================== */
 /* ==================== UART ==================== */
 
 /** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置 */
@@ -93,6 +94,7 @@
 /** @brief BspUart::printf() 取格式化缓冲锁、入队的等待上限 (ms) */
 #define UART_PRINTF_TIMEOUT_MS 10
 
+/* ==================== */
 /* ==================== SPI ==================== */
 
 /** @brief 每个 BspSpi 实例的 DMA 弹跳缓冲（字节，收发各一份） */
@@ -100,6 +102,7 @@
 /** @brief BspSpi / BspSpiDevice 传输接口的默认超时 (ms) */
 #define SPI_TRANSFER_TIMEOUT_MS 10
 
+/* ==================== */
 /* ==================== BMI088 ==================== */
 
 /** @brief DeviceBmi088 自动刷新任务的优先级：低于库的 sys / CAN 任务，高于一般业务任务 */
@@ -107,6 +110,7 @@
 /** @brief DeviceBmi088 自动刷新任务栈深（字）：含 VQF 姿态解算 */
 #define BMI088_TASK_STACK 512
 
+/* ==================== */
 /* ==================== 取值检查 ==================== */
 
 #ifdef __cplusplus
@@ -130,5 +134,7 @@ static_assert(SPI_DMA_BUFFER_SIZE >= 16 && SPI_DMA_BUFFER_SIZE <= 65535, "hardwa
 static_assert(SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
 static_assert(BMI088_TASK_STACK >= 128, "hardware_config.h: BMI088_TASK_STACK 至少 128 字");
 #endif
+
+/* ==================== */
 
 #endif /* HARDWARE_CONFIG_H */

@@ -8,7 +8,7 @@
 #include "task.h" // IWYU pragma: keep (pdMS_TO_TICKS)
 
 
-// ---------------- 构造 ----------------
+/* ==================== 构造 ==================== */
 
 
 /** @brief 用默认配置绑定 PWM 通道 */
@@ -22,8 +22,8 @@ DeviceBuzzer::DeviceBuzzer(BspPwm &pwm, const Config &cfg) : _pwm(pwm), _config(
 }
 
 
-// ----------------
-// ---------------- 公共接口 ----------------
+/* ==================== */
+/* ==================== 公共接口 ==================== */
 
 
 /** @brief 起振：限幅频率后设频率 + 设音量（占空比） */
@@ -65,6 +65,6 @@ void DeviceBuzzer::beep(uint32_t freq_hz, uint32_t duration_ms, float volume_pct
   off();
 }
 
-// ----------------
+/* ==================== */
 
 #endif // HAL_TIM_MODULE_ENABLED
