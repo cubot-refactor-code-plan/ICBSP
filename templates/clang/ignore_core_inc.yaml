@@ -1,0 +1,11 @@
+---
+# ---- CubeMX 生成的 Core/Inc：不报诊断 ----
+# main.h / stm32h7xx_hal_conf.h / gpio.h / tim.h / usart.h / FreeRTOSConfig.h 这些都是
+# CubeMX 生成的，下次重新生成会被覆盖，在编辑器里标红没有意义。
+# 只屏蔽诊断：编译数据库与索引保留，跳进这些头文件看宏定义仍然正常。
+#
+# 注意这里**不包含 Core/Src**：那里的 USER CODE 段是宿主自己写的，要保留诊断。
+If:
+  PathMatch: .*Core/Inc/.*
+Diagnostics:
+  Suppress: '*'
