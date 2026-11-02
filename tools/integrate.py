@@ -12,7 +12,8 @@ stm32_framework 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX�
   2. 链接脚本加 .dma_buffer / .noinit（templates/linker_sections.ld）
   3. FreeRTOSConfig.h 的 USER CODE 1：configASSERT → fault_on_assert（templates/FreeRTOSConfig_user_code.h）
   4. freertos.c 的 Includes / 4 / 5 / Init 段：钩子记录现场、调 app_init()（templates/freertos_user_code.c）
-  5. 复制 user/board/board_cfg.*、user/app/app_main.*、user/app/app_task.hpp、user/app/task/demo_task.cpp（已存在的不覆盖）
+  5. 复制 user/board/board_cfg.*、user/app/app_main.*、user/app/app_task.hpp、user/app/task/demo_task.cpp（已存在的不覆盖；
+     demo_task.cpp 只在新建工程时给，已有 app_main.cpp 就不再塞示范任务）
   6. 核对模板用到的句柄与参数；业务任务写在 user/app/task/，示例不自动创建
   7. 复制 hardware_config.h 到 user/board/（已存在的不覆盖）
   8. 根 CMakeLists.txt 末尾接入库与 user/board、user/app、user/module 包含路径；user/ 下的 .c / .cpp 自动收集
@@ -480,11 +481,14 @@ def plan_app(host, plan, rep, board_dir, app_dir):
         if not (board / name).exists():
             plan.create(board / name, (TEMPLATES / "user" / "board" / name).read_text(encoding="utf-8"))
             copied.append(f"{board_rel}/{name}")
+    app_fresh = not (app / "app_main.cpp").exists()
     for name in APP_TEMPLATES:
         if not (app / name).exists():
             plan.create(app / name, (TEMPLATES / "user" / "app" / name).read_text(encoding="utf-8"))
             copied.append(f"{app_rel}/{name}")
-    for name in TASK_TEMPLATES:
+    # demo_task.cpp 只是新工程的示范任务（心跳 / 运行监视）：工程已有 app_main.cpp 就说明
+    # 已经有自己的任务了，不再往里塞示范代码
+    for name in TASK_TEMPLATES if app_fresh else ():
         if not (task / name).exists():
             plan.create(task / name, (TEMPLATES / "user" / "app" / "task" / name).read_text(encoding="utf-8"))
             copied.append(f"{app_rel}/task/{name}")
