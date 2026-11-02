@@ -18,6 +18,12 @@
  *   ② 库任务：优先级与栈深——决定实时性和会不会栈溢出
  *   ③ 外设参数：队列深度、超时、缓冲区大小——决定吞吐、丢帧与阻塞时长
  *   ④ 取值检查：只做编译期断言，不改任何行为
+ *
+ * 【不在这里的两项】
+ *   1. 调试打印开关 `UART_PRINT_ENABLE` 与 `print_uart(...)` 定义在 `board_cfg.hpp`：
+ *      它们要绑定具体的串口实例，跟着实例放才不会互相牵连（本文件只放“不依赖实例”的宏）。
+ *   2. `BspUart::printf()` 的取锁 / 入队等待上限目前是**库内固定值**（各 10 ms，见
+ *      code/bsp/bsp_uart.cpp），没有做成可调宏——想要可调得先改库。
  */
 
 #ifndef HARDWARE_CONFIG_H
@@ -91,8 +97,10 @@
 
 /** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置 */
 #define UART_ENABLE_FIFO 1
-/** @brief BspUart::printf() 取格式化缓冲锁、入队的等待上限 (ms) */
-#define UART_PRINTF_TIMEOUT_MS 10
+
+/* 注意：`BspUart::printf()` 的等待上限目前是**库内固定值**（取锁 10 ms / 入队 10 ms，
+ * 见 code/bsp/bsp_uart.cpp），没有做成可调宏；调试打印开关 UART_PRINT_ENABLE 也在
+ * board_cfg.hpp（要绑串口实例）。详见文件头“不在这里的两项”。 */
 
 /* ==================== */
 /* ==================== SPI ==================== */
@@ -129,7 +137,6 @@ static_assert(CAN_TX_HEARTBEAT_MS >= 1, "hardware_config.h: CAN_TX_HEARTBEAT_MS 
 static_assert(CAN_CMD_EXPIRE_MS > CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指令有效期必须长于保底心跳");
 static_assert(CAN_BUSOFF_RETRY_MS >= 1, "hardware_config.h: CAN_BUSOFF_RETRY_MS 至少 1 ms");
 static_assert(UART_ENABLE_FIFO == 0 || UART_ENABLE_FIFO == 1, "hardware_config.h: UART_ENABLE_FIFO 取 0 或 1");
-static_assert(UART_PRINTF_TIMEOUT_MS >= 1, "hardware_config.h: UART_PRINTF_TIMEOUT_MS 至少 1 ms");
 static_assert(SPI_DMA_BUFFER_SIZE >= 16 && SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: SPI_DMA_BUFFER_SIZE 取 16~65535");
 static_assert(SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
 static_assert(BMI088_TASK_STACK >= 128, "hardware_config.h: BMI088_TASK_STACK 至少 128 字");
