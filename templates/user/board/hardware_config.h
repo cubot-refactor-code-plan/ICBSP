@@ -95,7 +95,7 @@
 #define UART_PRINTF_TIMEOUT_MS 10
 
 /**
- * @brief 调试打印宏 print_uart() 的总开关（board_cfg.hpp 里定义）
+ * @brief 调试打印宏 print_uart() 的总开关（宏本身也定义在本文件，见下）
  *
  * 【取值】1 = 正常调 `bsp_uart1.printf()`；0 = 展开成 `((void)0)`，调用处保持原样但**完全静默**
  * 【为什么需要】发布固件、或这路串口改作业务通信用时，把调试输出一次性关掉，
@@ -106,6 +106,23 @@
  *   但 `BspUartT::printf` 本身还是编进库的（要给其它实例用），所以不要把这一项当减肥手段
  */
 #define UART_PRINT_ENABLE 1
+
+/**
+ * @brief 调试打印宏：`print_uart("x=%d\r\n", x)`
+ *
+ * - 开（`UART_PRINT_ENABLE = 1`）：展开成 `bsp_uart1.printf(...)`，
+ *   返回 Status（OK / TIMEOUT 半行 / BAD_ARG）
+ * - 关（`= 0`）：展开成 `((void)0)`，调用处不用改，但**参数不求值、不打印、也不返回 Status**
+ * - 能用的范围：凡是能看到 `bsp_uart1` 的地方（即包含 board_cfg.hpp 的文件）；
+ *   换调试串口只改 board_cfg.hpp 里那个实例名，这里不用动
+ * - 内部有 printf 锁，多任务同时打印不会互相覆盖；
+ *   单行超过该实例的 TX_SIZE（默认 128 字节）会被截断
+ */
+#if UART_PRINT_ENABLE
+#  define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
+#else
+#  define print_uart(...) ((void)0)
+#endif
 
 /* ==================== */
 /* ==================== SPI ==================== */

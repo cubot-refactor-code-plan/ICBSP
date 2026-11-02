@@ -54,7 +54,6 @@ extern "C" void sys_task(void *argument)
     // 在线情况更新
     (void)Online::update();
 
-#  if defined(HAL_UART_MODULE_ENABLED) && defined(print_uart)
     // 每 5 s 打一次，避免打印本身占掉巡检时间
     if (count == 500U)
     {
@@ -63,10 +62,10 @@ extern "C" void sys_task(void *argument)
       print_uart("[sys] time=%us cycle=%uus\r\n",
                  static_cast<unsigned>(uptime_s),
                  static_cast<unsigned>(bsp_dwt.get_delta_s(&mark) * 1000000.0));
+
       (void)uptime_s; // 宿主把 print_uart 关成 ((void)0) 时，参数不求值，这里显式消费掉
       count = 0U;
     }
-#  endif
 
     vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(SYS_TASK_PERIOD_MS));
   }
