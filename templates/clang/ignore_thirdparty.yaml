@@ -1,0 +1,10 @@
+---
+# ---- 第三方库：CubeMX 的 Drivers/（CMSIS + HAL）与 FreeRTOS ----
+# 这些代码不归宿主维护，报错/告警没有意义（交叉工具链的专有选项、HAL 里的写法差异都会刷屏）。
+# 所以只屏蔽诊断，**保留编译数据库与后台索引**：跳进 HAL / FreeRTOS 看实现仍然正常。
+If:
+  PathMatch:
+    - .*Drivers/.*
+    - .*Middlewares/Third_Party/FreeRTOS/.*
+Diagnostics:
+  Suppress: '*'
