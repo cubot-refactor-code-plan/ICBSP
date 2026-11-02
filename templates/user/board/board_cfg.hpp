@@ -62,11 +62,9 @@
 
 // CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
 #include "fdcan.h"
-#include "main.h"  // IMYA
+#include "main.h" // IWYU pragma: keep
 #include "tim.h"
 #include "usart.h"
-
-#include "hardware_config.h" // 库的全部开关/参数（含 UART_PRINT_ENABLE）
 
 #include "bsp_can.hpp"
 #include "bsp_dwt.hpp"
@@ -101,8 +99,12 @@ inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128
    .mode     = UartDir::TxRx,
    .baudrate = 115200U});
 
-// 调试打印宏 print_uart() 定义在 hardware_config.h（开关 UART_PRINT_ENABLE 也在那儿），
-// 展开后就是本实例的 printf；换调试串口只改上面那行实例名。
+#define UART_PRINT_ENABLE 1
+#if UART_PRINT_ENABLE
+#  define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
+#else
+#  define print_uart(...) ((void)0)
+#endif
 
 /**
  * DWT 计时基准（Cortex-M7 内核 CYCCNT，不占外设、不需要中断）

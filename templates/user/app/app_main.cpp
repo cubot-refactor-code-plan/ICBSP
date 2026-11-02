@@ -28,9 +28,9 @@
 
 #include "app_main.h"
 
+#include "app_task.hpp"
 #include "board_cfg.hpp"
 #include "system.hpp"
-#include "app_task.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"
@@ -71,7 +71,8 @@ extern "C" void app_init(void)
   //                               tskIDLE_PRIORITY + 3, NULL) == pdPASS);
   //    任务入口开头请先调 sys_state.wait_running()（原因见文件头）。
   //    优先级建议 ≤ tskIDLE_PRIORITY + 5：让库的 CAN / sys 任务（+8 / +7）先跑。
-
+  //    monitor 要用 print_uart，vsnprintf 吃栈，所以给 384 字（1.5 KB）而不是 256 字。
+  configASSERT(xTaskCreate(monitor_task, "monitor", 384, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
 
   // 4. 放行：置运行位，放行所有在 wait_running() 上等待的任务。
   //    初始化阶段有失败记录（例如 CAN 节点注册失败、外设 init() 失败）时，

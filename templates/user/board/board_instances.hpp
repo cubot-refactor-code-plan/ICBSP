@@ -42,7 +42,7 @@
 #ifndef __BOARD_INSTANCES_HPP__
 #define __BOARD_INSTANCES_HPP__
 
-#include "board_cfg.hpp"
+#include "board_cfg.hpp"// IWYU pragma: keep
 
 /**
  * @brief CAN 实例列表
