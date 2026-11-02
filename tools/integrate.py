@@ -317,6 +317,15 @@ def plan_linker(host, plan, rep, explicit, region):
         rep.error(step, f"{region}@0x{regions[region]:08X} 是 ITCM / DTCM，DMA1 / DMA2 访问不到，换一个区（有 {names}）")
         return
 
+    if ".dma_buffer" not in missing and "__dma_buffer_start" not in tf.text:
+        rep.error(
+            step,
+            f"{rel} 有 .dma_buffer 段，但缺 __dma_buffer_start / __dma_buffer_end / __dma_buffer_load 符号："
+            "框架靠这三个符号在全局构造前把初值从 Flash 拷进 RAM，符号名不同等于不拷贝（串口参数会上电变随机值）。"
+            "按 templates/linker_sections.ld 改段内符号名",
+        )
+        return
+
     template = re.sub(r"^\s*/\*.*?\*/\s*\n", "", read_template("linker_sections.ld"), count=1, flags=re.S)
     blocks = {}
     # 连同 AT> FLASH 与 __dma_buffer_load = LOADADDR(...) 一起取，不能只截到第一个 >region
@@ -328,16 +337,13 @@ def plan_linker(host, plan, rep, explicit, region):
     if data is None:
         rep.error(step, f"{rel} 里没找到 .data 段")
         return
-    # 从 .data 往回跳过空行、注释和 _sidata = LOADADDR(.data)，落到上一个输出段的结尾 "} >FLASH"
+    # 从 .data 往回找最近一个输出段的结尾 "}"：中间可能是注释、_sidata / _sidma_buffer 之类的
+    # LOADADDR、PROVIDE(...)，一律跳过（只看是不是以 "}" 开头）
     j = data - 1
-    while j >= 0:
-        s = lines[j].strip()
-        if s == "" or s.startswith(("/*", "*")) or s.endswith("*/") or "LOADADDR(.data)" in s:
-            j -= 1
-        else:
-            break
-    if j < 0 or "}" not in lines[j]:
-        rep.error(step, f"{rel} 里 .data 之前的结构不认识，请按 templates/linker_sections.ld 手动添加")
+    while j >= 0 and not lines[j].lstrip().startswith("}"):
+        j -= 1
+    if j < 0:
+        rep.error(step, f"{rel} 里 .data 之前找不到输出段结尾的 \"}}\"，请按 templates/linker_sections.ld 手动添加")
         return
 
     insert = ["", "  /* stm32_framework：见 templates/linker_sections.ld（.dma_buffer 可加载，放 BspUart / BspSpi 实例；.noinit 放 fault_record） */"]
