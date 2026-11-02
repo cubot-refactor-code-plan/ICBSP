@@ -60,8 +60,10 @@
 /* ==================== */
 /* ==================== 库任务（system_init() 创建） ==================== */
 
-/** @brief 系统维护任务 sys_task 的优先级：高于业务任务，低于 CAN 收发任务 */
-#define SYS_TASK_PRIORITY (tskIDLE_PRIORITY + 7)
+/** @brief 系统维护任务 sys_task 的优先级：低于业务任务（常用 idle+7），低于 CAN 收发任务
+ *  @note sys_task 只做 10 ms 维护（CAN 恢复 / 串口巡检 / Online 计时），
+ *        让业务任务与 CAN 收发先跑；与业务任务同优先级会导致时间片轮转、控制周期抖动。 */
+#define SYS_TASK_PRIORITY (tskIDLE_PRIORITY + 6)
 /** @brief sys_task 栈深（字） */
 #define SYS_TASK_STACK 256
 
