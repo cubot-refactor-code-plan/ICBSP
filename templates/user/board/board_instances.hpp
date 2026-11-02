@@ -64,9 +64,6 @@
  * @brief UART 实例列表
  *
  * 用途：① HAL 的 UART 回调按句柄找到对应实例；② sys_task 每 10 ms 巡检它们的收发健康度。
- *
- *   - 只收（`RxOnly`）/ 只发（`TxOnly`）的实例**同样要列**：巡检看的是“有没有断流”，与方向无关
- *   - 调试串口 `print_uart` 用的实例也列进来，否则它卡死后不会自愈
  */
 #define BSP_UART_INSTANCES(X) \
   X(bsp_uart1)

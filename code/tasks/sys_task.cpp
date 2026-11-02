@@ -1,4 +1,4 @@
-#include "bsp_can.hpp"  // 未开 FDCAN 时为空
+#include "bsp_can.hpp" // 未开 FDCAN 时为空
 #include "bsp_dwt.hpp"
 #include "bsp_uart.hpp" // 未开 UART 时为空
 #include "online_check.hpp"
@@ -8,8 +8,8 @@
 #include "task.h"
 #include <stdint.h>
 
-#include "hardware_config.h"
 #include "board_instances.hpp"
+#include "hardware_config.h"
 
 #if SYS_TASK_ENABLE
 
@@ -24,8 +24,9 @@ extern "C" void sys_task(void *argument)
                 "sys_task requires a 1 kHz FreeRTOS tick");
 
   TickType_t wake_time = xTaskGetTickCount();
-  uint8_t    count     = 0U;
+  uint16_t   count     = 0U;
 
+  vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1000));
   for (;;)
   {
     ++count;
@@ -54,14 +55,15 @@ extern "C" void sys_task(void *argument)
     (void)Online::update();
 
 #  if defined(HAL_UART_MODULE_ENABLED) && defined(print_uart)
-    // 每 2 s 打一次，避免打印本身占掉巡检时间
-    if (count == 200U)
+    // 每 5 s 打一次，避免打印本身占掉巡检时间
+    if (count == 500U)
     {
       const double uptime_s = bsp_dwt.get_time_s();
 
       print_uart("[sys] time=%us cycle=%uus\r\n",
                  static_cast<unsigned>(uptime_s),
                  static_cast<unsigned>(bsp_dwt.get_delta_s(&mark) * 1000000.0));
+      (void)uptime_s; // 宿主把 print_uart 关成 ((void)0) 时，参数不求值，这里显式消费掉
       count = 0U;
     }
 #  endif
