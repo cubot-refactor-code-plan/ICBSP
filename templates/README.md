@@ -15,7 +15,7 @@
 | `user/app/task/demo_task.cpp` | `user/app/task/` | 示例任务实现，不自动创建 |
 | `vscode/settings.json`、`vscode/tasks.json`、`vscode/launch.json` | 宿主 `.vscode/` | 编译 / 烧录任务与调试配置，宿主没有才生成；有就只补缺失项 |
 | `Flash/OpenOCD_flash.*`、`Flash/JLink_flash.*`、`Flash/*.cfg` | 宿主 `Flash/` | 烧录脚本，运行时按工程名在 `build/` 下递归找 `.elf`；`.sh` 自动加可执行权限 |
-| `clang/.clangd` | 宿主根 `.clangd` | clangd 配置：`CompilationDatabase` 指向该预设的构建目录，`--query-driver` 指向本机交叉工具链。缺了它，CubeMX 的 Cortex-M 工程在 clangd 里会满屏假错误 |
+| `clang/.clangd` | 宿主根 `.clangd` | clangd 配置：`CompilationDatabase` 指向该预设的构建目录。缺了它，CubeMX 的 Cortex-M 工程在 clangd 里会满屏假错误。**`--query-driver` 不能写这里**（会被当编译器参数，报 `drv_unknown_argument`），它属于 `.vscode/settings.json` 的 `clangd.arguments` |
 | `clang/compile_flags.yaml` | 同上，插入宿主已有的 `.clangd` 顶部 | 只含 `CompileFlags` 一段：宿主已手写 `.clangd`（有 InlayHints / Diagnostics 等）时用它合并，不动原有配置 |
 
 `.clang-format` 不在本目录：直接复制库根目录的那一份（唯一来源，避免两处风格文件不同步）。
