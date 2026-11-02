@@ -13,7 +13,7 @@
 
 | 任务 | 文件 | 周期 | 优先级宏 | 栈深宏 | 谁创建 | 创建时机 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `sys_task` | `sys_task.cpp` | **10 ms**（`SYS_TASK_PERIOD_MS`） | `SYS_TASK_PRIORITY`（idle+7） | `SYS_TASK_STACK`（256 字） | `system_init()` | 无条件（`SYS_TASK_ENABLE`） |
+| `sys_task` | `sys_task.cpp` | **10 ms**（`SYS_TASK_PERIOD_MS`） | `SYS_TASK_PRIORITY`（idle+6） | `SYS_TASK_STACK`（256 字） | `system_init()` | 无条件（`SYS_TASK_ENABLE`） |
 | `can_rx_task` | `can_rx_task.cpp` | **1 ms** | `CAN_TASK_PRIORITY`（idle+8） | `CAN_TASK_STACK`（512 字） | `system_init()` | 开了 FDCAN 且 `CAN_RX_ENABLE` |
 | `can_tx_task` | `can_tx_task.cpp` | **1 ms** | `CAN_TASK_PRIORITY` | `CAN_TASK_STACK` | `system_start()` | 板级**有发送节点**才建 |
 
