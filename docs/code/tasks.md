@@ -106,7 +106,7 @@ for (;;)
 
 ```c
 #define SYS_TASK_ENABLE     1
-#define SYS_TASK_PRIORITY   (tskIDLE_PRIORITY + 7)
+#define SYS_TASK_PRIORITY   (tskIDLE_PRIORITY + 6)
 #define SYS_TASK_STACK      256
 #define CAN_TASK_PRIORITY   (tskIDLE_PRIORITY + 8)
 #define CAN_TASK_STACK      512
