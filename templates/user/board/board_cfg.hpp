@@ -100,6 +100,7 @@ inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128
    .baudrate = 115200U});
 
 #define UART_PRINT_ENABLE 1
+
 #if UART_PRINT_ENABLE
 #  define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
 #else
