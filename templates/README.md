@@ -19,6 +19,7 @@
 | `clang/compile_flags.yaml` | 同上，插入宿主已有的 `.clangd` 顶部 | 只含 `CompileFlags` 一段：宿主已手写 `.clangd`（有 InlayHints / Diagnostics 等）时用它合并，不动原有配置 |
 | `clang/ignore_templates.yaml` | 同上，追加到 `.clangd` **末尾**（自带 `---` 分隔） | 让库的 `templates/` 不用宿主编译数据库、不进后台索引、不报诊断：模板与宿主有同名文件（`board_cfg.hpp` 等），留着会干扰补全与跳转 |
 | `clang/ignore_thirdparty.yaml` | 同上，追加到 `.clangd` 末尾 | 屏蔽 CubeMX 的 `Drivers/`（CMSIS + HAL）与 `Middlewares/Third_Party/FreeRTOS/` 的诊断；**保留编译数据库与索引**，跳进实现不受影响 |
+| `clang/ignore_core_inc.yaml` | 同上，追加到 `.clangd` 末尾 | 屏蔽 CubeMX 生成的 `Core/Inc/`（`main.h`、`stm32h7xx_hal_conf.h` 等）的诊断；不含 `Core/Src`，那里的 USER CODE 保留诊断 |
 
 `.clang-format` 不在本目录：直接复制库根目录的那一份（唯一来源，避免两处风格文件不同步）。
 它带 `Language: Cpp`，只作用于 C++，CubeMX 生成的 `Core/Src/*.c` 不会被格式化。
