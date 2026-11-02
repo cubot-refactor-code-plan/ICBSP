@@ -4,14 +4,14 @@
 #include "bsp_uart.hpp" // IWYU pragma: keep（BspUartT 实例化与 UART 宏）
 #include "task.h"     // xTaskGetTickCount
 
-// ---------------- 模板实例化 ----------------
+/* ==================== 模板实例化 ==================== */
 
 // 显式实例化：必须覆盖 宿主的 board_cfg.cpp 里用到的串口类型，否则链接时找不到成员函数
 template class DeviceR9dsT<BspUartT<uart_mode::it, 128, 32>>;
 template class DeviceR9dsT<BspUartT<uart_mode::dma, 128, 128>>;
 
-// ----------------
-// ---------------- 构造与析构 ----------------
+/* ==================== */
+/* ==================== 构造与析构 ==================== */
 
 /**
  * @brief 绑定串口；原始通道先填中位
@@ -27,8 +27,8 @@ DeviceR9dsT<Uart>::DeviceR9dsT(Uart &uart) : _uart(uart)
     _raw[i] = CHANNEL_MID; // 还没收到帧，原始通道先按中位显示，避免上层读到 0 这种野值
   }
 }
-// ----------------
-// ---------------- 生命周期 ----------------
+/* ==================== */
+/* ==================== 生命周期 ==================== */
 
 /**
  * @brief 校验串口帧格式（SBUS：100000 / 8E2）
@@ -102,8 +102,8 @@ void DeviceR9dsT<Uart>::update(uint32_t timeout_ms)
     _fill = 0U;
   }
 }
-// ----------------
-// ---------------- 查询接口 ----------------
+/* ==================== */
+/* ==================== 查询接口 ==================== */
 
 /**
  * @brief 在线判定：帧到 + 没失控 + 没在连续丢帧
@@ -167,8 +167,8 @@ typename DeviceR9dsT<Uart>::Diag DeviceR9dsT<Uart>::get_diag(void) const
 {
   return _diag;
 }
-// ----------------
-// ---------------- 帧解析 ----------------
+/* ==================== */
+/* ==================== 帧解析 ==================== */
 
 /**
  * @brief 解析一帧已通过帧尾校验的数据
@@ -239,8 +239,8 @@ void DeviceR9dsT<Uart>::_parse_frame(const uint8_t *frame)
   // 注意这里只记“接收机还在发帧”这一件事：遥控器跟它有没有失联，由 is_online() 用 flags 判。
   _last_frame_tick = static_cast<uint32_t>(xTaskGetTickCount());
 }
-// ----------------
-// ---------------- 原始值换算 ----------------
+/* ==================== */
+/* ==================== 原始值换算 ==================== */
 
 /**
  * @brief 原始值 → 遥控器语义值（连续通道）
@@ -259,8 +259,8 @@ int16_t DeviceR9dsT<Uart>::_to_rc_value(uint16_t raw)
 {
   return static_cast<int16_t>((static_cast<int32_t>(CHANNEL_MID) - static_cast<int32_t>(raw)) / RAW_PER_UNIT);
 }
-// ----------------
-// ---------------- 开关判挡 ----------------
+/* ==================== */
+/* ==================== 开关判挡 ==================== */
 
 /** @brief 两挡开关判挡：比离 200 / 1800 哪个近，分界正好是中位 1000 */
 template <typename Uart>
@@ -288,4 +288,4 @@ typename DeviceR9dsT<Uart>::Switch DeviceR9dsT<Uart>::_to_switch_3pos(uint16_t r
   }
   return Switch::DOWN;
 }
-// ----------------
+/* ==================== */

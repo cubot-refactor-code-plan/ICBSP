@@ -9,7 +9,7 @@ constexpr float PI_F = 3.14159265358979f;
 } // namespace
 
 
-// ---------------- 构造 ----------------
+/* ==================== 构造 ==================== */
 
 /** @brief 构造：保存配置并按配置构造速度环（PID 的参数是构造时定下来的） */
 DeviceMotor::DeviceMotor(const Config &cfg) : _config(cfg), _pid(cfg.pid)
@@ -17,8 +17,8 @@ DeviceMotor::DeviceMotor(const Config &cfg) : _config(cfg), _pid(cfg.pid)
 }
 
 
-// ----------------
-// ---------------- 公共接口 ----------------
+/* ==================== */
+/* ==================== 公共接口 ==================== */
 
 /**
  * @brief 初始化：校验绑定与机械参数 → 算 counts_per_cm → 两路 PWM 归 0
@@ -177,8 +177,8 @@ size_t DeviceMotor::pid_frame(uint8_t *buf, uint8_t fields) const
 }
 
 
-// ----------------
-// ---------------- 私有实现 ----------------
+/* ==================== */
+/* ==================== 私有实现 ==================== */
 
 /** @brief 带符号占空比 → H 桥两路：任何时刻最多一路非 0（H 桥直通保护） */
 void DeviceMotor::_apply_output(float pct)
@@ -220,5 +220,5 @@ void DeviceMotor::_brake()
   _output_pct = 0.0f;
 }
 
-// ----------------
+/* ==================== */
 

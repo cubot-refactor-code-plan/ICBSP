@@ -93,6 +93,7 @@ public:
    */
   Status init(const MatrixF32<X_DIM, Y_DIM> &omega0 = MatrixF32<X_DIM, Y_DIM>());
 
+  /* ==================== */
   /* ==================== 计算接口 ==================== */
 
   /**
@@ -113,6 +114,7 @@ public:
   /** @brief 协方差重置为 p0·I（参数保留）；参数突变后想加快重新收敛时调用 */
   void reset_covariance();
 
+  /* ==================== */
   /* ==================== 数据接口 ==================== */
 
   /** @brief 参数估计 Ω（X_DIM×Y_DIM） */
@@ -177,6 +179,7 @@ private:
   uint32_t                _trace_limit_cnt = 0U; ///< tr(P) 触限次数
 };
 
+  /* ==================== */
 /* ==================== 模板实现（只有头文件：任意尺寸都能直接用） ==================== */
 
 template <uint32_t X_DIM, uint32_t Y_DIM>
@@ -316,5 +319,7 @@ bool Rls<X_DIM, Y_DIM>::covariance_ok(const MatrixF32<X_DIM, X_DIM> &p) const
   }
   return true;
 }
+
+/* ==================== */
 
 #endif // __RLS_HPP__

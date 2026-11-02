@@ -44,12 +44,12 @@
     // 说明见 docs/编辑器配置.md
     "outlinePlus.regionBoundaryPatternByLanguageId": {
         "c": {
-            "startRegex": "^\\s*/\\* ={20} (?!END )(.+) ={20} \\*/\\s*$",
-            "endRegex": "^\\s*/\\* ={20} END ={20} \\*/\\s*$"
+            "startRegex": "^\\s*/\\* ={20} (.+) ={20} \\*/\\s*$",
+            "endRegex": "^\\s*/\\* ={20} \\*/\\s*$"
         },
         "cpp": {
-            "startRegex": "^\\s*/\\* ={20} (?!END )(.+) ={20} \\*/\\s*$",
-            "endRegex": "^\\s*/\\* ={20} END ={20} \\*/\\s*$"
+            "startRegex": "^\\s*/\\* ={20} (.+) ={20} \\*/\\s*$",
+            "endRegex": "^\\s*/\\* ={20} \\*/\\s*$"
         }
     }
 }

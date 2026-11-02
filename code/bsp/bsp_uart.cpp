@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 
-// ---------------- 模板实例化 ----------------
+/* ==================== 模板实例化 ==================== */
 
 // 显式实例化：按项目实际使用的串口类型生成。
 // 新增串口时要同步改三处：这里、下面的 HAL 回调分发表、board_cfg.cpp 的实例定义。
@@ -13,8 +13,8 @@ template class BspUartT<uart_mode::dma, 128, 128>;
 template class BspUartT<uart_mode::it, 128, 32>;
 template class BspUartT<uart_mode::it, 128, 128>;
 
-// ----------------
-// ---------------- HAL 回调分发 ----------------
+/* ==================== */
+/* ==================== HAL 回调分发 ==================== */
 
 // HAL 的 UART 回调没有实例参数，只能按 huart 指针查表。
 extern "C"
@@ -77,8 +77,8 @@ extern "C"
   }
 }
 
-// ----------------
-// ---------------- Transport 策略 ----------------
+/* ==================== */
+/* ==================== Transport 策略 ==================== */
 
 namespace
 {
@@ -210,9 +210,9 @@ void uart_detail::ItTransport::abort_tx(UART_HandleTypeDef *huart)
   HAL_UART_AbortTransmit(huart);
 }
 
-// ----------------
-// ---------------- UART ----------------
-// ----------------
+/* ==================== */
+/* ==================== UART ==================== */
+/* ==================== */
 
 /**
  * @brief BspUartT<Transport, RX_SIZE, TX_SIZE> 成员函数定义
@@ -222,7 +222,7 @@ void uart_detail::ItTransport::abort_tx(UART_HandleTypeDef *huart)
  * 线程安全：FreeRTOS 流缓冲区自带锁；任务侧启动发送由 _tx_lock 串行化，printf() 由 _printf_lock 保护格式化缓冲。
  */
 
-// ---------------- 公有接口 ----------------
+/* ==================== 公有接口 ==================== */
 
 /**
  * @brief 创建 FreeRTOS 对象并启动 IDLE 接收（须在 STM32 初始化之后调用）
@@ -566,8 +566,8 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::rx_recover()
   _rx_error_cnt = _rx_error_cnt + 1; // 诊断：确实重建了一次
   return true;
 }
-// ----------------
-// ---------------- ISR 入口 ----------------
+/* ==================== */
+/* ==================== ISR 入口 ==================== */
 
 /**
  * @brief IDLE/TC 接收完成：投递数据并重新启动接收（ISR）
@@ -680,8 +680,8 @@ void BspUartT<Transport, RX_SIZE, TX_SIZE>::on_error_isr()
     _rx_hw_error_cnt = _rx_hw_error_cnt + 1;
   }
 }
-// ----------------
-// ---------------- 查询接口 ----------------
+/* ==================== */
+/* ==================== 查询接口 ==================== */
 
 /** @brief 发送流缓冲区剩余空间（字节） */
 template <typename Transport, size_t RX_SIZE, size_t TX_SIZE>
@@ -763,8 +763,8 @@ typename BspUartT<Transport, RX_SIZE, TX_SIZE>::TxDiag BspUartT<Transport, RX_SI
   diag.error_cnt         = _tx_error_cnt;
   return diag;
 }
-// ----------------
-// ---------------- 私有实现 ----------------
+/* ==================== */
+/* ==================== 私有实现 ==================== */
 
 /**
  * @brief 启动接收（仅 RX）
@@ -913,4 +913,4 @@ void BspUartT<Transport, RX_SIZE, TX_SIZE>::cleanup_resources()
     _printf_lock = nullptr;
   }
 }
-// ----------------
+/* ==================== */

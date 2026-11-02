@@ -11,7 +11,7 @@
 #  include "task.h" // IWYU pragma: keep（xTaskGetSchedulerState）
 
 
-// ---------------- 内部工具 ----------------
+/* ==================== 内部工具 ==================== */
 
 namespace
 {
@@ -49,10 +49,10 @@ bool scheduler_running()
 constexpr size_t HAL_MAX_SEGMENT = 0xFFFFU;
 } // namespace
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- HAL 回调（库独占，宿主工程不能再定义） ----------------
+/* ==================== HAL 回调（库独占，宿主工程不能再定义） ==================== */
 
 extern "C"
 {
@@ -98,9 +98,9 @@ extern "C"
   }
 }
 
-// ----------------
+/* ==================== */
 
-// ---------------- 总线：构造与初始化 ----------------
+/* ==================== 总线：构造与初始化 ==================== */
 
 BspSpi::BspSpi(const Config &cfg) : _hspi(cfg.hspi), _use_dma(cfg.use_dma), _dma_threshold(cfg.dma_threshold)
 {
@@ -170,10 +170,10 @@ bool BspSpi::is_init() const
   return _init;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 总线：事务接口 ----------------
+/* ==================== 总线：事务接口 ==================== */
 
 Status BspSpi::lock(uint32_t timeout_ms)
 {
@@ -310,10 +310,10 @@ Status BspSpi::transfer_dma(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t
   return Status::OK;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 总线：ISR 入口与查询 ----------------
+/* ==================== 总线：ISR 入口与查询 ==================== */
 
 void BspSpi::on_txrx_cplt_isr(BaseType_t *pxHigherPriorityTaskWoken)
 {
@@ -345,10 +345,10 @@ BspSpi::Diag BspSpi::diag() const
   return d;
 }
 
-// ----------------
+/* ==================== */
 
 
-// ---------------- 片选设备 ----------------
+/* ==================== 片选设备 ==================== */
 
 BspSpiDevice::BspSpiDevice(BspSpi &bus, const Config &cfg) : _bus(bus), _cs(BspGpio::Config(cfg.cs_port, cfg.cs_pin)), _read_flag(cfg.read_flag), _read_dummy(cfg.read_dummy)
 {
@@ -450,6 +450,6 @@ Status BspSpiDevice::write_reg8(uint8_t reg, uint8_t value, uint32_t timeout_ms)
   return write_reg(reg, &value, 1U, timeout_ms);
 }
 
-// ----------------
+/* ==================== */
 
 #endif // HAL_SPI_MODULE_ENABLED

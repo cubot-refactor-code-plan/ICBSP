@@ -21,6 +21,7 @@ static volatile uint32_t    user_alive_count = 0U; ///< 心跳计数：每秒加
 static volatile UserMonitor user_monitor     = {}; ///< 运行监视结果，每秒刷新
 
 
+/* ==================== */
 /* ==================== 任务 ==================== */
 
 /**
@@ -50,6 +51,9 @@ void monitor_task(void *argument)
     user_monitor.task_num        = static_cast<uint32_t>(uxTaskGetNumberOfTasks());
 #if INCLUDE_uxTaskGetStackHighWaterMark
     user_monitor.self_stack_free = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(NULL));
+
+/* ==================== */
+
 #endif
     vTaskDelayUntil(&wake, pdMS_TO_TICKS(1000U));
   }

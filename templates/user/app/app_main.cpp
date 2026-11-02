@@ -53,6 +53,7 @@ extern "C" void StartDefaultTask(void *argument)
 }
 
 
+/* ==================== */
 /* ==================== 入口 ==================== */
 
 extern "C" void app_init(void)
@@ -77,3 +78,5 @@ extern "C" void app_init(void)
   //    这里会断言停机，fault_record 记下本行。
   system_start();
 }
+
+/* ==================== */

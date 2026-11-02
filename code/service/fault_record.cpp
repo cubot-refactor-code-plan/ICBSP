@@ -7,7 +7,7 @@
 #include <stddef.h> // offsetof
 
 
-// ---------------- 全局实例 ----------------
+/* ==================== 全局实例 ==================== */
 
 
 /** @brief 放在 .noinit：启动代码不清零，复位后还能读到上一次的现场 */
@@ -17,8 +17,8 @@ static_assert(sizeof(fault_record.task) >= configMAX_TASK_NAME_LEN, "task 字段
 static_assert(offsetof(FaultRecord, flush) % 8U == 0U, "flush 必须独占一个 64 位 ECC 字");
 
 
-// ----------------
-// ---------------- 私有实现 ----------------
+/* ==================== */
+/* ==================== 私有实现 ==================== */
 
 namespace
 {
@@ -111,8 +111,8 @@ bool begin_record(FaultKind kind)
 } // namespace
 
 
-// ----------------
-// ---------------- 函数定义 ----------------
+/* ==================== */
+/* ==================== 函数定义 ==================== */
 
 
 extern "C" void fault_on_assert(const char *file, int line)
@@ -141,4 +141,4 @@ extern "C" void fault_on_malloc_failed(void)
 }
 
 
-// ----------------
+/* ==================== */

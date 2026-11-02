@@ -227,6 +227,7 @@ public:
     return *this;
   }
 
+  /* ==================== */
   /* ==================== 计算接口 ==================== */
 
   /**
@@ -276,6 +277,7 @@ public:
   /** @brief 读取目标值、当前值、原始输出 */
   Data get() const { return {_input.target, _input.feedback, _output}; }
 
+  /* ==================== */
   /* ==================== 数据接口 ==================== */
 
   PidInput _input;         ///< 输入缓存
@@ -288,6 +290,7 @@ protected:
   void calc_input(float target, float feedback);
 
 private:
+  /* ==================== */
   /* ==================== 私有成员函数 ==================== */
 
   /**
@@ -301,6 +304,7 @@ private:
    */
   float apply_limits_and_output();
 
+  /* ==================== */
   /* ==================== 私有成员变量 ==================== */
 
   Config _config;                                 ///< PID 配置
@@ -308,5 +312,7 @@ private:
   DiffMode  _diff_mode = DiffMode::DIFF_FEEDBACK; ///< 微分计算模式
   bool      _has_last  = false;                   ///< 是否有上一帧输入（首次调用 / reset() 后为 false，该帧微分为 0）
 };
+
+  /* ==================== */
 
 #endif // __PID_HPP__
