@@ -7,7 +7,8 @@
  * 其他版本未验证，重新生成后留意配置阶段的检查结果即可。
  *
  * - .dma_buffer：BspUart / BspSpi 实例（内含 DMA 收发缓冲）。H7 的 DMA1 / DMA2 访问不到 DTCM，
- *   所以实例要加 __attribute__((section(".dma_buffer"))) 并链接到 RAM_D1（AXI SRAM，或 RAM_D2 / RAM_D3）。
+ *   所以实例要加 __attribute__((section(".dma_buffer.<变量名>"))) 并链接到 RAM_D1（AXI
+ *   SRAM，或 RAM_D2 / RAM_D3）；段名按变量唯一，理由见 templates/user/board/board_cfg.hpp。
  *   这些实例是 constexpr 常量初始化的，**必须可加载**（AT> FLASH），由框架在全局构造前
  *   把初值拷进 RAM_D1；写成 NOLOAD 会让句柄 / 波特率等配置上电后变成随机值。
  *   BspUartT::init() 发现实例在 DTCM / ITCM 会返回 BAD_ARG。

@@ -33,9 +33,15 @@
  *
  * 【三条硬规矩（踩了就很难查）】
  *
- *   1. **串口 / SPI 实例必须放 `.dma_buffer` 段**
+ *   1. **串口 / SPI 实例必须放 `.dma_buffer` 段，且段名按变量唯一**
  *      H7 的 DMA1/DMA2 访问不到 ITCM / DTCM，实例里的接收/发送缓冲如果是普通全局变量
  *      （被链接到 DTCM），DMA 搬过去就是脏数据或直接卡住。CMake 配置阶段有段检查会拦。
+ *
+ *      段名必须写成 `.dma_buffer.<变量名>`，**不能只写 `.dma_buffer`**：实例是
+ *      C++17 `inline` 变量，多个 TU 各 emit 一份弱定义，段名相同则弱定义里的数据
+ *      会一起进同一个输出段（符号去重了、数据没去），表现为段里多出一份无符号的
+ *      副本，或者链接器 + `--gc-sections` 剔掉真数据。按变量命名后每个变量独占一个
+ *      COMDAT 段，重复副本会被正常丢弃。
  *
  *   2. **改 `BspUartT` 的 Transport 或缓冲大小，要在库里补显式实例化**
  *      模板定义在 `.cpp` 里，只实例化了三种组合（`code/bsp/bsp_uart.cpp`）：
@@ -94,7 +100,7 @@ inline BspCanT<16, 16> bsp_can1(
 /**
  * USART1：调试串口，DMA 收发，115200（`print_uart` 用的就是它）
  */
-inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
+inline __attribute__((section(".dma_buffer.bsp_uart1"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
   {.huart    = &huart1,
    .mode     = UartDir::TxRx,
    .baudrate = 115200U});
