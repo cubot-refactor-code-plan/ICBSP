@@ -318,7 +318,7 @@ def plan_linker(host, plan, rep, explicit, region):
         rep.error(step, f"{region}@0x{regions[region]:08X} 是 ITCM / DTCM，DMA1 / DMA2 访问不到，换一个区（有 {names}）")
         return
 
-    if ".dma_buffer" not in missing and "__dma_buffer_start" not in tf.text:
+    if "dma_buffer" not in missing and "__dma_buffer_start" not in tf.text:
         rep.error(
             step,
             f"{rel} 有 .dma_buffer 段，但缺 __dma_buffer_start / __dma_buffer_end / __dma_buffer_load 符号："
