@@ -137,10 +137,11 @@ inline BspPwm bsp_pwm_buzzer(
 ### BspDwt
 
 ```cpp
-inline BspDwt bsp_dwt {};
+bsp_dwt.get_delta_s(&last);   // 实例在库内，system_init() 已经 init() 过
 ```
 
-`init()` 从 RCC 自动推算 CPU 频率，**没有配置项**，全局一个实例就够。
+实例由库定义（`code/service/system.cpp`），`init()` 在 `system_init()` 里调用，宿主**不要**再定义或 `init()`。
+CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个实例就够。
 
 | 方法 | 说明 |
 | --- | --- |
