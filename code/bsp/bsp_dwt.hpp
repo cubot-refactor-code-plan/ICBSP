@@ -119,4 +119,13 @@ private:
   /* ==================== */
 };
 
+/**
+ * @brief 库内唯一的 DWT 实例
+ *
+ * @note 定义在 `code/service/system.cpp`（与 `system_init()` 同一文件）。
+ *       宿主**不要**再定义同名实例、也不要再调 `init()`：包含本头文件后直接使用即可
+ *       （例如 `bsp_dwt.get_delta_s(&last)`）。
+ */
+extern BspDwt bsp_dwt;
+
 #endif // __BSP_DWT_HPP__

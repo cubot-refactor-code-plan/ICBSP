@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "FreeRTOS.h" // IWYU pragma: keep
+#include "bsp_dwt.hpp" // 计时基准（库内实例，本文件负责 init）
 #include "status.hpp"
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
 #include "task.h"
@@ -30,6 +31,9 @@ bool has_tx_nodes()
 
 
 /* ==================== 全局系统状态 ==================== */
+
+/** @brief 库内唯一的 DWT 实例：本文件定义并在 `system_init()` 里 init() */
+BspDwt bsp_dwt;
 
 EventState sys_state;
 
@@ -78,6 +82,9 @@ __attribute__((constructor(101))) void init_dma_buffer_early()
 
 extern "C" void system_init(void)
 {
+  // 计时基准最先起来：sys_task 用它算 10 ms 周期的耗时；宿主的 board_init() 不用再 init()
+  configASSERT(bsp_dwt.init() == Status::OK);
+
   // 系统状态最先建：CAN 节点注册、任务入口的 wait_running() 都依赖它
   configASSERT(sys_state.init() == Status::OK);
 

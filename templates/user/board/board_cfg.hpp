@@ -114,9 +114,12 @@ inline __attribute__((section(".dma_buffer.bsp_uart1"))) BspUartT<uart_mode::dma
 #endif
 
 /**
- * DWT 计时基准（Cortex-M7 内核 CYCCNT，不占外设、不需要中断）
+ * DWT 计时基准：**由库内部初始化**
+ *
+ * 实例定义在 `stm32-framework/code/service/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
+ * 这里只 `#include "bsp_dwt.hpp"` 后直接调用（如 `bsp_dwt.get_delta_s(&last)`）。
+ * 不要在这里再定义实例，也不要再调 `init()`。
  */
-inline BspDwt bsp_dwt {};
 
 /**
  * 蜂鸣器 PWM：TIM12_CH2
