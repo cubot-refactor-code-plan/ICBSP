@@ -1,6 +1,6 @@
 # stm32_framework 接口实机测试（2026-10-17）
 
-> **2026-11-04 注明**：本目录是从 STM32_BSP 原样带过来的，记录对应 **STM32_BSP @ 43a34cf 的旧实现**（`BspUart<N>`、实例登记表、`SysFlag*`）；本库现在的 UART / CAN 是另一套实现，不能当作“已实测”。回填（`undo.md` 阶段 1.1 / 1.2）完成后在宿主 MC02_with_submodule 上复测，再更新这里。
+> **2026-11-04 注明**：本目录是从 STM32_BSP 原样带过来的，记录对应 **STM32_BSP @ 43a34cf 的旧实现**（`BspUart<N>`、实例登记表、`SysFlag*`）；本库现在的 CAN 是另一套实现，不能当作“已实测”；UART 已在 1.1 回填并复测，见 `uart_backfill_2026-11-04.md`。回填（`undo.md` 阶段 1.1 / 1.2）完成后在宿主 MC02_with_submodule 上复测，再更新这里。
 
 > 本目录是宿主工程 `MC02_with_submodule` 的 `docs/bsp_test/` 的副本（2026-10-17，2026-10-28 补 SPI / BMI088）。文中的路径都以**宿主工程根目录**为准：
 > `app/`、`Core/`、`CMakeLists.txt` 指宿主工程，`third_party/stm32-framework/` 即本库。测试代码在宿主工程 `app/test/`，不在本库里。
@@ -11,6 +11,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | `uart_u7_u10.md` | UART U7 ⇄ U10：用例、方案、现象、结论，3 个专项诊断 |
+| `uart_backfill_2026-11-04.md` | **当前实现**：undo 1.1 UART 回填后的 UART / RS485 回归（Debug + -O2 浸泡），以及测试时钟回绕导致 R03 假超时的诊断 |
 | `rs485_u2_u3.md` | RS485 U2 ⇄ U3 |
 | `can1_can2.md` | CAN1 ⇄ CAN2 |
 | `spi_bmi088.md` | SPI2 + 板载 BMI088（2026-10-28）：基本功能、错误路径、故障注入、总线争用与浸泡 |
