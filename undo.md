@@ -12,8 +12,10 @@
 
 ### 1.0 切换主线
 
-- [ ] 宿主 MC02_with_submodule 新开分支，submodule 指向 fork；宿主改 C++20，按 fork 模板补 `board_instances.hpp` / `hardware_config.h` / `board_cfg.hpp`，`app/` 适配；0 warning 作为基线（此时 UART / CAN 带着 N1~N23，不上板跑通信测试）
-- [ ] 本文件搬进 fork 仓库；fork 的 `docs/bsp_test/` 注明“对应 STM32_BSP @ 43a34cf 的旧实现”
+- [x] 宿主 MC02_with_submodule 新开分支，submodule 指向 fork；宿主改 C++20，按 fork 模板补 `board_instances.hpp` / `hardware_config.h` / `board_cfg.hpp`，`app/` 适配；0 warning 作为基线（此时 UART / CAN 带着 N1~N23，不上板跑通信测试）
+  - 2026-11-04 完成：宿主分支 `icbsp-migration`，submodule 路径暂不改（阶段 2 改名时一起改成 `third_party/icbsp`）；Debug 与 RelWithDebInfo 干净重编 0 warning。
+  - 遗留到 1.1：U10 原来是 256 字节缓冲，库只有 `<dma, 128, 128>` 的显式实例化，暂改 128（I1）；`app/test/` 测试代码还是旧接口（开关为 0 时整段不编译），1.1 / 1.2 回填后逐组适配；RS485 应答的 `dma_repair_cnt` 暂时填 0（N7）。
+- [x] 本文件搬进 fork 仓库；fork 的 `docs/bsp_test/` 注明“对应 STM32_BSP @ 43a34cf 的旧实现”
 
 ### 1.1 UART 回填（保留 fork 接口，内部换成本仓库的收发状态机）
 
