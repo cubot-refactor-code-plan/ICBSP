@@ -93,7 +93,7 @@ Status EventState::error(Status statu)
   return Status::OK;
 }
 
-/** @brief 记录初始化失败：先停掉本实例的运行期动作，再记错误码留下原因 */
+/** @brief 记录初始化失败：先停掉本实例的运行期动作，再记错误码留下原因；运行后调用降级成 error() */
 Status EventState::init_error(Status statu)
 {
   if (_handle == nullptr)
@@ -104,23 +104,58 @@ Status EventState::init_error(Status statu)
   {
     return Status::BAD_ARG;
   }
+  if ((xEventGroupGetBits(_handle) & RUNNING_BIT) != 0U)
+  {
+    // 已在运行：运行期错误不能让本实例（以及挂在下面的任务）停摆，只记码（N16 / Q6）
+    (void)error(statu);
+    return Status::NOT_SUPPORTED;
+  }
 
-  // INIT_FAIL 与 RUNNING 先处理完再记错误码：失败位置位就一定已经停掉了运行位
   (void)xEventGroupSetBits(_handle, INIT_FAIL_BIT);
   (void)xEventGroupClearBits(_handle, RUNNING_BIT);
   (void)xEventGroupSetBits(_handle, status_bit(statu));
   (void)xEventGroupClearBits(_handle, status_bit(Status::OK));
 
-  // 初始化失败要连父节点的失败位一起置：父节点同样不会再进入运行态
   if (_parent != nullptr)
   {
-    (void)_parent->init_error(statu);
+    (void)_parent->init_error(statu); // 父节点在运行时同样降级成 error()
   }
   return Status::OK;
 }
 
+/** @brief 清一个错误码：只清本实例，不传播；没有别的错误时把 OK 标记置回来 */
+Status EventState::clear_error(Status statu)
+{
+  if (_handle == nullptr)
+  {
+    return Status::NOT_INIT;
+  }
+  if (statu == Status::OK)
+  {
+    return Status::BAD_ARG;
+  }
+  (void)xEventGroupClearBits(_handle, status_bit(statu));
+  if (error_bits() == 0U)
+  {
+    (void)xEventGroupSetBits(_handle, status_bit(Status::OK));
+  }
+  return Status::OK;
+}
+
+/** @brief 清全部错误码：不传播、不动初始化失败位与运行位 */
+Status EventState::clear_errors(void)
+{
+  if (_handle == nullptr)
+  {
+    return Status::NOT_INIT;
+  }
+  (void)xEventGroupClearBits(_handle, ERROR_MASK);
+  (void)xEventGroupSetBits(_handle, status_bit(Status::OK));
+  return Status::OK;
+}
 
 /* ==================== */
+
 /* ==================== 查询与等待 ==================== */
 
 
@@ -136,6 +171,12 @@ bool EventState::running(void) const
   return is_ready() && ((xEventGroupGetBits(_handle) & RUNNING_BIT) != 0U);
 }
 
+/** @brief 已记录的错误码位图 */
+uint32_t EventState::error_bits(void) const
+{
+  return (_handle == nullptr) ? 0U : (static_cast<uint32_t>(xEventGroupGetBits(_handle)) & ERROR_MASK);
+}
+
 /** @brief 已记录的最小错误码；按位号从小到大扫，取到的即枚举值最小的那个 */
 Status EventState::error_code(void) const
 {
@@ -143,9 +184,7 @@ Status EventState::error_code(void) const
   {
     return Status::NOT_INIT;
   }
-
-  // 位号即枚举值：从 1 扫到 STATUS_MAX - 1（bit 0 是 OK 位，不算错误）
-  const EventBits_t bits = xEventGroupGetBits(_handle);
+  const uint32_t bits = error_bits();
   for (uint32_t value = 1U; value < STATUS_MAX; ++value)
   {
     if ((bits & (1U << value)) != 0U)

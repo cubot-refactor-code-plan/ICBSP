@@ -11,10 +11,31 @@
 #include "board_instances.hpp"
 #include "hardware_config.h"
 
-#if SYS_TASK_ENABLE
-
 // 维护周期：Online 计时、CAN 恢复、UART 巡检统一按这个节拍
 constexpr uint32_t SYS_TASK_PERIOD_MS = 10U;
+
+static_assert(CAN_BUSOFF_RETRY_MS >= SYS_TASK_PERIOD_MS, "hardware_config.h: CAN_BUSOFF_RETRY_MS 不能短于 sys_task 的 10 ms 节拍");
+
+extern "C"
+{
+  volatile SysTaskStats sys_task_stats = {};
+}
+
+namespace
+{
+// 报告回调与周期：任务侧随时可改，sys_task 每周期读一次（两个字分开读，最多错一个周期，无害）
+SystemReportHook volatile report_hook          = nullptr;
+volatile uint32_t         report_period_cycles = 0U;
+} // namespace
+
+extern "C" void system_set_report_hook(SystemReportHook hook, uint32_t period_ms)
+{
+  const uint32_t cycles = period_ms / SYS_TASK_PERIOD_MS;
+  report_period_cycles  = (cycles == 0U) ? 1U : cycles;
+  report_hook           = hook;
+}
+
+#if SYS_TASK_ENABLE
 
 
 extern "C" void sys_task(void *argument)
@@ -23,21 +44,24 @@ extern "C" void sys_task(void *argument)
   static_assert(configTICK_RATE_HZ == 1000U,
                 "sys_task requires a 1 kHz FreeRTOS tick");
 
-  TickType_t wake_time = xTaskGetTickCount();
-  uint16_t   count     = 0U;
+  TickType_t wake_time   = xTaskGetTickCount();
+  uint32_t   report_cnt  = 0U; // 距上次报告的周期数
+  uint32_t   window_cnt  = 0U; // 平均值窗口内的周期数
+  uint64_t   window_sum  = 0U; // 平均值窗口内的耗时和 (µs)
+  constexpr uint32_t AVG_WINDOW = 1000U / SYS_TASK_PERIOD_MS;
 
   vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1000));
   for (;;)
   {
-    ++count;
-
     // 本轮计时基准（无状态，首次结果丢弃）
     uint32_t mark = 0U;
     (void)bsp_dwt.get_delta_s(&mark);
 
 #  if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
-    // CAN 硬件 Bus-Off 自恢复：按板级实例列表直接展开
-#    define X(name) (void)name.service_recovery();
+    // CAN：Bus-Off 自恢复 + 发送兜底（软件缓冲有帧、TX-FIFO-EMPTY 中断却关着时补发，N27）
+#    define X(name)                   \
+      (void)name.service_recovery(); \
+      (void)name.tx_recover();
     BSP_CAN_INSTANCES(X)
 #    undef X
 #  endif
@@ -54,17 +78,31 @@ extern "C" void sys_task(void *argument)
     // 在线情况更新
     (void)Online::update();
 
-    // 每 5 s 打一次，避免打印本身占掉巡检时间
-    if (count == 500U)
+    // 耗时统计（不含报告回调本身）
+    const uint32_t cost_us  = static_cast<uint32_t>(bsp_dwt.get_delta_s(&mark) * 1000000.0);
+    sys_task_stats.cycles  = sys_task_stats.cycles + 1U;
+    sys_task_stats.last_us = cost_us;
+    if (cost_us > sys_task_stats.max_us)
     {
-      const double uptime_s = bsp_dwt.get_time_s();
+      sys_task_stats.max_us = cost_us;
+    }
+    window_sum = window_sum + cost_us;
+    window_cnt = window_cnt + 1U;
+    if (window_cnt >= AVG_WINDOW)
+    {
+      sys_task_stats.avg_us = static_cast<uint32_t>(window_sum / window_cnt);
+      window_sum            = 0U;
+      window_cnt            = 0U;
+    }
 
-      print_uart("[sys] time=%us cycle=%uus\r\n",
-                 static_cast<unsigned>(uptime_s),
-                 static_cast<unsigned>(bsp_dwt.get_delta_s(&mark) * 1000000.0));
-
-      (void)uptime_s; // 宿主把 print_uart 关成 ((void)0) 时，参数不求值，这里显式消费掉
-      count = 0U;
+    // 周期报告：宿主用 system_set_report_hook() 接上（例如打印到调试串口），库本身不打印
+    const SystemReportHook hook = report_hook;
+    report_cnt                  = report_cnt + 1U;
+    if (hook != nullptr && report_cnt >= report_period_cycles)
+    {
+      report_cnt               = 0U;
+      const SysTaskStats snap = {sys_task_stats.cycles, sys_task_stats.last_us, sys_task_stats.max_us, sys_task_stats.avg_us};
+      hook(&snap);
     }
 
     vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(SYS_TASK_PERIOD_MS));

@@ -50,14 +50,19 @@ enum class Status : uint8_t { OK, BUSY, TIMEOUT, FULL, IO_ERROR, BAD_ARG, NOT_IN
 | --- | --- |
 | `Status init()` | 建事件组；未 init 时其余接口安全返回 |
 | `Status set_parent(EventState &parent)` | 把子系统挂到父状态上 |
-| `Status complete_init()` | 初始化阶段结束：有 `init_error` 就返回该错误 |
-| `Status error(Status)` | 运行期错误，**向上传播**到父节点 |
-| `Status init_error(Status)` | 初始化失败登记（不立即停，等 `complete_init()` 统一查） |
+| `Status complete_init()` | 初始化阶段结束：置运行位；有过 `init_error` 就返回 `NOT_SUPPORTED`、不置位 |
+| `Status error(Status)` | 运行期错误：只记码，不动运行位，**向上传播**到父节点 |
+| `Status init_error(Status)` | 初始化失败：记码 + 置粘滞失败位 + 清运行位，向上传播。**只在初始化期有效**：本实例已在运行时降级成 `error()`，返回 `NOT_SUPPORTED`（运行期的错误不能让系统停摆） |
+| `Status clear_error(Status)` / `Status clear_errors()` | 清一个 / 全部错误码；只清本实例、**不传播**，不动失败位与运行位 |
 | `bool is_ready()` / `bool running()` | 阶段查询 |
-| `Status error_code()` | 取当前错误码 |
+| `Status error_code()` | 未清的错误码里**枚举值最小**的那个（不是最近一次）；没有错误返回 `OK` |
+| `uint32_t error_bits()` | 未清的错误码位图（`status_bit()` 掩码） |
 | `void wait_running()` | 阻塞到运行位；**初始化失败时删除当前任务** |
 
 父子关系只用于「错误向上传播」，**不聚合 running**：子系统 running 不代表父级 running。
+
+错误的生命周期：`error()` / `init_error()` 记下的码一直保留（粘滞），直到维护者调 `clear_error()`；
+清子节点不会清父节点（父节点上的同一个码可能还来自别的子节点）。初始化失败位永不清除。
 
 业务任务的标准开头：
 
@@ -87,8 +92,8 @@ public:
 ```
 
 `sys_task` 每 10 ms 调一次 `Online::update()`（静态方法，内部遍历链表、用无符号差值比较 tick，
-回绕安全）刷新所有节点状态。**注意**：对象析构会从链表摘除，若要动态创建/销毁，
-必须与 `Online::update()` 互斥（通常做法是全部在 `board_init()` 前建好，运行期不销毁）。
+回绕安全）刷新所有节点状态。遍历时挂起调度器、每个节点单独进出一次临界区，关中断的时间不随节点数增长。
+对象只能在任务里构造 / 析构（析构从链表摘除；`update()` 挂着调度器，任务里的增删不会和遍历交叠），不能在 ISR 里析构。
 
 ---
 
@@ -100,7 +105,7 @@ public:
 using Callback = Status (*)(void *context, const CanRxMsg &rx);
 
 static CanRxNodeT *regist(CanT &can, uint32_t can_id, Callback cb, void *ctx = nullptr,
-                          uint32_t id_type = FDCAN_STANDARD_ID);
+                          uint32_t id_type = FDCAN_STANDARD_ID, uint16_t dlc_mask = CAN_DLC_MASK_8);
 static Status      unregist(CanT &can, CanRxNodeT *node);
 static void        freeze();                       // 运行后冻结注册
 static bool        dispatch(CanT &can, const CanRxMsg &rx);  // 有节点消费返回 true
@@ -108,17 +113,25 @@ static bool        dispatch(CanT &can, const CanRxMsg &rx);  // 有节点消费�
 
 - 在**初始化阶段**（`board_init()`）注册，同一 CAN + 帧类型 + ID 不允许重复
 - `dispatch()` 由 `can_rx_task` 调用，回调里要短、不能阻塞，`rx` 只在回调期间有效
-- 返回 `false` 表示没人认领，帧进回退缓冲，可通过 `BspCan::receive()` 自己取
+- `dlc_mask`：接受的数据长度位图（第 n 位 = DLC n），默认只收 8 字节帧，`CAN_DLC_MASK_ANY` 收 0~8；长度不符当作没人认领
+- 返回 `false` 表示没人认领：计入 `diagnostics.rx_unclaimed`，有回退缓冲（`CAN_RX_RETURN_FRAMES > 0`）就放进去，可通过 `BspCanT::receive()` 自己取
 
 ### 发送：`CanTxNodeT<CanT>`
 
 ```cpp
-Status filldata(uint8_t data[], uint8_t slot = 0);  // 往聚合缓冲的某个槽位填 8 字节
-Status init();
+static CanTxNodeT *regist(CanT &can, uint32_t can_id, uint8_t division = 1, uint8_t slot = 0,
+                          uint32_t id_type = FDCAN_STANDARD_ID);
+Status filldata(uint8_t data[], uint8_t slot = 0);  // 往聚合缓冲的某个槽位填 8 / division 字节
+Stats  get_stats() const;                          // sent / partial_sends / heartbeat_sends / expired
 ```
 
-`can_tx_task` 每 1 ms 把同一 CAN 上所有节点按槽位聚合成一帧发出，并做两件事：
-保底心跳（100 ms 没新指令也要发）与指令有效期（超过 100 ms 的旧指令视为失效）。
+`can_tx_task` 每 1 ms 检查一次，满足任一条件就把这一帧发出：
+- **凑齐即发**：所有“有效”槽位都重新填过（过期的、注册了却从没填过的槽位不算）；
+- **凑不齐时限**：有槽位填了新数据，等了 `CAN_TX_GATHER_MS` 还没凑齐（计入 `partial_sends`，大于 0 说明同帧设备的刷新节拍不一致）；
+- **保底心跳**：`CAN_TX_HEARTBEAT_MS` 内没发过（计入 `heartbeat_sends`）。
+
+槽位 `CAN_CMD_EXPIRE_MS` 没被刷新就清零并标为过期；槽位全部注销的节点不再发送。
+发送走 `send_latest()`：同 ID 的上一帧还没发出去时这一帧不入队、下个周期发最新内容，所以总线被占满时一个节点最多在驱动里占一帧。
 
 ---
 
@@ -144,7 +157,7 @@ void fault_on_malloc_failed(void);
 | 现象 | 原因 |
 | --- | --- |
 | 业务任务一直不跑 | 前面某步 `init_error`，`system_start()` 断言停机；或忘了调 `wait_running()` 前的 `system_start()` |
-| `regist()` 返回 `nullptr` | 同一 CAN + ID 重复注册，或注册发生在 `freeze()` 之后 |
+| `regist()` 返回 `nullptr` | 同一 CAN + ID 重复注册，或注册发生在 `freeze()` 之后（运行态之后注册只返回失败，不影响系统运行） |
 | 设备一直判离线 | 回调里没调 `refresh_task()` / `refresh_isr()`，或 `timeout_gap` 比实际帧间隔小 |
 | 复位后读不到上次的故障 | 链接脚本缺 `.noinit`，或该段被 `NOLOAD` 之外的方式初始化了 |
 | 错误码一直 OK 但系统没起来 | 子系统 `set_parent()` 前就 `error()`，父节点收不到 |

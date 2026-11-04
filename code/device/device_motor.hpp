@@ -26,6 +26,11 @@
 #ifndef __DEVICE_MOTOR_HPP__
 #define __DEVICE_MOTOR_HPP__
 
+#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+
+// 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
+#ifdef HAL_TIM_MODULE_ENABLED
+
 #include "bsp_encoder.hpp" // 测速反馈
 #include "bsp_pwm.hpp"     // H 桥两路输出
 #include "pid.hpp"         // 速度环
@@ -202,5 +207,7 @@ private:
 
   /* ==================== */
 };
+
+#endif // HAL_TIM_MODULE_ENABLED
 
 #endif // __DEVICE_MOTOR_HPP__

@@ -1,3 +1,8 @@
+#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+
+// 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本文件不参与编译
+#ifdef HAL_TIM_MODULE_ENABLED
+
 #include "device_servo.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep (configTICK_RATE_HZ)
@@ -302,3 +307,5 @@ void DeviceServo::_write_pulse(void)
 }
 
 /* ==================== */
+
+#endif // HAL_TIM_MODULE_ENABLED
