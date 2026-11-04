@@ -19,9 +19,10 @@
 
 ### 1.1 UART 回填（保留 fork 接口，内部换成本仓库的收发状态机）
 
-- [ ] 修 N1~N12：`_tx_write_lock` + 中断不写流缓冲区、FIFO、RX 流缓冲 2 倍、IDLE 重算、按进度判卡死、先中止再结算、DMA 句柄修复 + NVIC 保护、运行中 re-init、`ms_to_ticks()`、DMA / 可达性检查、RS485 软件 DE、在途长度时序（对比评估 C12 表格有两边的位置）
-- [ ] **F2** 调用 HAL 之前先置 `_tx_chunk_active`，失败再改回（评审 F2）
-- [ ] **BspUart 接收改为 DMA 循环模式**：直接在回填后的实现上做（2026-10-17 记录，原文如下；文中路径、行为指 STM32_BSP 的旧实现）
+- [x] 修 N1~N12：`_tx_write_lock` + 中断不写流缓冲区、FIFO、RX 流缓冲 2 倍、IDLE 重算、按进度判卡死、先中止再结算、DMA 句柄修复 + NVIC 保护、运行中 re-init、`ms_to_ticks()`、DMA / 可达性检查、RS485 软件 DE、在途长度时序（对比评估 C12 表格有两边的位置）
+  - 2026-11-04 完成（N11 按“硬件设计没问题就不该有软件 DE”的决定**不恢复**，RS485 只支持硬件 DE；N4 在循环 DMA 下不再需要）。改动逐项见宿主 `docs/bsp_test/uart_backfill_2026-11-04.md`。
+- [x] **F2** 调用 HAL 之前先置 `_tx_chunk_active`，失败再改回（评审 F2）
+- [x] **BspUart 接收改为 DMA 循环模式**：直接在回填后的实现上做（2026-10-17 记录，原文如下；文中路径、行为指 STM32_BSP 的旧实现）
 
   **为什么要改**：现在的接收是 DMA Normal 模式 + `HAL_UARTEx_ReceiveToIdle_DMA()`，每次 IDLE / 缓冲写满都由 HAL 停 DMA、库再重新启动。
   这条路径在实机测试（`docs/bsp_test/`）里暴露了一串问题，前三个已在库里打补丁，第四个只能靠配置缓解：
@@ -47,9 +48,12 @@
   - 改完在宿主工程（测试代码在宿主 `app/test/`）按 `docs/bsp_test/` 全部用例回归，**Debug 与 -O2（RelWithDebInfo）各跑一遍**，并把 TIM8 优先级改回 15 验证不再卡死。
   - （2026-11-03 补充）把 TIM8 改回 15 之前，先完成 1.4 的 A3：BMI088 在调度器启动前用 `HAL_Delay()`，时基优先级 ≥ 5 时会卡在 `board_init()`。
 
-- [ ] **I1** 改成 header-only；恢复 `HAL_UART_MODULE_ENABLED` 保护（N24）
-- [ ] 回填时核对 **N31**：`tx_recover()` 的中止 + 续发要持 `_tx_lock`
-- [ ] 回填完马上跑 `docs/bsp_test/` 的 UART / RS485 用例（Debug 与 -O2），确认 10-17 的修复都回来了
+- [x] **I1** 改成 header-only；恢复 `HAL_UART_MODULE_ENABLED` 保护（N24）
+- [x] 回填时核对 **N31**：`tx_recover()` 的中止 + 续发要持 `_tx_lock`
+- [x] 回填完马上跑 `docs/bsp_test/` 的 UART / RS485 用例（Debug 与 -O2），确认 10-17 的修复都回来了
+  - 2026-11-04：记录见宿主 `docs/bsp_test/uart_backfill_2026-11-04.md`。顺带修了测试时钟 `us_now()` 每 7.8 s 回绕一次的错误（R03 偶发“超时”与 10-17 记录里 -O2 下未定位的 1/1000 超时都是它）。
+  - Debug 37 / 37、-O2 39 / 39（含 U14 / R06 各 5 分钟浸泡；U14 双向零丢失、零 DMA 错误，10-17 时这里丢 124 帧）。
+  - TIM8 改回 15 的验证没做：要先完成 1.4 的 A3（见 1.4 新增的一条）。
 
 ### 1.2 CAN 回填（保留 fork 的 `BspCanT<RX, TX>`、re-init 复位回滚、诊断计数、TX-empty 动态开关、ErrorStatusCallback、删 `CanMode`、ms 超时、`const` data）
 
@@ -65,10 +69,11 @@
 ### 1.3 fork 引入的架构问题
 
 - [ ] **N13** BSP `init()` 校验自己在 X-macro 列表里（不在就 `BAD_ARG`）；SPI 同句柄重复检测
+  - UART 部分已在 1.1 做完（`bsp_uart_is_listed()`，清单外或同句柄重复 → `BAD_ARG`）；CAN / SPI 待做
 - [ ] **N14** sys_task 去掉 `print_uart`（换成 Q5 的计数 + 回调）
 - [ ] **N15** 清理摆设宏：`CAN_BUSOFF_RETRY_MS` 接回、`UART_ENABLE_FIFO` 恢复作用、删 `CAN_RX_QUEUE_FRAMES` / `CAN_RX_RETURN_FRAMES` / `CAN_TX_QUEUE_FRAMES`
 - [ ] **N16** 运行期 `regist()` 不调 `init_error()`；EventState 传播不清 RUNNING
-- [ ] **N24** encoder / servo / motor / r9ds / emmv5 / pwm / uart 全部补 HAL 模块保护
+- [ ] **N24** encoder / servo / motor / r9ds / emmv5 / pwm 补 HAL 模块保护（uart 已在 1.1 恢复）
 - [ ] **N25** `integrate.py` 不再生成强定义 `StartDefaultTask`（检查 As weak，否则写进 USER CODE 段转调）
 - [ ] `.dma_buffer.<变量名>` 约定封装成宏（`ICBSP_DMA_BUFFER(name)`）
 - [ ] **N30** 库占用的 HAL 回调末尾转调弱函数 `icbsp_unhandled_*()`，让宿主自己的同类外设也能收到回调
@@ -82,6 +87,7 @@
 - [ ] **F4** PID 积分上限在计算时取实际值（`i_max == 0` 时跟随 `out_max`），链式配置和 Config 配置语义一致（评审 F4）
 - [ ] **F5** DjiMotor 提供 `snapshot()`，去掉没用的互斥锁；R9DS 同样处理（评审 F5）
 - [ ] **A3** BMI088 调度器启动前改用 DWT 忙等（fork 已有 `bsp_dwt`），不再依赖 HAL 时基中断优先级。**1.1 的 DMA 循环模式要把 TIM8 改回 15 验证，必须先完成这一项。**（评审 A3）
+- [ ] A3 完成后：CubeMX 把 TIM8 时基优先级改回 15，Debug 与 -O2 跑 UART / RS485 全部用例 + U14 浸泡，确认不再卡死（1.1 的循环 DMA 已去掉串口中断里的 `HAL_DMA_Abort()`）
 - [ ] **A2** 库任务默认优先级按 `configMAX_PRIORITIES` 取，加 `static_assert`（含 BMI088；fork 的 sys 是 +6，与 BMI088 同级）（评审 A2）
 - [ ] **A4** DMA 可达性按 DMA1/2 和 BDMA 分别判断；合并两份 `dma_reachable`（评审 A4）
 - [ ] **A5** 新增 `fault_on_exception()` 和 HardFault / MemManage / BusFault 的 USER CODE 片段（评审 A5）
