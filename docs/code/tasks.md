@@ -49,14 +49,14 @@ static_assert(configTICK_RATE_HZ == 1000U, "sys_task requires a 1 kHz FreeRTOS t
    Online::update();           // ③ 在线计时：超过 timeout_gap 判离线
 ```
 
-另外用 DWT 统计本轮耗时，每 **200 个周期（2 s）** 打印一次：
+另外用 DWT 统计本轮耗时，写进全局 `sys_task_stats`（`cycles` / `last_us` / `avg_us`（最近 1 s）/ `max_us`），
+调试器里直接读。库本身**不打印**，也不引用宿主的任何宏（对比评估 N14）；要打印就由宿主接回调：
 
-```text
-[sys] 10.0 ms/tick, max 120 us
+```cpp
+system_set_report_hook(app_sys_report, 5000U);   // 每 5 s 在 sys_task 里调一次，参数是统计快照
 ```
 
-打印走宿主 `board_cfg.hpp` 的 `print_uart(...)`。**打印本身有开销**（尤其浮点），
-所以刻意不是每周期打。
+回调跑在 `sys_task` 的栈上：打印要留够 vsnprintf 的栈，也不要阻塞太久（会推迟 CAN 恢复与串口巡检）。
 ---
 
 ## 3. can_rx_task：按 ID 分发（1 ms）

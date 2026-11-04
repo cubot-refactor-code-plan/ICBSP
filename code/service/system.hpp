@@ -26,6 +26,8 @@
 #ifndef __SYSTEM_HPP__
 #define __SYSTEM_HPP__
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 #include "status.hpp"
 
@@ -49,6 +51,35 @@ extern "C"
    * @note 有初始化失败记录（sys_state.init_error）时断言停机，fault_record 记下本次调用位置。
    */
   void system_start(void);
+
+  /**
+   * @brief sys_task 的循环耗时统计（库内计数，不依赖宿主的打印宏，对比评估 N14 / Q5）
+   * @note 单位 µs，由 DWT 计时；只有 sys_task 写。调试器里可以直接读全局变量 sys_task_stats。
+   */
+  typedef struct
+  {
+    uint32_t cycles;  ///< 已运行的维护周期数（每 10 ms 一次）
+    uint32_t last_us; ///< 最近一个周期的维护耗时
+    uint32_t max_us;  ///< 启动以来的最大维护耗时
+    uint32_t avg_us;  ///< 最近 1 s（100 个周期）的平均维护耗时，每 1 s 更新一次
+  } SysTaskStats;
+
+  /** @brief sys_task 的循环耗时统计（定义在 tasks/sys_task.cpp；SYS_TASK_ENABLE = 0 时恒为 0） */
+  extern volatile SysTaskStats sys_task_stats;
+
+  /**
+   * @brief 周期报告回调：在 sys_task 里调用，参数是当前统计的快照
+   * @note 跑在 sys_task 的栈上（SYS_TASK_STACK）；回调里打印要留够 vsnprintf 的栈，不要阻塞太久（会推迟 CAN 恢复和串口巡检）。
+   */
+  typedef void (*SystemReportHook)(const SysTaskStats *stats);
+
+  /**
+   * @brief 设置周期报告回调（默认没有，库自己不打印任何东西）
+   * @param hook      回调；nullptr = 取消
+   * @param period_ms 调用周期，按 10 ms 取整，最小 10 ms
+   * @note 任何时候都可以调用（例如 system_init() 之后，在 board_init() 里把它接到调试串口的 printf）。
+   */
+  void system_set_report_hook(SystemReportHook hook, uint32_t period_ms);
 
   /** @brief 系统维护任务（由 system_init() 创建，业务代码不要直接调用） */
   void sys_task(void *argument);

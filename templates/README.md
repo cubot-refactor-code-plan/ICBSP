@@ -10,7 +10,7 @@
 | `user/board/hardware_config.h` | `user/board/` | 必选：唯一配置源，所有宏、功能开关与范围检查都在这里 |
 | `user/board/board_cfg.*` | `user/board/` | `board_cfg.hpp` 放 inline 外设实例，`board_cfg.cpp` 放 `board_init()` |
 | `user/board/board_instances.hpp` | `user/board/` | `BSP_CAN_INSTANCES` / `BSP_UART_INSTANCES` / `BSP_SPI_INSTANCES` 实例名清单，库的 HAL 回调与任务按它展开 |
-| `user/app/app_main.*` | `user/app/` | `app_init()` 与 `StartDefaultTask()` |
+| `user/app/app_main.*` | `user/app/` | `app_init()` 与默认任务体 `app_default_task()`（`freertos.c` 的 `StartDefaultTask()` 在 USER CODE 段里转调） |
 | `user/app/app_task.hpp` | `user/app/` | 示例任务声明（heartbeat / monitor） |
 | `user/app/task/demo_task.cpp` | `user/app/task/` | 示例任务实现，不自动创建 |
 | `vscode/settings.json`、`vscode/tasks.json`、`vscode/launch.json` | 宿主 `.vscode/` | 编译 / 烧录任务与调试配置，宿主没有才生成；有就只补缺失项 |

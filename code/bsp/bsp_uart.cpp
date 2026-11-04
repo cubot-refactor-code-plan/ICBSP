@@ -50,6 +50,10 @@ extern "C"
   }
     BSP_UART_INSTANCES(X)
 #undef X
+    else
+    {
+      icbsp_unhandled_uart_rx_event(huart, Size);
+    }
     portYIELD_FROM_ISR(woken);
   }
 
@@ -67,6 +71,10 @@ extern "C"
   }
     BSP_UART_INSTANCES(X)
 #undef X
+    else
+    {
+      icbsp_unhandled_uart_tx_cplt(huart);
+    }
     portYIELD_FROM_ISR(woken);
   }
 
@@ -83,6 +91,25 @@ extern "C"
   }
     BSP_UART_INSTANCES(X)
 #undef X
+    else
+    {
+      icbsp_unhandled_uart_error(huart);
+    }
+  }
+
+  // 清单外串口的回调转调：默认空，宿主定义同名强函数即可（对比评估 N30）
+  __attribute__((weak)) void icbsp_unhandled_uart_rx_event(UART_HandleTypeDef *huart, uint16_t size)
+  {
+    (void)huart;
+    (void)size;
+  }
+  __attribute__((weak)) void icbsp_unhandled_uart_tx_cplt(UART_HandleTypeDef *huart)
+  {
+    (void)huart;
+  }
+  __attribute__((weak)) void icbsp_unhandled_uart_error(UART_HandleTypeDef *huart)
+  {
+    (void)huart;
   }
 }
 

@@ -96,7 +96,7 @@ inline BspCanT<16, 16> bsp_can1(
 /**
  * USART1：调试串口，DMA 收发，115200（`print_uart` 用的就是它）
  */
-inline __attribute__((section(".dma_buffer.bsp_uart1"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
+inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
   {.huart    = &huart1,
    .mode     = UartDir::TxRx,
    .baudrate = 115200U});

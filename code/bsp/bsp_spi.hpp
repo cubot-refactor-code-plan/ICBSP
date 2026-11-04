@@ -19,7 +19,7 @@
  *
  *   // 1) 总线实例写在板级配置里：句柄 + 是否用 DMA + DMA 阈值（字节）。
  *   //    用 DMA 时实例必须放进 .dma_buffer（实例里有弹跳缓冲，H7 的 DMA1 / DMA2 访问不到 DTCM）
- *   __attribute__((section(".dma_buffer"))) BspSpi bsp_spi2({&hspi2, true, 16U});
+ *   inline ICBSP_DMA_BUFFER(bsp_spi2) BspSpi bsp_spi2({.hspi = &hspi2, .use_dma = true, .dma_threshold = 16U}); // board_cfg.hpp
  *
  *   // 2) 片选设备：总线 + {片选端口, 片选引脚, 读标志位, 读时地址后的空字节数}
  *   BspSpiDevice bmi088_acc_spi(bsp_spi2, {GYRO_ACC_CS_GPIO_Port, GYRO_ACC_CS_Pin, 0x80U, 1U});
@@ -70,9 +70,27 @@
 #include "semphr.h"   // IWYU pragma: keep（总线锁、完成信号量）
 
 #include "bsp_gpio.hpp"       // 片选引脚
+#include "bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
 #include "hardware_config.h" // 唯一配置源（功能开关、队列深度等）
 #include "status.hpp"         // 统一状态码
 
+
+/**
+ * @brief 实例是否在 board_instances.hpp 的 BSP_SPI_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_spi.cpp）
+ * @note HAL 回调只认清单里的实例：init() 用它把“漏写清单 / 两个实例绑同一句柄”变成 BAD_ARG（对比评估 N13）。
+ */
+bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi);
+
+/**
+ * @brief 清单外 SPI 的回调转调（弱函数，默认什么也不做；实现在 bsp_spi.cpp）
+ * @note 库占用了 HAL_SPI_TxRxCpltCallback / HAL_SPI_ErrorCallback，宿主不能再定义它们；
+ *       不在 BSP_SPI_INSTANCES 里的 SPI 的这两个回调转到下面两个函数。
+ */
+extern "C"
+{
+  void icbsp_unhandled_spi_txrx_cplt(SPI_HandleTypeDef *hspi);
+  void icbsp_unhandled_spi_error(SPI_HandleTypeDef *hspi);
+}
 
 /* ==================== 总线 ==================== */
 
@@ -110,27 +128,33 @@ public:
   /* ==================== */
   /* ==================== 构造与初始化 ==================== */
 
-  /** @brief 构造函数（只做赋值，FreeRTOS 资源创建推迟到 init()） */
-  BspSpi(const Config &cfg);
+  /** @brief 只绑定配置（constexpr：board_cfg.hpp 的 inline 全局实例要常量初始化；FreeRTOS 资源推迟到 init()） */
+  constexpr BspSpi(const Config &cfg) : _hspi(cfg.hspi), _use_dma(cfg.use_dma), _dma_threshold(cfg.dma_threshold)
+  {
+  }
 
-  /** @brief 析构：释放锁与信号量 */
-  ~BspSpi();
+  /** @brief 平凡析构（全局实例永不析构）；需要释放资源时显式调 deinit() */
+  ~BspSpi() = default;
 
   // 两个对象绑同一句柄会让 HAL 回调分不清是谁
   BspSpi(const BspSpi &)            = delete;
   BspSpi &operator=(const BspSpi &) = delete;
 
   /**
-   * @brief 检查配置，创建总线锁（互斥量，带优先级继承）与 DMA 完成信号量
+   * @brief 检查配置，（重新）创建总线锁（互斥量，带优先级继承）与 DMA 完成信号量（可重复调用，和 CAN / UART 一致）
    *
    * @note 在初始化阶段调用（system_init() 之后、system_start() 之前），先于挂在它上面的 BspSpiDevice::init()。
-   *       不能重复调用（运行中重建锁会让正在等锁的任务失效）。
+   *       重复调用时先 deinit()（中止进行中的传输、释放旧资源、清诊断计数）再重建；
+   *       运行中重新调用时不能有任务正在使用或等待本总线（旧的锁会被删掉）。
    *
    * @return OK=成功；IO_ERROR=资源创建失败；
-   *         BAD_ARG=句柄为空、use_dma 却没链接 RX / TX DMA、
-   *                 use_dma 却不在 DMA 可达的内存里（没放进 .dma_buffer）、已经 init 过
+   *         BAD_ARG=句柄为空、实例不在 BSP_SPI_INSTANCES 里或清单里另有实例绑了同一句柄、
+   *                 use_dma 却没链接 RX / TX DMA、use_dma 却不在 DMA 可达的内存里（没放进 .dma_buffer）
    */
   Status init();
+
+  /** @brief 中止进行中的传输并释放锁与信号量；之后 is_init() 为 false，传输接口返回 NOT_INIT */
+  void deinit();
 
   /** @brief 是否已 init() 成功 */
   bool is_init() const;
@@ -218,8 +242,8 @@ private:
   volatile uint32_t _error_cnt        = 0; ///< 错误次数
   volatile uint32_t _lock_timeout_cnt = 0; ///< 等锁超时次数
 
-  uint8_t _tx_bounce[SPI_DMA_BUFFER_SIZE]; ///< DMA 发送弹跳缓冲（也用来放 0xFF 填充）
-  uint8_t _rx_bounce[SPI_DMA_BUFFER_SIZE]; ///< DMA 接收弹跳缓冲（也用来丢弃收到的字节）
+  uint8_t _tx_bounce[SPI_DMA_BUFFER_SIZE] = {}; ///< DMA 发送弹跳缓冲（也用来放 0xFF 填充）
+  uint8_t _rx_bounce[SPI_DMA_BUFFER_SIZE] = {}; ///< DMA 接收弹跳缓冲（也用来丢弃收到的字节）
 
   /* ==================== */
 };

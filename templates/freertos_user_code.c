@@ -22,6 +22,11 @@ void vApplicationMallocFailedHook(void)
 }
 /* USER CODE END 5 */
 
+/* StartDefaultTask() 函数体里（CubeMX 删掉了 defaultTask 就不用这一段）： */
+  /* USER CODE BEGIN StartDefaultTask */
+  app_default_task(argument); /* 默认任务的任务体在 app_main.cpp，不返回 */
+  /* USER CODE END StartDefaultTask */
+
 /* MX_FREERTOS_Init() 里： */
   /* USER CODE BEGIN Init */
   app_init(); /* 库入口 → 板级初始化 → 业务任务 → 放行，见 app_main.cpp */

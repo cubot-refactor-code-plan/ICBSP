@@ -43,7 +43,7 @@ configASSERT(bsp_can1.init() == Status::OK);
 DMA 用到的实例（`BspUartT` 在 dma 模式、`BspSpi` 开 DMA）必须放 `.dma_buffer`：
 
 ```cpp
-inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(...);
+inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(...);
 ```
 
 原因：DMA1/DMA2 访问不到 ITCM/DTCM，只能访问 AXI SRAM（D1）。段必须是**可加载**的
@@ -62,16 +62,21 @@ inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
 
 | 方法 | 说明 |
 | --- | --- |
-| `Status init()` / `void deinit()` | 启动 FDCAN、开中断、建队列 |
-| `bool is_ready() const` | 是否已初始化且未停机 |
-| `Status send(uint32_t std_id, const uint8_t *data)` | 标准帧，8 字节 |
-| `Status receive(CanRxMsg *msg, uint32_t timeout_ms)` | 从**回退缓冲**取未被节点认领的帧 |
-| `Status read_raw(CanRxMsg *msg, uint32_t timeout_ms)` | 接收任务专用：不经过回退缓冲 |
-| `bool return_frame(const CanRxMsg &msg)` | 认领失败时把帧还回去 |
-| `Status service_recovery()` | `sys_task` 周期调用：Bus-Off 后重建 |
-| `bool tx_recover()` | 发送卡死时强制恢复 |
+| `Status init()` / `void deinit()` | 停外设、清缓冲、按 CubeMX 配置重新启动（可重复调用，失败回滚）；实例不在 `BSP_CAN_INSTANCES` 里或句柄重复 → `BAD_ARG` |
+| `bool is_ready() const` | 构造时是否给了句柄 |
+| `Status send(uint32_t id, const uint8_t *data, uint8_t dlc = 8, uint32_t id_type = FDCAN_STANDARD_ID)` | 标准帧 / 扩展帧，DLC 0~8；非阻塞，**只能在任务里调用** |
+| `Status receive(CanRxMsg *msg, uint32_t timeout_ms)` | `CAN_RX_ENABLE = 1`：取没被节点认领的帧（回退缓冲，`CAN_RX_RETURN_FRAMES = 0` 时返回 `NOT_SUPPORTED`）；`= 0`：取所有收到的帧 |
+| `Status send_latest(...)` | 参数同 `send()`；同 ID 的上一帧还在驱动里时不入队、返回 `BUSY`（周期帧用，发送节点内部就用它） |
+| `Status read_raw(...)` / `bool return_frame(...)` | `can_rx_task` 专用 |
+| `Status service_recovery()` / `bool tx_recover()` | `sys_task` 每 10 ms 调用：Bus-Off 恢复 / 发送兜底 |
 
-`CanRxMsg` = `FDCAN_RxHeaderTypeDef header` + `uint8_t data[8]`；`CanTxMsg` = `std_id` + `data[8]`。
+- `CanRxMsg` = `FDCAN_RxHeaderTypeDef header` + `uint8_t data[8]`（DLC 之后的字节为 0）；`CanTxMsg` = `id` + `id_type` + `dlc` + `data[8]`。
+- 只有头文件；`bsp_can.cpp` 只放 HAL 回调。库占用 `HAL_FDCAN_RxFifo0Callback`、`HAL_FDCAN_TxFifoEmptyCallback`、`HAL_FDCAN_ErrorStatusCallback`，宿主不能再定义；
+  不在 `BSP_CAN_INSTANCES` 里的 FDCAN 的这三个回调转到弱函数 `icbsp_unhandled_fdcan_*()`，宿主定义同名函数即可接收（见下文“清单外外设的回调”）。
+- 远程帧由硬件拒收；DLC > 8 的帧丢弃并计入 `diagnostics.rx_len_drop`。
+- TX 队列模式（CubeMX `TxFifoQueueMode = Queue`）下，同一 ID 的帧保证按发送顺序上线（硬件里已有同 ID 的帧时，下一帧先在软件里等）。
+- **总线上有更高优先级的流量、可能被占满时用 Queue 模式**：FIFO 模式严格按入队顺序发，排在前面的低优先级帧发不出去时，后面更高优先级的帧也只能等；Queue 模式按 ID 优先级发，配合发送节点的 `send_latest()`（一个周期 ID 最多占一个硬件缓冲），高优先级帧总能先发（实测 C06c / C06d）。
+- 诊断：`diagnostics` 的各项计数（`rx_unclaimed`、`rx_return_dropped`、`tx_buf_full`、`tx_stall_recover`、`bus_off_events` 等），含义见 `bsp_can.hpp`。
 
 **队列长度怎么估**：`RX_DEPTH` 是每路 CAN 的接收队列帧数，ISR 写、`can_rx_task` 每 1 ms 取走。
 一条总线上挂 N 个设备、每帧 1 ms 内到达时，16 帧约够 8 个设备同时回包；挂满就加到 32/48。
@@ -79,7 +84,7 @@ inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
 ### BspUartT&lt;Transport, RX_SIZE, TX_SIZE&gt;
 
 ```cpp
-inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
+inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
 ```
 
@@ -105,7 +110,7 @@ inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128
 ### BspSpi / BspSpiDevice
 
 ```cpp
-inline __attribute__((section(".dma_buffer"))) BspSpi bsp_spi2(
+inline ICBSP_DMA_BUFFER(bsp_spi2) BspSpi bsp_spi2(
     {.hspi = &hspi2, .use_dma = true, .dma_threshold = 16U});
 
 inline BspSpiDevice bmi088_acc_spi(bsp_spi2,
@@ -113,9 +118,24 @@ inline BspSpiDevice bmi088_acc_spi(bsp_spi2,
 ```
 
 - `BspSpi` 管总线：`lock()/unlock()` 互斥、`transfer_locked()` 传输；引脚 NSS 必须是**软件**模式
+- `BspSpi` 是 constexpr 构造、平凡析构，和 CAN / UART 一样写成 `board_cfg.hpp` 的 inline 实例；`init()` 可重复调用（先 `deinit()` 再重建，
+  前提是没有任务正在用这条总线），`deinit()` 中止进行中的传输并释放资源。`init()` 核对实例在 `BSP_SPI_INSTANCES` 里、且清单里只有它绑这个句柄，否则 `BAD_ARG`
 - `BspSpiDevice` 管片选与寄存器语义：`read_reg()` / `write_reg()` / `read_reg8()` / `write_reg8()`，
   内部做 `select → 发命令 → dummy → 读 → deselect`
 - `.read_flag`：读命令要或上的位（BMI088 是 `0x80`）；`.read_dummy`：读之前要先发的空字节数
+
+### 清单外外设的回调
+
+库占用了 UART / SPI / FDCAN 的若干 HAL 回调（宿主不能再定义它们）。宿主自己用 HAL 管、不在 `BSP_*_INSTANCES` 清单里的外设，
+这些回调转到下面的弱函数（默认什么也不做），宿主定义同名强函数即可：
+
+| 库占用的回调 | 清单外转到 |
+| --- | --- |
+| `HAL_UARTEx_RxEventCallback` / `HAL_UART_TxCpltCallback` / `HAL_UART_ErrorCallback` | `icbsp_unhandled_uart_rx_event(huart, size)` / `icbsp_unhandled_uart_tx_cplt(huart)` / `icbsp_unhandled_uart_error(huart)` |
+| `HAL_SPI_TxRxCpltCallback` / `HAL_SPI_ErrorCallback` | `icbsp_unhandled_spi_txrx_cplt(hspi)` / `icbsp_unhandled_spi_error(hspi)` |
+| `HAL_FDCAN_RxFifo0Callback` / `HAL_FDCAN_TxFifoEmptyCallback` / `HAL_FDCAN_ErrorStatusCallback` | `icbsp_unhandled_fdcan_rx_fifo0(h, its)` / `icbsp_unhandled_fdcan_tx_fifo_empty(h)` / `icbsp_unhandled_fdcan_error_status(h, its)` |
+
+它们都声明在对应的 `bsp_*.hpp` 里（`extern "C"`）。库没占用的回调（例如 `HAL_UART_RxCpltCallback`、`HAL_SPI_TxCpltCallback`）宿主照常定义。
 
 ### BspPwm
 

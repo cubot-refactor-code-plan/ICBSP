@@ -57,28 +57,43 @@
 
 ### 1.2 CAN 回填（保留 fork 的 `BspCanT<RX, TX>`、re-init 复位回滚、诊断计数、TX-empty 动态开关、ErrorStatusCallback、删 `CanMode`、ms 超时、`const` data）
 
-- [ ] 修 N17~N22：`FDCAN_REJECT_REMOTE`、`TXFQS.TFQF`、按 DLC 拷贝、`send()` 临界区、`receive()` 只读回退缓冲（仅 `CAN_RX_ENABLE = 1`，见 N28）、`CAN_BUSOFF_RETRY_MS` 接回且 Bus-Off 只计一次
-- [ ] **N27** sys_task 加 `tx_recover()`（现在没有任何地方调用它）；`send()` 返回 FULL 前也 `_start_transmission(0)` 踢一次
-- [ ] **N28** `receive()` 按 `CAN_RX_ENABLE` 分开：1 → 只读回退缓冲；0 → 不建回退缓冲，只读原始缓冲
-- [ ] **N29** 发送 MessageBuffer 单读者（任务侧取帧放进临界区，或者只让 ISR 取帧），和 N20 一起改
-- [ ] **N35** 槽位全部注销的发送节点从链表摘除；`service_recovery()` 检查 `xMessageBufferReset` 的返回值
-- [ ] **N23** header-only（连带 DjiMotor、DeviceR9dsT、DeviceEmmv5GroupT 的显式实例化）
-- [ ] **I2** 扩展帧发送、接收节点声明 DLC；**F3** 凑齐即发加时限 + 降频计数；**F6** 回退缓冲可选 / 只计数；F9 其余（`StdFiltersNbr`）
-- [ ] 回填完马上跑 CAN 用例
+- [x] 修 N17~N22：`FDCAN_REJECT_REMOTE`、`TXFQS.TFQF`、按 DLC 拷贝、`send()` 临界区、`receive()` 只读回退缓冲（仅 `CAN_RX_ENABLE = 1`，见 N28）、`CAN_BUSOFF_RETRY_MS` 接回且 Bus-Off 只计一次
+- [x] **N27** sys_task 加 `tx_recover()`（现在没有任何地方调用它）；`send()` 返回 FULL 前也 `_start_transmission(0)` 踢一次
+- [x] **N28** `receive()` 按 `CAN_RX_ENABLE` 分开：1 → 只读回退缓冲；0 → 不建回退缓冲，只读原始缓冲
+- [x] **N29** 发送 MessageBuffer 单读者（任务侧取帧放进临界区，或者只让 ISR 取帧），和 N20 一起改
+- [x] **N35** 槽位全部注销的发送节点从链表摘除；`service_recovery()` 检查 `xMessageBufferReset` 的返回值
+- [x] **N23** header-only（连带 DjiMotor、DeviceR9dsT、DeviceEmmv5GroupT 的显式实例化）
+- [x] **I2** 扩展帧发送、接收节点声明 DLC；**F3** 凑齐即发加时限 + 降频计数；**F6** 回退缓冲可选 / 只计数；F9 其余（`StdFiltersNbr`）
+- [x] 回填完马上跑 CAN 用例
+  - 2026-11-04：记录见宿主 `docs/bsp_test/can_backfill_2026-11-04.md`。Debug：14 / 16（C06c / C06d 为设计限制）；-O2 三组全量 + 5 分钟浸泡：功能用例全部通过，C09 双向 30 万帧零丢失。N35 的 Reset 改为逐帧读空发送缓冲、不再清接收缓冲；顺带修了本次发现的“TX 队列模式下同 ID 乱序”（C06e）。
+- [x] 测试固件堆不够 UART + RS485 + CAN 三组一起跑（2026-11-04 -O2 回归最低空闲堆 160 字节，系统检查 S-* 失败；功能用例全部通过）：CubeMX 把 `configTOTAL_HEAP_SIZE` 从 48 KB 加到 64 KB（需用户确认 CubeMX 生成），或者分组烧录
+  - 2026-11-04 用户确认后加到 64 KB（CubeMX 命令行生成，只改了 `FreeRTOSConfig.h` 一行）
+- [x] 发送节点对同一 ID 只保留最新值（替换而不排队），解决 C06c / C06d 的队头阻塞（10-17 起的设计限制）
+  - 2026-11-04：新增 `BspCanT::send_latest()`，发送节点改用它。队列模式 C06d 20 / 20（0.8 ~ 1.2 ms）；FIFO 模式 C06c 仍 0 / 20（硬件按入队顺序发的固有限制），改为只记录，文档写明“有更高优先级流量时用 Queue 模式”
 
 ### 1.3 fork 引入的架构问题
 
-- [ ] **N13** BSP `init()` 校验自己在 X-macro 列表里（不在就 `BAD_ARG`）；SPI 同句柄重复检测
-  - UART 部分已在 1.1 做完（`bsp_uart_is_listed()`，清单外或同句柄重复 → `BAD_ARG`）；CAN / SPI 待做
-- [ ] **N14** sys_task 去掉 `print_uart`（换成 Q5 的计数 + 回调）
-- [ ] **N15** 清理摆设宏：`CAN_BUSOFF_RETRY_MS` 接回、`UART_ENABLE_FIFO` 恢复作用、删 `CAN_RX_QUEUE_FRAMES` / `CAN_RX_RETURN_FRAMES` / `CAN_TX_QUEUE_FRAMES`
-- [ ] **N16** 运行期 `regist()` 不调 `init_error()`；EventState 传播不清 RUNNING
-- [ ] **N24** encoder / servo / motor / r9ds / emmv5 / pwm 补 HAL 模块保护（uart 已在 1.1 恢复）
-- [ ] **N25** `integrate.py` 不再生成强定义 `StartDefaultTask`（检查 As weak，否则写进 USER CODE 段转调）
-- [ ] `.dma_buffer.<变量名>` 约定封装成宏（`ICBSP_DMA_BUFFER(name)`）
-- [ ] **N30** 库占用的 HAL 回调末尾转调弱函数 `icbsp_unhandled_*()`，让宿主自己的同类外设也能收到回调
-- [ ] **N32** `BspSpi` 改成 constexpr 构造 + 平凡析构 + `deinit()`，`init()` 的重入语义和 CAN / UART 一致
-- [ ] **N36** 阶段 2 默认建树之前，先定 EventState 错误的生命周期（`clear_error()`、`error_code()` 的含义）；`Online::update()` 缩短临界区
+2026-11-04 完成，Debug 与 -O2 全组回归通过（含 SPI / BMI088 与新增服务层组），记录 `docs/bsp_test/arch_1_3_2026-11-04.md`。
+
+- [x] **N13** BSP `init()` 校验自己在 X-macro 列表里（不在就 `BAD_ARG`）；SPI 同句柄重复检测
+  - UART（1.1）、CAN（1.2）、SPI（1.3，`bsp_spi_is_listed()`）都做完；清单里两个实例绑同一句柄也是 `BAD_ARG`
+- [x] **N14** sys_task 去掉 `print_uart`（换成 Q5 的计数 + 回调）
+  - `sys_task_stats`（cycles / last_us / avg_us / max_us）+ `system_set_report_hook(hook, period_ms)`；模板 `app_main.cpp` 每 5 s 打到调试串口
+- [x] **N15** 清理摆设宏：`CAN_BUSOFF_RETRY_MS` 接回、`UART_ENABLE_FIFO` 恢复作用、删 `CAN_RX_QUEUE_FRAMES` / `CAN_RX_RETURN_FRAMES` / `CAN_TX_QUEUE_FRAMES`
+  - 前两项在 1.2 / 1.1 做完；删了 `CAN_RX_QUEUE_FRAMES` / `CAN_TX_QUEUE_FRAMES`；`CAN_RX_RETURN_FRAMES` 在 1.2 已接回代码（回退缓冲深度，0 = 不建），保留；`CAN_BUSOFF_RETRY_MS` 检查改成 ≥ 10（Q5）
+- [x] **N16** 运行期 `regist()` 不调 `init_error()`；EventState 传播不清 RUNNING
+  - 2026-11-04 在 1.2 里做完：`CanTxNodeT::regist()` 冻结后只返回 `nullptr`（`CanRxNodeT` 本来就是这样）；1.3 里 `init_error()` 改成只在初始化期有效（运行后降级成 `error()`，不清 RUNNING，传播到父节点时同样按父节点是否在运行决定）
+- [x] **N24** encoder / servo / motor / r9ds / emmv5 / pwm 补 HAL 模块保护（uart 已在 1.1 恢复）
+  - 编译矩阵（全开 / 四个模块全关 / 各关一个）库目标 0 error、0 warning；对照：去掉 pwm 的保护、关 TIM 时 36 个 error
+- [x] **N25** `integrate.py` 不再生成强定义 `StartDefaultTask`（检查 As weak，否则写进 USER CODE 段转调）
+  - 模板改成 `app_default_task()`；脚本把转调写进 USER CODE StartDefaultTask 段（不论 As weak 与否都成立），As external 时提示。只在本工程上 `--dry-run` 验证过
+- [x] `.dma_buffer.<变量名>` 约定封装成宏（`ICBSP_DMA_BUFFER(name)`，`code/bsp/bsp_dma_buffer.hpp`）
+- [x] **N30** 库占用的 HAL 回调末尾转调弱函数 `icbsp_unhandled_*()`，让宿主自己的同类外设也能收到回调
+  - 8 个：UART rx_event / tx_cplt / error、SPI txrx_cplt / error、FDCAN rx_fifo0 / tx_fifo_empty / error_status；实测 Y05
+- [x] **N32** `BspSpi` 改成 constexpr 构造 + 平凡析构 + `deinit()`，`init()` 的重入语义和 CAN / UART 一致
+  - 弹跳缓冲要 `= {}` 才是常量初始化（测试里的 `constinit` 探针查出来的）；本工程 `bsp_spi2` 改成 `board_cfg.hpp` 的 inline 实例
+- [x] **N36** 阶段 2 默认建树之前，先定 EventState 错误的生命周期（`clear_error()`、`error_code()` 的含义）；`Online::update()` 缩短临界区
+  - 错误码粘滞到 `clear_error()` / `clear_errors()`（只清本实例、不传播、不动失败位）；`error_code()` = 未清错误里枚举值最小的，另有 `error_bits()`；`Online::update()` 挂起调度器遍历、每节点单独临界区
 
 ### 1.4 评审里的已有问题（fork 里同样存在）
 
