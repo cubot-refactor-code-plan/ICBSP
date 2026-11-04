@@ -1,5 +1,7 @@
 # stm32_framework 接口实机测试（2026-10-17）
 
+> **2026-11-04 注明**：本目录是从 STM32_BSP 原样带过来的，记录对应 **STM32_BSP @ 43a34cf 的旧实现**（`BspUart<N>`、实例登记表、`SysFlag*`）；本库现在的 UART / CAN 是另一套实现，不能当作“已实测”。回填（`undo.md` 阶段 1.1 / 1.2）完成后在宿主 MC02_with_submodule 上复测，再更新这里。
+
 > 本目录是宿主工程 `MC02_with_submodule` 的 `docs/bsp_test/` 的副本（2026-10-17，2026-10-28 补 SPI / BMI088）。文中的路径都以**宿主工程根目录**为准：
 > `app/`、`Core/`、`CMakeLists.txt` 指宿主工程，`third_party/stm32-framework/` 即本库。测试代码在宿主工程 `app/test/`，不在本库里。
 
