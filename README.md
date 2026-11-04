@@ -1,5 +1,8 @@
 # stm32-framework
 
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/stm32-framework)[![License](https://img.shields.io/github/license/cubot-refactor-code-plan/stm32-framework.svg)](https://github.com/cubot-refactor-code-plan/stm32-framework/blob/main/LICENSE)
+![](https://img.shields.io/badge/chip-STM32H7xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg) 
+
 面向 **STM32H7 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Protocol、Algorithm 分层，宿主工程通过 git submodule 接入。
 
 - 语言：**C++20**（`inline` 变量、指定初始化器）
@@ -94,8 +97,8 @@ CAN 接收和发送保持两个独立任务，不合并。
 
 ## 已知限制
 
-- BSP 没有运行时登记表，`board_instances.hpp` 必须和 `board_cfg.*` 同步；漏写实例不会报错，但对应中断不会分发。
-- `BspUartT` 的显式实例化在 `bsp_uart.cpp`；新增 Transport / 缓冲大小时要补一行实例化。
+- BSP 没有运行时登记表，`board_instances.hpp` 必须和 `board_cfg.*` 同步。串口实例漏写时 `BspUartT::init()` 返回 `BAD_ARG`；CAN / SPI 实例漏写目前还不报错，只是对应中断不会分发（`undo.md` 1.3 的 N13）。
+- `BspUartT` 只有头文件，任意 Transport / 缓冲尺寸组合都不用在库里补显式实例化。
 
 ## 许可证
 

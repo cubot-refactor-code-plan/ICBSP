@@ -91,12 +91,16 @@ inline __attribute__((section(".dma_buffer"))) BspUartT<uart_mode::dma, 128, 128
 | --- | --- |
 | `Status send(const uint8_t*, size_t, timeout, size_t *written)` | 阻塞到写进流缓冲为止 |
 | `Status printf(const char *fmt, ...)` | 调试打印；浮点需要宿主加 `-u _printf_float` |
-| `Status receive(uint8_t*, size_t, timeout, size_t *received)` | 读一帧（IDLE/TC 切帧后的整段） |
+| `Status receive(uint8_t*, size_t, timeout, size_t *received)` | 读字节流（不保证整帧，切帧是协议层的事） |
 | `bool tx_recover()` / `bool rx_recover()` | 传输卡死后的补救，`sys_task` 调用 |
 | `size_t get_tx_free_space()` / `get_rx_available_data()` | 诊断用 |
 
-**改了 `Transport` 或缓冲大小，必须回 `code/bsp/bsp_uart.cpp` 补一行显式实例化**，
-否则链接报未定义——模板实例化点只在那个 `.cpp` 里。
+- `BspUartT` 只有头文件，`bsp_uart.cpp` 里只有 HAL 回调分发，任意 Transport / 缓冲尺寸都不用补显式实例化。
+- `uart_mode::dma` 的接收是**循环 DMA**：`init()` 把 `hdmarx` 改成 Circular + 直接模式（CubeMX 里配 Normal 也可以），
+  IDLE / 半满 / 写满事件只报告 DMA 写到的位置，接收路径不调用阻塞版 `HAL_DMA_Abort()`。接收流缓冲区是 `2 × RX_SIZE`。
+- `init()` 核对实例在 `BSP_UART_INSTANCES` 清单里、且是清单里唯一绑该句柄的实例，否则返回 `BAD_ARG`；
+  DMA 模式下还要求配了用到的 RX / TX DMA、实例在 DMA 可达的内存里（`.dma_buffer`）。
+- RS485 只支持 UART 硬件 DE（CubeMX 里选 RS485 模式），库不提供软件 DE。
 
 ### BspSpi / BspSpiDevice
 
@@ -175,7 +179,7 @@ CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个
 | 现象 | 原因 |
 | --- | --- |
 | 串口参数上电变随机值 | `.dma_buffer` 写成 `NOLOAD`，或漏了 `AT> FLASH` |
-| 新增串口缓冲后链接报未定义 | `code/bsp/bsp_uart.cpp` 少一行显式实例化 |
+| 串口 `init()` 返回 `BAD_ARG` | 实例没写进 `BSP_UART_INSTANCES` / 两个实例绑同一句柄 / DMA 模式没配 DMA / 实例不在 `.dma_buffer` |
 | CAN 收不到帧 | FDCAN 中断没开 / 过滤器没放行 / 实例没写进 `BSP_CAN_INSTANCES` |
 | 多个 SPI 设备互相踩数据 | 没用 `lock()` 包住整笔事务 |
 | 浮点打印空或乱码 | 宿主 CMake 少了 `-u _printf_float`（nano.specs） |

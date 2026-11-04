@@ -43,15 +43,11 @@
  *      副本，或者链接器 + `--gc-sections` 剔掉真数据。按变量命名后每个变量独占一个
  *      COMDAT 段，重复副本会被正常丢弃。
  *
- *   2. **改 `BspUartT` 的 Transport 或缓冲大小，要在库里补显式实例化**
- *      模板定义在 `.cpp` 里，只实例化了三种组合（`code/bsp/bsp_uart.cpp`）：
- *          `BspUartT<uart_mode::dma, 128, 128>`
- *          `BspUartT<uart_mode::it, 128, 32>`
- *          `BspUartT<uart_mode::it, 128, 128>`
- *      写成别的组合会**链接报未定义**（编译能过，链接不过）。
+ *   2. **`BspUartT` 只有头文件，Transport 与缓冲尺寸随便组合**
+ *      DMA 模式的 RX DMA 由 `init()` 自动改成循环模式；CubeMX 里配 Normal 也可以。
  *
  *   3. **本文件每加一个实例，`board_instances.hpp` 必须同步加名字**
- *      少了这一步不报错、不告警，只是那个实例的 HAL 回调不会被分发、串口巡检也不管它
+ *      串口实例漏写时 `init()` 返回 BAD_ARG；CAN / SPI 实例漏写目前不报错，只是 HAL 回调不会被分发
  *      ——表现是“数据收不到”，不是“编译失败”。
  *
  * 【加一个外设实例的完整步骤（以再加一路 CAN2 为例）】
