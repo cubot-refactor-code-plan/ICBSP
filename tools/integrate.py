@@ -384,6 +384,18 @@ def plan_freertos_config(host, plan, rep):
 # ==================== 4. freertos.c ====================
 
 
+def default_task_option(host):
+    """读 .ioc 里 defaultTask 的 Code Generation Option（Default / As weak / As external）；找不到返回 None"""
+    for ioc in sorted(host.glob("*.ioc")):
+        for line in ioc.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("FREERTOS.Tasks01="):
+                for task in line.split("=", 1)[1].split(";"):
+                    fields = task.split(",")
+                    if fields and fields[0] == "defaultTask" and len(fields) > 4:
+                        return fields[4]
+    return None
+
+
 def plan_freertos_c(host, plan, rep):
     step = "freertos.c"
     tf = TextFile(host / "Core/Src/freertos.c")
@@ -422,9 +434,25 @@ def plan_freertos_c(host, plan, rep):
         tf.text = replace_section(tf.text, name, current)
         done.append(name)
 
+    # StartDefaultTask：任务体转调 app_default_task()（N25：不再在 C++ 里强定义 StartDefaultTask，
+    # 那只在 CubeMX 设成 "As weak" 时成立，默认设置下会重复定义）
+    option = default_task_option(host)
+    current = section_text(tf.text, "StartDefaultTask")
+    if current is None:
+        if option == "As external":
+            rep.warn(step, "defaultTask 设成了 As external：freertos.c 里没有 StartDefaultTask()，请自己定义它并转调 app_default_task(argument)")
+        else:
+            rep.skip(step, "没有 defaultTask（CubeMX 里删掉了），app_default_task() 不会被调用")
+    elif "app_default_task(" not in current:
+        if compact(strip_comments(current)) in ("", "for(;;){osDelay(1);}"):
+            tf.text = replace_section(tf.text, "StartDefaultTask", section_text(tpl, "StartDefaultTask"))
+            done.append("StartDefaultTask")
+        else:
+            rep.warn(step, "USER CODE StartDefaultTask 里已有自己的代码：没有改动；要用模板的默认任务体请手动加 app_default_task(argument)")
+
     if done:
         plan.edit(tf)
-        rep.ok(step, f"USER CODE {' / '.join(done)}：钩子调 fault_on_*()，MX_FREERTOS_Init() 调 app_init()")
+        rep.ok(step, f"USER CODE {' / '.join(done)}：钩子调 fault_on_*()，MX_FREERTOS_Init() 调 app_init()，StartDefaultTask() 转调 app_default_task()")
     else:
         rep.skip(step, "钩子与 app_init() 已接好")
 
@@ -1248,7 +1276,7 @@ def main():
     print(
         "\n已写入。下一步：\n"
         f"  1. 按上面的 [注意] 核对 {args.board_dir}/board_cfg.*（句柄、波特率、PWM 参数）\n"
-        f"  2. 业务任务写在 {args.app_dir}/task/；示例 heartbeat/monitor 不自动创建，需要时在 StartDefaultTask() 里 xTaskCreate\n"
+        f"  2. 业务任务写在 {args.app_dir}/task/；示例 heartbeat/monitor 不自动创建，需要时在 app_main.cpp 的 app_init() 里 xTaskCreate\n"
         f"  3. cmake --preset {args.preset} && cmake --build --preset {args.preset}\n"
         f"  4. 烧录：bash Flash/OpenOCD_flash.sh 或 bash Flash/JLink_flash.sh（自动在 build/ 下找 .elf）\n"
         "  5. VS Code 里执行 clangd: Restart language server（.clangd 已指向该预设的编译数据库）"

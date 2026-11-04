@@ -47,7 +47,7 @@ public:
 
   /**
    * @brief 从内部链表注销本节点
-   * @warning 若允许在调度器启动后销毁对象，注销必须与 update() 互斥
+   * @note 只能在任务里析构（update() 遍历时挂起调度器，所以任务里的注销不会和遍历交叠）；不能在 ISR 里析构
    */
   ~Online();
 
@@ -74,6 +74,7 @@ public:
    * @brief 推进全部在线检查节点的离线计时
    * @return Status::OK 遍历完成
    * @note 只能在单个周期任务中调用（当前为 sys_task，10 ms 一次），不能在 ISR 中调用。
+   * @note 遍历期间挂起调度器，每个节点单独进出一次临界区：关中断时间与节点数无关。
    */
   static Status update(void);
 

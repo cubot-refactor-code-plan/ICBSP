@@ -126,17 +126,25 @@ Status Online::is_online(void) const
 
 Status Online::update(void)
 {
-  const ScopedTaskCritical lock;
-  const TickType_t        now = xTaskGetTickCount();
-
+  // 链表只在任务里增删（构造 / 析构）：挂起调度器就能安全遍历，中断照常响应。
+  // 每个节点单独进出临界区，关中断的时间不随节点数增长（N36）；now 在临界区里取，
+  // 免得 refresh_isr() 恰好在“取 now 之后、比较之前”刷新，算出负的间隔被当成超时。
+  const bool scheduler = xTaskGetSchedulerState() == taskSCHEDULER_RUNNING;
+  if (scheduler)
+  {
+    vTaskSuspendAll();
+  }
   for (Online *item = _head; item != nullptr; item = item->_next)
   {
-    // 无符号差值，tick 回绕安全
-    const bool timed_out =
-      (now - item->_last_refresh_tick) >= pdMS_TO_TICKS(item->_timeout_gap);
-    item->_statu = timed_out ? Status::TIMEOUT : Status::OK;
+    const ScopedTaskCritical lock;
+    const TickType_t         now       = xTaskGetTickCount();
+    const bool               timed_out = (now - item->_last_refresh_tick) >= pdMS_TO_TICKS(item->_timeout_gap);
+    item->_statu                       = timed_out ? Status::TIMEOUT : Status::OK;
   }
-
+  if (scheduler)
+  {
+    (void)xTaskResumeAll();
+  }
   return Status::OK;
 }
 

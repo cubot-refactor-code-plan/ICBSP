@@ -36,14 +36,14 @@
 #include "task.h"
 
 
-/* ==================== 默认任务（覆盖 freertos.c 的 weak 实现） ==================== */
+/* ==================== 默认任务（freertos.c 的 StartDefaultTask() 转调这里） ==================== */
 
 /**
  * @note CubeMX 默认建的 `defaultTask`（freertos.c 里另有一个 startDefaultTask 入口）。
  *       本工程不用它做业务，只保留一个空循环占位；
  *       真要停掉它，去 CubeMX 的 FREERTOS 配置里把 defaultTask 删掉。
  */
-extern "C" void StartDefaultTask(void *argument)
+extern "C" void app_default_task(void *argument)
 {
   (void)argument;
   for (;;)
@@ -52,6 +52,22 @@ extern "C" void StartDefaultTask(void *argument)
   }
 }
 
+
+/* ==================== */
+/* ==================== sys_task 报告 ==================== */
+
+/**
+ * @brief sys_task 的周期报告：每 5 s 把维护耗时打到调试串口（库本身不打印，见 system_set_report_hook()）
+ * @note 跑在 sys_task 的栈上；printf 的 vsnprintf 要栈，库任务栈 SYS_TASK_STACK 已按这个留了余量。
+ */
+static void sys_report(const SysTaskStats *stats)
+{
+  (void)print_uart("[sys] time=%lus cycle=%luus avg=%luus max=%luus\r\n",
+                   static_cast<unsigned long>(xTaskGetTickCount() / configTICK_RATE_HZ),
+                   static_cast<unsigned long>(stats->last_us),
+                   static_cast<unsigned long>(stats->avg_us),
+                   static_cast<unsigned long>(stats->max_us));
+}
 
 /* ==================== */
 /* ==================== 入口 ==================== */
@@ -65,6 +81,9 @@ extern "C" void app_init(void)
   // 2. 板级初始化：外设实例 init() → 设备 init() → 挂 CAN 的设备注册节点
   //    详细顺序与失败处理见 user/board/board_cfg.cpp
   board_init();
+
+  //    sys_task 的维护耗时：库只计数（全局 sys_task_stats），要打印就在这里接回调；不要可以删掉这一行
+  system_set_report_hook(sys_report, 5000U);
 
   // 3. 业务任务（可选）：示例任务不自动创建，需要时在这里加，例如：
   //      configASSERT(xTaskCreate(heartbeat_task, "heartbeat", 256, NULL,

@@ -27,10 +27,12 @@ public:
 
   /**
    * @brief 初始化阶段注册接收节点，相同 CAN、帧类型和 ID 不允许重复。
-   * @return 成功返回节点；失败返回 nullptr，参数/冲突/资源错误记入系统初始化错误。
+   * @param dlc_mask 接受的数据长度位图（第 n 位 = 接受 DLC n）：默认 CAN_DLC_MASK_8 只收 8 字节帧，
+   *                 CAN_DLC_MASK_ANY 收 0~8 任意长度（回调里看 rx.header.DataLength）；长度不符的帧当作没人认领
+   * @return 成功返回节点；失败返回 nullptr，参数/冲突/资源错误记入系统初始化错误；运行态之后调用直接返回 nullptr。
    */
   static CanRxNodeT *regist(CanT &can_item, uint32_t can_id, Callback callback, void *context = nullptr,
-                            uint32_t id_type = FDCAN_STANDARD_ID);
+                            uint32_t id_type = FDCAN_STANDARD_ID, uint16_t dlc_mask = CAN_DLC_MASK_8);
 
   /** @brief 初始化阶段注销并销毁接收节点。 */
   static Status unregist(CanT &can_item, CanRxNodeT *node);
@@ -51,12 +53,13 @@ private:
   CanT       *_can;
   uint32_t    _can_id;
   uint32_t    _id_type;
+  uint16_t    _dlc_mask;
   Callback    _callback;
   void       *_context;
   CanRxNodeT *next;
 
-  CanRxNodeT(CanT &can_item, uint32_t can_id, Callback callback, void *context, uint32_t id_type) :
-    _can(&can_item), _can_id(can_id), _id_type(id_type), _callback(callback), _context(context), next(nullptr)
+  CanRxNodeT(CanT &can_item, uint32_t can_id, Callback callback, void *context, uint32_t id_type, uint16_t dlc_mask) :
+    _can(&can_item), _can_id(can_id), _id_type(id_type), _dlc_mask(dlc_mask), _callback(callback), _context(context), next(nullptr)
   {
   }
 
@@ -69,14 +72,14 @@ private:
 
 template <typename CanT>
 CanRxNodeT<CanT> *CanRxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, Callback callback, void *context,
-                                           uint32_t id_type)
+                                           uint32_t id_type, uint16_t dlc_mask)
 {
   if (_frozen)
   {
     return nullptr;
   }
   if (callback == nullptr || can_id > ((id_type == FDCAN_EXTENDED_ID) ? 0x1FFFFFFFU : 0x7FFU) ||
-      (id_type != FDCAN_STANDARD_ID && id_type != FDCAN_EXTENDED_ID))
+      (id_type != FDCAN_STANDARD_ID && id_type != FDCAN_EXTENDED_ID) || (dlc_mask & CAN_DLC_MASK_ANY) == 0U)
   {
     sys_state.init_error(Status::BAD_ARG);
     return nullptr;
@@ -94,7 +97,7 @@ CanRxNodeT<CanT> *CanRxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, Call
     sys_state.init_error(Status::FULL);
     return nullptr;
   }
-  CanRxNodeT *node = new (std::nothrow) CanRxNodeT(can_item, can_id, callback, context, id_type);
+  CanRxNodeT *node = new (std::nothrow) CanRxNodeT(can_item, can_id, callback, context, id_type, dlc_mask);
   if (node == nullptr)
   {
     sys_state.init_error(Status::FULL);
@@ -139,6 +142,11 @@ bool CanRxNodeT<CanT>::dispatch(CanT &can_item, const CanRxMsg &rx)
   {
     if (node->_can == &can_item && node->_can_id == rx.header.Identifier && node->_id_type == rx.header.IdType)
     {
+      const uint32_t len = can_detail::dlc_to_len(rx.header.DataLength);
+      if (len > 8U || (node->_dlc_mask & (1U << len)) == 0U)
+      {
+        return false; // 长度不是这个节点要的：当作没人认领
+      }
       return node->_callback(node->_context, rx) == Status::OK;
     }
   }

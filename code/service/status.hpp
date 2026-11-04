@@ -76,6 +76,7 @@ public:
   static constexpr uint32_t RUNNING_BIT   = 1U << 22; ///< 本实例已进入运行态
   static constexpr uint32_t INIT_FAIL_BIT = 1U << 23; ///< 本实例初始化失败过（粘滞，不清除）
   static constexpr uint32_t STATUS_MAX    = 22U;      ///< 状态码只能用 bit 0 ~ 21，不得侵入系统标志位
+  static constexpr uint32_t ERROR_MASK    = ((1U << STATUS_MAX) - 1U) & ~1U; ///< 错误码位 bit 1 ~ 21（不含 OK 标记）
 
   /* ==================== */
   /* ==================== 构造与析构 ==================== */
@@ -128,10 +129,25 @@ public:
   /**
    * @brief 记录初始化失败：记错误码 + 置粘滞失败位 + 清运行位
    * @param statu 错误状态码（不允许传 OK）
-   * @return error() 的结果；NOT_INIT=未 init
+   * @return OK=已记录；BAD_ARG=传了 OK；NOT_INIT=未 init；
+   *         NOT_SUPPORTED=本实例已经在运行（complete_init() 之后）：只按 error() 记码，不置失败位、不清运行位
    * @note 运行位被清且失败位粘滞，本实例此后不会再进入运行态。
+   * @note 只在初始化期有效（对比评估 Q6 / N16）：运行期的错误不能让整个系统停摆，所以运行后调用降级成 error()；
+   *       向父节点传播时同样按父节点自己是否在运行来决定。
    */
   Status init_error(Status statu);
+
+  /**
+   * @brief 清掉一个已记录的错误码；没有别的错误时 OK 标记回来
+   * @param statu 要清的状态码（不允许传 OK）
+   * @return OK=已清（原来没记录也算 OK）；BAD_ARG=传了 OK；NOT_INIT=未 init
+   * @note 只清本实例，不向父节点传播（父节点上同一个码可能还来自别的子节点，由父节点的维护者自己清）。
+   *       初始化失败位不受影响：初始化失败过的实例永远不再进入运行态。
+   */
+  Status clear_error(Status statu);
+
+  /** @brief 清掉全部已记录的错误码（同 clear_error()，不传播、不动初始化失败位）；未 init 时返回 NOT_INIT */
+  Status clear_errors(void);
 
   /* ==================== */
   /* ==================== 查询与等待 ==================== */
@@ -143,11 +159,15 @@ public:
   bool running(void) const;
 
   /**
-   * @brief 已记录的最小错误码
-   * @return 错误状态码；从未记录过错误时返回 Status::OK；未 init 时返回 Status::NOT_INIT
-   * @note 位号即枚举值且从小到大扫，因此多个错误并存时返回枚举值最小的那个。
+   * @brief 已记录的错误码里枚举值最小的那个（不是最近一次的错误）
+   * @return 错误状态码；没有未清的错误时返回 Status::OK；未 init 时返回 Status::NOT_INIT
+   * @note 错误的生命周期：error() / init_error() 记下的码一直保留（粘滞），直到 clear_error() / clear_errors()；
+   *       多个错误并存时按枚举值从小到大取第一个。要知道具体有哪些错误，用 error_bits()。
    */
   Status error_code(void) const;
+
+  /** @brief 已记录的错误码位图（bit n = 状态码 n，掩码用 status_bit()）；未 init 时返回 0 */
+  uint32_t error_bits(void) const;
 
   /**
    * @brief 阻塞等待本实例进入运行态

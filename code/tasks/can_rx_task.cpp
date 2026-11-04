@@ -20,12 +20,13 @@ static void can_rx_service(CanT &can)
     }
 
     bool consumed = false;
-    if ((rx.header.IdType == FDCAN_STANDARD_ID || rx.header.IdType == FDCAN_EXTENDED_ID) && rx.header.RxFrameType == FDCAN_DATA_FRAME && rx.header.FDFormat == FDCAN_CLASSIC_CAN && rx.header.DataLength == FDCAN_DLC_BYTES_8)
+    // 远程帧由硬件拒收、DLC > 8 的帧在中断里已丢弃；长度是否符合由各节点的 dlc_mask 决定（评审 I2）
+    if ((rx.header.IdType == FDCAN_STANDARD_ID || rx.header.IdType == FDCAN_EXTENDED_ID) && rx.header.RxFrameType == FDCAN_DATA_FRAME && rx.header.FDFormat == FDCAN_CLASSIC_CAN)
     {
       consumed = CanRxNodeT<CanT>::dispatch(can, rx);
     }
 
-    // 没有接收节点认领的帧放回回退缓冲，仍可由 can.receive() 读取。
+    // 没有接收节点认领的帧：计入 rx_unclaimed；有回退缓冲（CAN_RX_RETURN_FRAMES > 0）就放进去，供 can.receive() 读取
     if (!consumed)
     {
       (void)can.return_frame(rx);

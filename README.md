@@ -97,7 +97,8 @@ CAN 接收和发送保持两个独立任务，不合并。
 
 ## 已知限制
 
-- BSP 没有运行时登记表，`board_instances.hpp` 必须和 `board_cfg.*` 同步。串口实例漏写时 `BspUartT::init()` 返回 `BAD_ARG`；CAN / SPI 实例漏写目前还不报错，只是对应中断不会分发（`undo.md` 1.3 的 N13）。
+- BSP 没有运行时登记表，`board_instances.hpp` 必须和 `board_cfg.*` 同步。实例漏写、或清单里两个实例绑同一句柄时，`BspUartT` / `BspCanT` / `BspSpi` 的 `init()` 返回 `BAD_ARG`（`board_init()` 里断言停机）。
+- 清单外的同类外设（宿主自己用 HAL 管的 UART / SPI / FDCAN）收到的 HAL 回调转到弱函数 `icbsp_unhandled_*()`，见 `docs/code/bsp.md`。
 - `BspUartT` 只有头文件，任意 Transport / 缓冲尺寸组合都不用在库里补显式实例化。
 
 ## 许可证

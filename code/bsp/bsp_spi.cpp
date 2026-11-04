@@ -74,6 +74,10 @@ extern "C"
     }
     BSP_SPI_INSTANCES(X)
 #  undef X
+    else
+    {
+      icbsp_unhandled_spi_txrx_cplt(hspi);
+    }
 
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
@@ -93,22 +97,57 @@ extern "C"
     }
     BSP_SPI_INSTANCES(X)
 #  undef X
+    else
+    {
+      icbsp_unhandled_spi_error(hspi);
+    }
 
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
+
+  // 清单外 SPI 的回调转调：默认空，宿主定义同名强函数即可（对比评估 N30）
+  __attribute__((weak)) void icbsp_unhandled_spi_txrx_cplt(SPI_HandleTypeDef *hspi)
+  {
+    (void)hspi;
+  }
+  __attribute__((weak)) void icbsp_unhandled_spi_error(SPI_HandleTypeDef *hspi)
+  {
+    (void)hspi;
+  }
 }
+
+/* ==================== 实例清单核对 ==================== */
+
+bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi)
+{
+  bool     listed = false;
+  uint32_t same   = 0U; // 清单里绑这个句柄的实例数
+#  define X(name)                                 \
+    if (static_cast<const void *>(&name) == self) \
+    {                                             \
+      listed = true;                              \
+    }                                             \
+    if (name.handle() == hspi)                    \
+    {                                             \
+      same = same + 1U;                           \
+    }
+  BSP_SPI_INSTANCES(X)
+#  undef X
+  return listed && same == 1U;
+}
+
 
 /* ==================== */
 
 /* ==================== 总线：构造与初始化 ==================== */
 
-BspSpi::BspSpi(const Config &cfg) : _hspi(cfg.hspi), _use_dma(cfg.use_dma), _dma_threshold(cfg.dma_threshold)
+void BspSpi::deinit()
 {
-  // 构造函数只做赋值；FreeRTOS 资源创建推迟到 init()
-}
-
-BspSpi::~BspSpi()
-{
+  _init = false;
+  if (_hspi != nullptr && HAL_SPI_GetState(_hspi) != HAL_SPI_STATE_READY)
+  {
+    (void)HAL_SPI_Abort(_hspi); // 进行中的 DMA 段停下来，之后才能删完成信号量
+  }
   if (_lock != nullptr)
   {
     vSemaphoreDelete(_lock);
@@ -119,17 +158,15 @@ BspSpi::~BspSpi()
     vSemaphoreDelete(_done);
     _done = nullptr;
   }
-  _init = false;
 }
 
 Status BspSpi::init()
 {
-  // 运行中重建锁会让正在等锁的任务拿着失效句柄，所以只允许一次
-  if (_init || _hspi == nullptr)
+  // HAL 回调只认清单里的实例：漏写清单、两个实例绑同一句柄都在这里拒绝（N13）
+  if (_hspi == nullptr || !bsp_spi_is_listed(this, _hspi))
   {
     return Status::BAD_ARG;
   }
-
   if (_use_dma)
   {
     // 没链接 DMA 时 HAL_SPI_TransmitReceive_DMA() 直接返回错误，提前拒绝，免得运行时每次大传输都失败
@@ -144,23 +181,23 @@ Status BspSpi::init()
     }
   }
 
+  // 可重复调用：先停掉旧的（中止传输、释放资源），再重建
+  deinit();
+  _xfer_error       = false;
+  _poll_cnt         = 0U;
+  _dma_cnt          = 0U;
+  _bounce_cnt       = 0U;
+  _timeout_cnt      = 0U;
+  _error_cnt        = 0U;
+  _lock_timeout_cnt = 0U;
+
   _lock = xSemaphoreCreateMutex(); // 互斥量自带优先级继承
   _done = xSemaphoreCreateBinary();
   if (_lock == nullptr || _done == nullptr)
   {
-    if (_lock != nullptr)
-    {
-      vSemaphoreDelete(_lock);
-      _lock = nullptr;
-    }
-    if (_done != nullptr)
-    {
-      vSemaphoreDelete(_done);
-      _done = nullptr;
-    }
+    deinit();
     return Status::IO_ERROR;
   }
-
   _init = true;
   return Status::OK;
 }

@@ -43,7 +43,8 @@
 #include "stream_buffer.h"
 #include "task.h" // IWYU pragma: keep
 
-#include "hardware_config.h" // UART_ENABLE_FIFO
+#include "bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
+#include "hardware_config.h"  // UART_ENABLE_FIFO
 #include "status.hpp"        // 统一状态码
 
 #include <stdarg.h>
@@ -520,6 +521,18 @@ private:
  */
 bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart);
 
+/**
+ * @brief 清单外串口的回调转调（弱函数，默认什么也不做；实现在 bsp_uart.cpp）
+ * @note 库占用了 HAL_UARTEx_RxEventCallback / HAL_UART_TxCpltCallback / HAL_UART_ErrorCallback，宿主不能再定义它们。
+ *       宿主自己用 HAL 管的串口（不在 BSP_UART_INSTANCES 里）的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
+ */
+extern "C"
+{
+  void icbsp_unhandled_uart_rx_event(UART_HandleTypeDef *huart, uint16_t size);
+  void icbsp_unhandled_uart_tx_cplt(UART_HandleTypeDef *huart);
+  void icbsp_unhandled_uart_error(UART_HandleTypeDef *huart);
+}
+
 /** @brief BspUartT 的 Transport 短名：uart_mode::dma / uart_mode::it */
 namespace uart_mode
 {
@@ -548,7 +561,7 @@ enum class UartDir : uint8_t
  *
  * @note 用法（实例写在 board_cfg.hpp，DMA 模式必须放进 .dma_buffer，段名按变量唯一）：
  *
- *   inline __attribute__((section(".dma_buffer.bsp_uart1"))) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
+ *   inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
  *     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
  *   // board_instances.hpp 的 BSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 configASSERT(bsp_uart1.init() == Status::OK);
  *
