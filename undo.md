@@ -1,0 +1,156 @@
+# 待办（v1.0.0 路线）
+
+> 2026-11-03 整理，2026-11-04 按对比评估第 3 节的回答定稿。编号说明：F / A / I / D 见宿主根目录 `stm32_bsp_review.md`；C（差异条目）/ N（fork 引入的新问题）/ Q（问题）见宿主根目录 `stm32_framework_对比评估.md`（定稿方案在其 3.1 节和第 4 节）。
+> **主线 = fork**（`cubot-refactor-code-plan/stm32-framework`，阶段 2 改名 **ICBSP**，发布方 INVC & CUBOT）。阶段 1~4 的库改动都在 fork 上做；`bsp:` 位置（本仓库）是回填时的对照来源。本文件在 1.0 搬进 fork 仓库。
+> Q1~Q19 已全部回答（Q11 更正为编码器进核心库，与 Rh-i 协商的结果）。
+> 2026-11-04 在 fork @ `7ef6bfa` 上做了独立复核：新增 N27~N37（对比评估 2.8 节），更正 F11（fork 只改了字段类型，赋值时仍截成 float）。下面的条目已经同步。
+> 每个阶段结束时都要满足：Debug 与 -O2（RelWithDebInfo）编译 0 warning。
+
+---
+
+## 阶段 1：修复已有问题
+
+### 1.0 切换主线
+
+- [ ] 宿主 MC02_with_submodule 新开分支，submodule 指向 fork；宿主改 C++20，按 fork 模板补 `board_instances.hpp` / `hardware_config.h` / `board_cfg.hpp`，`app/` 适配；0 warning 作为基线（此时 UART / CAN 带着 N1~N23，不上板跑通信测试）
+- [ ] 本文件搬进 fork 仓库；fork 的 `docs/bsp_test/` 注明“对应 STM32_BSP @ 43a34cf 的旧实现”
+
+### 1.1 UART 回填（保留 fork 接口，内部换成本仓库的收发状态机）
+
+- [ ] 修 N1~N12：`_tx_write_lock` + 中断不写流缓冲区、FIFO、RX 流缓冲 2 倍、IDLE 重算、按进度判卡死、先中止再结算、DMA 句柄修复 + NVIC 保护、运行中 re-init、`ms_to_ticks()`、DMA / 可达性检查、RS485 软件 DE、在途长度时序（对比评估 C12 表格有两边的位置）
+- [ ] **F2** 调用 HAL 之前先置 `_tx_chunk_active`，失败再改回（评审 F2）
+- [ ] **BspUart 接收改为 DMA 循环模式**：直接在回填后的实现上做（2026-10-17 记录，原文如下；文中路径、行为指 STM32_BSP 的旧实现）
+
+  **为什么要改**：现在的接收是 DMA Normal 模式 + `HAL_UARTEx_ReceiveToIdle_DMA()`，每次 IDLE / 缓冲写满都由 HAL 停 DMA、库再重新启动。
+  这条路径在实机测试（`docs/bsp_test/`）里暴露了一串问题，前三个已在库里打补丁，第四个只能靠配置缓解：
+
+  1. 缓冲写满（TC）一次投递整块，流缓冲区与 DMA 缓冲一样大时紧接着的 IDLE 投递被丢（已改：接收流缓冲区 2 倍）。
+  2. IDLE 后到重新启动 DMA 之间的空窗里字节溢出（已改：打开 UART FIFO）。
+  3. HAL 先读 DMA 剩余计数、再停 DMA，中间到达的字节没算进 size（已改：停流后按剩余计数重算）。
+  4. **HAL V1.11.6 `HAL_DMA_Abort()` 的读-改-写竞争**：先清 EN，紧接着 `CR &= ~(TC|HT|TE|DME)` 又读回 CR，
+     流还没真正停下时 EN 仍读 1，被写回去 —— 流重新使能，HAL 再死等 EN 清零。HAL 在 IDLE 中断里调用它，
+     HAL 时基（TIM8）优先级 15 低于串口中断 5，超时永远到不了 → 整机卡死。-O2 构建下 U14（双向、帧间 1 tick）9 s 内必现，-O0 下没出现。
+     - 现在的缓解（宿主工程 CubeMX）：TIM8 时基中断优先级改为 4（高于串口 / CAN 的 5），HAL_DMA_Abort 5 ms 后超时返回，
+       句柄进 ERROR，库的 `rx_recover()` 修复后重建接收。不再卡死，但每次命中丢一小段数据、中断里多停 5 ms。
+     - 其他用本库的工程如果 HAL 时基优先级仍是 15，同样会卡死。
+
+  **怎么改**：`init()` 里把 RX DMA 设成循环模式（`hdmarx->Init.Mode = DMA_CIRCULAR` 后 `HAL_DMA_Init()`，或要求 CubeMX 配成 Circular），
+  HAL 的 IDLE / HT / TC 回调在循环模式下**不会停 DMA**，只报告当前写到的位置；库按“上次读到的位置 → 当前位置”把新数据投进流缓冲区（处理回绕）。
+  这样 IDLE 路径不再调用 `HAL_DMA_Abort()`（根除第 4 条），也没有重新挂接收的空窗（第 1~3 条自然消失），`rx_recover()` 只在真故障时动作。
+
+  **要注意**：
+
+  - 回调里的 Size 是缓冲区内的绝对位置，不是本次长度；HT / TC / IDLE 都要处理，HT 不能再忽略。
+  - 错误（ORE / FE / NE）时 HAL 在 DMA 模式下仍会中止接收，`rx_recover()` 的重建路径保留。
+  - 改完在宿主工程（测试代码在宿主 `app/test/`）按 `docs/bsp_test/` 全部用例回归，**Debug 与 -O2（RelWithDebInfo）各跑一遍**，并把 TIM8 优先级改回 15 验证不再卡死。
+  - （2026-11-03 补充）把 TIM8 改回 15 之前，先完成 1.4 的 A3：BMI088 在调度器启动前用 `HAL_Delay()`，时基优先级 ≥ 5 时会卡在 `board_init()`。
+
+- [ ] **I1** 改成 header-only；恢复 `HAL_UART_MODULE_ENABLED` 保护（N24）
+- [ ] 回填时核对 **N31**：`tx_recover()` 的中止 + 续发要持 `_tx_lock`
+- [ ] 回填完马上跑 `docs/bsp_test/` 的 UART / RS485 用例（Debug 与 -O2），确认 10-17 的修复都回来了
+
+### 1.2 CAN 回填（保留 fork 的 `BspCanT<RX, TX>`、re-init 复位回滚、诊断计数、TX-empty 动态开关、ErrorStatusCallback、删 `CanMode`、ms 超时、`const` data）
+
+- [ ] 修 N17~N22：`FDCAN_REJECT_REMOTE`、`TXFQS.TFQF`、按 DLC 拷贝、`send()` 临界区、`receive()` 只读回退缓冲（仅 `CAN_RX_ENABLE = 1`，见 N28）、`CAN_BUSOFF_RETRY_MS` 接回且 Bus-Off 只计一次
+- [ ] **N27** sys_task 加 `tx_recover()`（现在没有任何地方调用它）；`send()` 返回 FULL 前也 `_start_transmission(0)` 踢一次
+- [ ] **N28** `receive()` 按 `CAN_RX_ENABLE` 分开：1 → 只读回退缓冲；0 → 不建回退缓冲，只读原始缓冲
+- [ ] **N29** 发送 MessageBuffer 单读者（任务侧取帧放进临界区，或者只让 ISR 取帧），和 N20 一起改
+- [ ] **N35** 槽位全部注销的发送节点从链表摘除；`service_recovery()` 检查 `xMessageBufferReset` 的返回值
+- [ ] **N23** header-only（连带 DjiMotor、DeviceR9dsT、DeviceEmmv5GroupT 的显式实例化）
+- [ ] **I2** 扩展帧发送、接收节点声明 DLC；**F3** 凑齐即发加时限 + 降频计数；**F6** 回退缓冲可选 / 只计数；F9 其余（`StdFiltersNbr`）
+- [ ] 回填完马上跑 CAN 用例
+
+### 1.3 fork 引入的架构问题
+
+- [ ] **N13** BSP `init()` 校验自己在 X-macro 列表里（不在就 `BAD_ARG`）；SPI 同句柄重复检测
+- [ ] **N14** sys_task 去掉 `print_uart`（换成 Q5 的计数 + 回调）
+- [ ] **N15** 清理摆设宏：`CAN_BUSOFF_RETRY_MS` 接回、`UART_ENABLE_FIFO` 恢复作用、删 `CAN_RX_QUEUE_FRAMES` / `CAN_RX_RETURN_FRAMES` / `CAN_TX_QUEUE_FRAMES`
+- [ ] **N16** 运行期 `regist()` 不调 `init_error()`；EventState 传播不清 RUNNING
+- [ ] **N24** encoder / servo / motor / r9ds / emmv5 / pwm / uart 全部补 HAL 模块保护
+- [ ] **N25** `integrate.py` 不再生成强定义 `StartDefaultTask`（检查 As weak，否则写进 USER CODE 段转调）
+- [ ] `.dma_buffer.<变量名>` 约定封装成宏（`ICBSP_DMA_BUFFER(name)`）
+- [ ] **N30** 库占用的 HAL 回调末尾转调弱函数 `icbsp_unhandled_*()`，让宿主自己的同类外设也能收到回调
+- [ ] **N32** `BspSpi` 改成 constexpr 构造 + 平凡析构 + `deinit()`，`init()` 的重入语义和 CAN / UART 一致
+- [ ] **N36** 阶段 2 默认建树之前，先定 EventState 错误的生命周期（`clear_error()`、`error_code()` 的含义）；`Online::update()` 缩短临界区
+
+### 1.4 评审里的已有问题（fork 里同样存在）
+
+- [ ] **F1** 四元数初值改为单位四元数，加 `attitude_ready()`；`rotation_vector()` / `normalized()` 防零模长；PID 遇到非有限输入时丢弃并计数（评审 F1）
+- [ ] **A1** 初始化动作挪出 `configASSERT`（`system.cpp`、模板、编码规范）；`configASSERT` 改成 `do { } while (0)` 形式（评审 A1）
+- [ ] **F4** PID 积分上限在计算时取实际值（`i_max == 0` 时跟随 `out_max`），链式配置和 Config 配置语义一致（评审 F4）
+- [ ] **F5** DjiMotor 提供 `snapshot()`，去掉没用的互斥锁；R9DS 同样处理（评审 F5）
+- [ ] **A3** BMI088 调度器启动前改用 DWT 忙等（fork 已有 `bsp_dwt`），不再依赖 HAL 时基中断优先级。**1.1 的 DMA 循环模式要把 TIM8 改回 15 验证，必须先完成这一项。**（评审 A3）
+- [ ] **A2** 库任务默认优先级按 `configMAX_PRIORITIES` 取，加 `static_assert`（含 BMI088；fork 的 sys 是 +6，与 BMI088 同级）（评审 A2）
+- [ ] **A4** DMA 可达性按 DMA1/2 和 BDMA 分别判断；合并两份 `dma_reachable`（评审 A4）
+- [ ] **A5** 新增 `fault_on_exception()` 和 HardFault / MemManage / BusFault 的 USER CODE 片段（评审 A5）
+- [ ] **F11** 去掉 `dji_motor.cpp:311` 的 `static_cast<float>`（fork 只把字段改成了 double，存进去的仍是 float 精度）
+- [ ] 其余低级别条目：A6（`algorithm/` 不依赖 RTOS）、A8、A9、F7 其余部分、F8、F10、I4、I5、I6 / I7（和 Q10 一起）、D3、PWM 去掉默认构造（I8 剩余）、DWT `get_time_s()` 线程安全与回绕（C11：加临界区；sys_task 保留周期性的回绕跟踪，Q5 去掉打印时不能一起删掉）、N37（编码器 ARR 检查、舵机跨任务变量改 atomic、`PID::calc` 的 `df_dt` 改名或按秒计）
+- [ ] 回填时**不能弄丢** fork 已修好的：F9（re-init / RF0L）、I3、I8（GPIO / Key）、Key 长按饱和、F11 的 double 字段类型、F7（`hw_error_cnt`）、PID 去 virtual / `print`、A7（可加载 `.dma_buffer`）
+- [ ] 1.1~1.4 完成后按对比评估附录 B 逐条核对 N1~N37
+
+## 阶段 2：加入新功能
+
+- [ ] 改名 **ICBSP**（Q15）：仓库名、CMake 目标 `icbsp`、配置宏 / 开关加 `ICBSP_` 前缀、文档前缀、`LICENSE` 版权人 INVC & CUBOT
+- [ ] 目录重排（Q13）：`code/{bsp, service/{system,comm,monitor,definition}, device/{motor,sensor,remote,actuator}, algorithm, tasks}`，包含路径只加 `code/`（草案见对比评估 3.1）
+- [ ] `examples/dm_mc02/Flash/README.md` 的经验（OpenOCD 0.12、不注册 OCTOSPI2 bank）补进 `templates/Flash` 和文档；README 的示例仓库链接先空着，阶段 6 再补（Q18）
+- [ ] 配置检查（Q3）：库内 `config_check.hpp`（范围 `static_assert` + 缺宏 `#error`），模板同步
+- [ ] 功能开关（Q4）：放进 `hardware_config.h`，注释写清后果，依赖用 `static_assert`
+- [ ] sys_task（Q5）：10 ms；去掉开机 1 s 等待；`sys_task_stats`（DWT 计时）+ 可选回调；`CAN_BUSOFF_RETRY_MS` 等按 10 ms 粒度检查
+- [ ] EventState 默认树（Q6）：`sys_state` → BSP 实例 → 设备；子节点错误只置父错误位、不清 RUNNING；照搬 fork 81 条判据并补建树用例
+- [ ] 命名统一（Q10）：GPIO / Key / PWM 改名；编码规范写入“查询 `get_`、布尔 `is_` / `has_`”并扫一遍全部接口（GPIO 改回 `get_port/get_pin`）
+- [ ] 编码器进核心库 `bsp/bsp_encoder`（Q11 更正），补 `HAL_TIM_MODULE_ENABLED` 保护
+- [ ] 设备并入核心（Q12 / Q17）：DeviceMotor（`device/motor/`）、DeviceServo、DeviceR9dsT（加 `snapshot()`；诊断计数改 `uint32_t`，N34）、DeviceEmmv5GroupT（去掉写死的 128 字节串口缓冲尺寸；N33：`get_position/get_status` 改名 `take_`、超时统一 `ms_to_ticks()`、校验方式可配）
+- [ ] **dm_motor（达妙）新写**：MIT / 位置速度 / 速度模式；使能、失能、清错误、设零点；反馈解包（ID、错误码、位置、速度、扭矩、温度）；`P_MAX` / `V_MAX` / `T_MAX` 可配；Online、`snapshot()`；接口风格对齐 DjiMotor
+- [ ] DR16 接收机（DT7 遥控器，DBUS）
+- [ ] ET08 接收机
+- [ ] 保留 fork 已有的：UART 七项（Q8）、CAN 三项（Q9）、Online ms + `is_online`（Q7）、DWT（Q11）、`can_tx_task` 按需创建（C10）、QuaternionPID 拆文件、PID `get()`；Matrix `_data` 改回 private + `friend`
+- [ ] 每加一项都补 HAL 模块保护（N24），对照附录 B 核对 N1~N37
+
+## 阶段 3：功能全面测试
+
+- [ ] 主机侧单元测试：PID（F4、NaN）、四元数（F1、零模长）、Matrix、RLS，放进 CI
+- [ ] 编译矩阵：功能开关 / HAL 模块（FDCAN、UART、SPI、TIM）逐个关，各组合 0 warning；`CAN_RX_ENABLE = 0` 时实际跑一次 `receive()`（N28）
+- [ ] BSP 实板回归：`docs/bsp_test/` 的 UART / RS485 / CAN / SPI + BMI088 全部用例 + UART IT 模式，Debug 与 -O2 各一遍，加浸泡测试
+- [ ] DMA 循环模式专项测试（TIM8 = 15 不卡死）；F2 短帧压力测试
+- [ ] Service：EventState 树（81 条 + 默认树传播 + 不清 RUNNING）、Online 毫秒语义、N16 回归、N13 回归（漏写实例时 `init()` 返回 `BAD_ARG`）
+- [ ] 新功能实板：CAN TX-empty 动态开关（丢唤醒统计；先修 N27，再人为关一次中断，确认 `tx_stall_recover` 增加、总线恢复）、ErrorStatusCallback 计数、DWT（两个任务并发调 `get_time_s()`，跨 10 圈回绕不跳变）、编码器、N30 的转调钩子、R9DS / 舵机 / EmmV5 / dm_motor / DeviceMotor（没硬件的标“只编译验证”）
+- [ ] 全程不打开 BMI088 加热电阻（PB1 / TIM3_CH4）；结果按 `docs/bsp_test/` 的格式存档
+
+## 阶段 4：文档补全
+
+- [ ] 采用 fork 的文档结构（Q16），以 ICBSP 名字和新目录重写；`docs/code/` 跟随代码子目录，架构图用 `tools/draw_diagrams.py` 重画
+- [ ] 修掉 D2 和 N26
+- [ ] 修掉复核补进 N26 的不一致：README“每 2 s 打印”（实际 5 s）、`board_cfg.cpp` 头注释与示例（DWT 已由库初始化、舵机不是 CAN 设备、Emm_V5 不是达妙）、monitor“每秒”（实际 10 s）、`bsp_spi.cpp` 引用不存在的 `ms_to_ticks()`、`bsp_spi.hpp` 示例段名、`integrate.py` 收尾提示、`CAN_RX_NODE_MAX` 注释
+- [ ] 接入指南补齐：C++20；宿主两个文件的职责；宿主不能定义的 HAL 回调清单（含 `HAL_FDCAN_ErrorStatusCallback`）及 `icbsp_unhandled_*()` 转调（N30）；编码器 ARR 要求（N37）；FDCAN `MessageRAMOffset` / `StdFiltersNbr`；时基优先级的两条理由；newlib 锁；BDMA 外设限制
+- [ ] 功能开关逐个写明关掉之后的后果
+- [ ] 编码规范：`get_` / `is_` 规则、包含路径规则、C++20 规则（volatile、聚合体 Config、平凡析构）、`.dma_buffer` 宏
+- [ ] 每个模块如实标注“已实测 / 只编译验证”；`docs/bsp_test/` 注明对应的代码版本
+- [ ] 许可证说明（matrix 授权来源、VQF SPDX、厂商 PDF 去留）
+
+## 阶段 5：web_ui 接入帮助（Node.js 前端 + `integrate.py` 引擎，Q14 = A）
+
+- [ ] `integrate.py` 合入 fork 扩展后加机器接口：`--json`（检查结果、外设、可挂设备）、`--plan` / `--dry-run`（diff）、`--apply <选择.json>`
+- [ ] 库侧清单 `tools/manifest.json`（Python 读取）：外设 → BSP 类、模板参数、必需的 CubeMX 设置；设备目录 → 依赖、参数、默认值、`init()` 顺序；校验规则
+- [ ] `.ioc` 校验：现有检查 + D1 缺的检查（`TICK_INT_PRIORITY < 5`、Message RAM 重叠、`StdFiltersNbr`、`MasterKeepIOState`、DMA 模式、D-Cache、NVIC、defaultTask As weak）
+- [ ] 生成 `board_instances.hpp` + `board_cfg.hpp` 实例（can1 / can2 → `bsp_can1` / `bsp_can2`，参数取自 `.ioc`，自动套 `.dma_buffer` 宏）+ `init()` + `hardware_config.h`（开关按勾选生成）
+- [ ] 可选设备：按外设列出可挂设备，勾选后生成实例、`init()`、回调转调；设备只在依赖的外设和开关都满足时出现；DR16 / ET08 标“计划中”
+- [ ] 与宿主同步：只写生成区 / USER CODE 段，可重复运行，写盘前给 diff 预览，遇到手改内容就停下
+- [ ] Node 前端只做展示和收集选择，不复制接入逻辑；找不到 Python 时明确提示
+- [ ] 生成快照测试：MC02_with_submodule 的 `.ioc` + 一个全新工程，生成的代码 0 warning 编译
+
+## 阶段 6：宿主接入回归测试
+
+- [ ] 全新 CubeMX 工程：H723 + 至少一个其他型号（H743 / H750），分别用 `integrate.py` 和 Web UI 接入，0 warning（C++20），上板冒烟
+- [ ] 通过回归的 H723 测试宿主工程作为新的示例工程（Q18）：整理后推到组织下，README 写上链接
+- [ ] CubeMX 重新生成后再接入一次，确认幂等
+- [ ] MC02_with_submodule 把 1.0 的分支合回 main，submodule 指向 ICBSP；更新宿主 `CLAUDE.md`（库路径 / 目录、回调清单加 ErrorStatusCallback、C++20、去掉 `examples/dm_mc02` 引用、烧录参照改 `templates/Flash`）；跑阶段 3 的回归；clangd `--check` 0 诊断
+- [ ] 把遇到的问题回填到接入指南的“常见问题”
+
+## 阶段 7：发布 v1.0.0
+
+- [ ] 许可证审计（A10）：根目录 LICENSE（版权人 INVC & CUBOT）、matrix 书面授权、VQF SPDX、厂商 PDF 与仓库体积
+- [ ] 版本号宏 `ICBSP_VERSION_MAJOR/MINOR/PATCH`，清单 / Web UI 校验版本匹配
+- [ ] `CHANGELOG.md`（自 `43a34cf` 起，含 STM32_BSP 10-17 实测修复的来源提交、fork 的提交与作者）
+- [ ] 打 tag `v1.0.0` + release notes（发布方 INVC & CUBOT；支持型号、已实测模块、已知限制）
+- [ ] 宿主更新 submodule 指针并提交；`STM32_BSP` 在 GitHub 上归档（Q19）
+
