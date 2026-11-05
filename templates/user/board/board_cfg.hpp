@@ -55,7 +55,7 @@
  *   1. CubeMX：开 FDCAN2 的 RX FIFO0 中断，确认经典 CAN 模式，重新生成
  *   2. 本文件「外设实例」分节下面加：
  *          inline BspCanT<16, 16> bsp_can2({.hfdcan = &hfdcan2, .name = "CAN2"});
- *   3. `board_instances.hpp` 的 `BSP_CAN_INSTANCES` 里加 `X(bsp_can2)`
+ *   3. `board_instances.hpp` 的 `ICBSP_CAN_INSTANCES` 里加 `X(bsp_can2)`
  *   4. `board_cfg.cpp` 的 `board_init()` 里加一行 `ICBSP_CHECK(bsp_can2.init() == Status::OK);`
  */
 
@@ -63,15 +63,15 @@
 #define __BOARD_CFG_HPP__
 
 // CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
-#include "bsp/bsp_series.hpp" // IWYU pragma: keep（BSP_SERIES_F4）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（ICBSP_SERIES_F4）
 #include "main.h"         // IWYU pragma: keep
 #include "tim.h"
 #include "usart.h"
 
 // CAN 句柄头：H7 是 FDCAN，F4 是 bxCAN。
 // 没在 CubeMX 里开 CAN 时，连 can.h / fdcan.h 都不会生成，所以整段按模块开关条件化。
-#if BSP_CAN_MODULE_ENABLED
-#  if BSP_SERIES_F4
+#if ICBSP_CAN_MODULE_ENABLED
+#  if ICBSP_SERIES_F4
 #    include "can.h"
 #  else
 #    include "fdcan.h"
@@ -100,8 +100,8 @@ void board_init(void);
  *
  * @note 两边的 BspCanT 接口完全一致，只有 Config 字段名不同：H7 写 `.hfdcan = &hfdcan1`，F4 写 `.hcan = &hcan1`。
  */
-#if BSP_CAN_MODULE_ENABLED
-#  if BSP_SERIES_F4
+#if ICBSP_CAN_MODULE_ENABLED
+#  if ICBSP_SERIES_F4
 inline BspCanT<16, 16> bsp_can1(
   {.hcan  = &hcan1,
    .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
@@ -120,9 +120,9 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
    .mode     = UartDir::TxRx,
    .baudrate = 115200U});
 
-#define UART_PRINT_ENABLE 1
+#define ICBSP_UART_PRINT_ENABLE 1
 
-#if UART_PRINT_ENABLE
+#if ICBSP_UART_PRINT_ENABLE
 #  define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
 #else
 #  define print_uart(...) ((void)0)
@@ -131,7 +131,7 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 /**
  * DWT 计时基准：**由库内部初始化**
  *
- * 实例定义在 `stm32-framework/code/service/system/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
+ * 实例定义在 `ICBSP/code/service/system/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
  * 这里只 `#include "bsp/bsp_dwt.hpp"` 后直接调用（如 `bsp_dwt.get_delta_s(&last)`）。
  * 不要在这里再定义实例，也不要再调 `init()`。
  */

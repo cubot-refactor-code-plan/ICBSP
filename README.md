@@ -1,14 +1,17 @@
-# stm32-framework
+# ICBSP
 
-![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/stm32-framework)[![License](https://img.shields.io/github/license/cubot-refactor-code-plan/stm32-framework.svg)](https://github.com/cubot-refactor-code-plan/stm32-framework/blob/main/LICENSE)
-![](https://img.shields.io/badge/chip-STM32H7xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg) 
+**ICBSP = INVC & CUBOT Board Support Package**，由 INVC 与 CUBOT 共同维护（前身 stm32-framework / STM32_BSP）。
 
-面向 **STM32H7 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Protocol、Algorithm 分层，宿主工程通过 git submodule 接入。
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP)[![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)
+![](https://img.shields.io/badge/chip-STM32H7xx%20%7C%20STM32F4xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg) 
+
+面向 **STM32H7 / STM32F4 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Algorithm 分层，宿主工程通过 git submodule 接入。
 
 - 语言：**C++20**（`inline` 变量、指定初始化器）
 - 构建：CMake ≥ 3.22，ARM GNU Toolchain
 - 目标：任意 STM32H7 CubeMX（CMake）工程
-- 许可证：MIT，见根目录 `LICENSE`
+- 许可证：MIT，见根目录 `LICENSE`（版权人 INVC & CUBOT）
+- 宏前缀：`ICBSP_`（配置宏、功能开关、实例清单），CMake 目标 `icbsp`
 
 > 当前状态：`User/` 的 BSP / Service / Device / Protocol（Emm_V5）/ Algorithm（PID）已合并进库。
 > BSP 层没有运行时登记表、基类、虚函数；实例由宿主的 `board_instances.hpp` 清单驱动。
@@ -17,7 +20,7 @@
 ## 目录
 
 ```text
-stm32-framework/
+ICBSP/
 ├─ code/         库源码（分层见 docs/code/；包含路径只加 code/，写成 "bsp/bsp_uart.hpp"）
 │  ├─ bsp/       CAN、UART、SPI、PWM、GPIO、Key、Encoder、DWT
 │  ├─ service/
@@ -43,8 +46,8 @@ stm32-framework/
 在宿主工程根目录：
 
 ```bash
-python3 third_party/stm32-framework/tools/integrate.py --dry-run   # 只看将改什么
-python3 third_party/stm32-framework/tools/integrate.py             # 执行
+python3 third_party/icbsp/tools/integrate.py --dry-run   # 只看将改什么
+python3 third_party/icbsp/tools/integrate.py             # 执行
 ```
 
 脚本可重复执行，已完成的步骤会跳过。它会检查 CubeMX 前提、给链接脚本加 `.dma_buffer` / `.noinit`、
@@ -88,10 +91,10 @@ python3 third_party/stm32-framework/tools/integrate.py             # 执行
 HAL 模块没开时对应开关会自动置 0。模板见 `templates/user/board/hardware_config.h`。
 
 ```c
-#define SYS_TASK_ENABLE       1
-#define CAN_RX_ENABLE         1
-#define CAN_TX_ENABLE         1
-#define UART_PATROL_ENABLE    1
+#define ICBSP_SYS_TASK_ENABLE       1
+#define ICBSP_CAN_RX_ENABLE         1
+#define ICBSP_CAN_TX_ENABLE         1
+#define ICBSP_UART_PATROL_ENABLE    1
 ```
 
 ## 库任务

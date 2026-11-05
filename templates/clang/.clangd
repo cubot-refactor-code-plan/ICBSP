@@ -1,4 +1,4 @@
-# .clangd —— 由 stm32-framework/tools/integrate.py 生成（工程 {{PROJECT}}，预设 {{PRESET}}）
+# .clangd —— 由 ICBSP/tools/integrate.py 生成（工程 {{PROJECT}}，预设 {{PRESET}}）
 #
 # 为什么需要它：clangd 不会自己去 CMake 构建目录里找 compile_commands.json。
 # 不给它，它就只能靠猜参数，于是 Cortex-M 相关的 -mcpu / -mfpu / 系统头全丢，头文件一路标红。

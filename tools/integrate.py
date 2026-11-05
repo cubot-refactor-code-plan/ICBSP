@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-stm32_framework 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX（CMake）工程改成能用本库的样子。
+icbsp 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX（CMake）工程改成能用本库的样子。
 
 用法（在宿主工程根目录，或用 --host 指定）：
 
-    python3 third_party/stm32-framework/tools/integrate.py --dry-run   # 只检查并打印将要做的修改
-    python3 third_party/stm32-framework/tools/integrate.py             # 执行
+    python3 third_party/icbsp/tools/integrate.py --dry-run   # 只检查并打印将要做的修改
+    python3 third_party/icbsp/tools/integrate.py             # 执行
 
 做的事（每一步都先判断是否已完成，已完成就跳过，可重复运行）：
   1. 检查 CubeMX 前提（docs/接入指南.md 第 1 节）：STM32H7、CMake 工具链、FreeRTOS CMSIS_V2、tick 1 kHz、栈溢出检查 2、分配失败钩子
@@ -389,7 +389,7 @@ def plan_linker(host, plan, rep, explicit, region):
         return
 
     note = ".dma_buffer 可加载，放 BspUart / BspSpi 实例；.noinit 放 fault_record" if need_dma else ".noinit 放 fault_record"
-    insert = ["", f"  /* stm32_framework：见 templates/linker_sections.ld（{note}） */"]
+    insert = ["", f"  /* icbsp：见 templates/linker_sections.ld（{note}） */"]
     for i, name in enumerate(missing):
         if i:
             insert.append("")
@@ -629,8 +629,8 @@ def plan_hardware_config(host, plan, rep, board_dir):
     legacy = host / "Core/Inc/hardware_config.h"
     if dst.exists():
         text = dst.read_text(encoding="utf-8")
-        if "CAN_RX_ENABLE" not in text:
-            rep.warn(step, f"{board_dir}/hardware_config.h 是旧版（缺少 CAN_RX_ENABLE 等开关）：请按 templates/user/board/hardware_config.h 更新")
+        if "ICBSP_CAN_RX_ENABLE" not in text:
+            rep.warn(step, f"{board_dir}/hardware_config.h 是旧版（缺少 ICBSP_CAN_RX_ENABLE 等开关）：请按 templates/user/board/hardware_config.h 更新")
         else:
             rep.skip(step, f"{board_dir}/hardware_config.h 已存在")
         if legacy.exists():
@@ -660,14 +660,14 @@ def plan_cmake(host, plan, rep, board_dir, app_dir, user_dir):
         tf.text = tf.text.rstrip("\n") + "\n" + lib_block(lib_rel, board_rel, app_rel, user_rel)
         added.append(f"{lib_rel} 与 {user_rel}/ 的包含路径")
     # 库自身也要看到 user/board/hardware_config.h：已接入库的老工程再运行时补上
-    if re.search(r"target_include_directories\(\s*stm32_framework\b[^)]*" + re.escape(board_rel) + r"(?=[\s)])", tf.text):
-        rep.skip(step, f"stm32_framework 已有 {board_rel} 包含路径")
+    if re.search(r"target_include_directories\(\s*icbsp\b[^)]*" + re.escape(board_rel) + r"(?=[\s)])", tf.text):
+        rep.skip(step, f"icbsp 已有 {board_rel} 包含路径")
     else:
         tf.text = tf.text.rstrip("\n") + (
             f"\n# hardware_config.h 在 {board_rel}/：库自身也要看到\n"
-            f"target_include_directories(stm32_framework PRIVATE {board_rel})\n"
+            f"target_include_directories(icbsp PRIVATE {board_rel})\n"
         )
-        added.append(f"stm32_framework 的 {board_rel} 包含路径")
+        added.append(f"icbsp 的 {board_rel} 包含路径")
     # user/ 单独判断：已接入库的老工程再运行时也会补上
     if re.search(r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/" + re.escape(user_rel) + r"/\*\.cpp", tf.text):
         rep.skip(step, f"已自动收集 {user_rel}/ 的源文件")
@@ -681,10 +681,10 @@ def plan_cmake(host, plan, rep, board_dir, app_dir, user_dir):
 
 def lib_block(lib_rel, board_rel, app_rel, user_rel):
     return (
-        f"\n# stm32_framework：必须在 add_subdirectory(cmake/stm32cubemx) 之后接入（见 {lib_rel}/README.md 第 1 节）\n"
+        f"\n# icbsp：必须在 add_subdirectory(cmake/stm32cubemx) 之后接入（见 {lib_rel}/README.md 第 1 节）\n"
         f"add_subdirectory({lib_rel})\n"
-        f"target_include_directories(stm32_framework PRIVATE {board_rel})  # 库自身也要看到 hardware_config.h\n"
-        "target_link_libraries(${CMAKE_PROJECT_NAME} stm32_framework)\n"
+        f"target_include_directories(icbsp PRIVATE {board_rel})  # 库自身也要看到 hardware_config.h\n"
+        "target_link_libraries(${CMAKE_PROJECT_NAME} icbsp)\n"
         "target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_20)\n"
         f"target_include_directories(${{CMAKE_PROJECT_NAME}} PRIVATE {board_rel} {app_rel} {user_rel}/module)\n"
         "target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)  # BspUartT::printf 打印浮点需要（nano.specs）\n"
@@ -1310,7 +1310,7 @@ def default_host():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="把 stm32_framework 接入 STM32H7 CubeMX（CMake）宿主工程（详见 docs/接入指南.md）")
+    ap = argparse.ArgumentParser(description="把 icbsp 接入 STM32H7 CubeMX（CMake）宿主工程（详见 docs/接入指南.md）")
     ap.add_argument("--host", type=Path, help="宿主工程根目录（默认：本库作为 submodule 所在的工程，否则当前目录）")
     ap.add_argument("--dry-run", action="store_true", help="只检查并打印将要做的修改，不写文件")
     ap.add_argument("--board-dir", default="user/board", help="板级配置目录，相对宿主根（默认 user/board）")

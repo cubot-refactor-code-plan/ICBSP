@@ -4,8 +4,8 @@
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "hardware_config.h"
 
-// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_TX_ENABLE=0 时，本模块整体不参与编译
-#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
+// 宿主工程没在 CubeMX 里开 FDCAN 或 ICBSP_CAN_TX_ENABLE=0 时，本模块整体不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_TX_ENABLE
 
 #include "bsp/bsp_can.hpp"
 #include "service/system/status.hpp"
@@ -18,8 +18,8 @@
 #include <new>
 #include <string.h>
 
-#ifndef CAN_TX_GATHER_MS
-#  error "hardware_config.h 缺少 CAN_TX_GATHER_MS（共帧槽位凑不齐时最多等多久就发），见 templates/user/board/hardware_config.h"
+#ifndef ICBSP_CAN_TX_GATHER_MS
+#  error "hardware_config.h 缺少 ICBSP_CAN_TX_GATHER_MS（共帧槽位凑不齐时最多等多久就发），见 templates/user/board/hardware_config.h"
 #endif
 
 /**
@@ -29,9 +29,9 @@
  *
  * @note 发送时机（can_tx_task 每 1 ms 调 service()）：
  *       - **凑齐即发**：所有“有效”槽位都被重新填写过（过期的、注册了却从没填过的槽位不算，见下）；
- *       - **凑不齐时限**：有槽位填了新数据、等了 CAN_TX_GATHER_MS 还没凑齐，也发（计入 partial_sends）；
- *       - **保底心跳**：CAN_TX_HEARTBEAT_MS 内没发过就发一次当前内容（计入 heartbeat_sends）。
- *       槽位 CAN_CMD_EXPIRE_MS 没被刷新就清零并标为“过期”，过期槽位不再拖住“凑齐即发”（评审 F3）。
+ *       - **凑不齐时限**：有槽位填了新数据、等了 ICBSP_CAN_TX_GATHER_MS 还没凑齐，也发（计入 partial_sends）；
+ *       - **保底心跳**：ICBSP_CAN_TX_HEARTBEAT_MS 内没发过就发一次当前内容（计入 heartbeat_sends）。
+ *       槽位 ICBSP_CAN_CMD_EXPIRE_MS 没被刷新就清零并标为“过期”，过期槽位不再拖住“凑齐即发”（评审 F3）。
  * @note 发送用 send_latest()：同 ID 的上一帧还没发出去时这一帧不入队（BUSY），下个周期发最新内容；
  *       总线被更高优先级流量占满时，一个节点最多在驱动里占一帧，不会堵住别的帧。
  * @note 注册只在初始化阶段（system_start() 之前）；运行态之后 regist() 直接返回 nullptr，不记初始化错误。
@@ -44,7 +44,7 @@ public:
   struct Stats
   {
     uint32_t sent;            ///< 发出的帧数
-    uint32_t partial_sends;   ///< 凑不齐、按 CAN_TX_GATHER_MS 时限发出的帧数（大于 0 说明同帧设备的刷新节拍不一致）
+    uint32_t partial_sends;   ///< 凑不齐、按 ICBSP_CAN_TX_GATHER_MS 时限发出的帧数（大于 0 说明同帧设备的刷新节拍不一致）
     uint32_t heartbeat_sends; ///< 没有新数据、只靠保底心跳发出的帧数
     uint32_t expired;         ///< 槽位过期被清零的次数
   };
@@ -103,7 +103,7 @@ private:
   CanT             *_can;
   CanTxNodeT       *next;
 
-  static constexpr uint32_t CMD_EXPIRE_MS = CAN_CMD_EXPIRE_MS;
+  static constexpr uint32_t CMD_EXPIRE_MS = ICBSP_CAN_CMD_EXPIRE_MS;
 
   static inline CanTxNodeT *_head   = nullptr;
   static inline uint32_t    _num    = 0U;
@@ -197,7 +197,7 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
     }
   }
 
-  if (_num >= CAN_TX_NODE_MAX)
+  if (_num >= ICBSP_CAN_TX_NODE_MAX)
   {
     sys_state.init_error(Status::FULL);
     return nullptr;
@@ -303,8 +303,8 @@ void CanTxNodeT<CanT>::service(CanT &can_item)
     const uint8_t active  = static_cast<uint8_t>(node->bufferRegister & ~node->bufferExpired); // 在被刷新的槽位
     const bool    fresh   = (node->bufferUnsend & node->bufferRegister) != 0U;
     const bool    ready   = active != 0U && (node->bufferUnsend & active) == active;
-    const bool    timeout = fresh && now - node->first_unsend_tick >= pdMS_TO_TICKS(CAN_TX_GATHER_MS);
-    const bool    due     = now - node->last_send_tick >= pdMS_TO_TICKS(CAN_TX_HEARTBEAT_MS);
+    const bool    timeout = fresh && now - node->first_unsend_tick >= pdMS_TO_TICKS(ICBSP_CAN_TX_GATHER_MS);
+    const bool    due     = now - node->last_send_tick >= pdMS_TO_TICKS(ICBSP_CAN_TX_HEARTBEAT_MS);
     if ((ready || timeout || due) &&
         can_item.send_latest(node->txBuffer.id, node->txBuffer.data, node->txBuffer.dlc, node->txBuffer.id_type) == Status::OK)
     {
@@ -360,6 +360,6 @@ Status CanTxNodeT<CanT>::filldata(uint8_t data[], uint8_t slot)
   return Status::OK;
 }
 
-#endif // HAL_FDCAN_MODULE_ENABLED && CAN_TX_ENABLE
+#endif // HAL_FDCAN_MODULE_ENABLED && ICBSP_CAN_TX_ENABLE
 
 #endif // CAN_TX_NODE_HPP

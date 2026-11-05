@@ -116,7 +116,7 @@ static bool        dispatch(CanT &can, const CanRxMsg &rx);  // 有节点消费�
 - 在**初始化阶段**（`board_init()`）注册，同一 CAN + 帧类型 + ID 不允许重复
 - `dispatch()` 由 `can_rx_task` 调用，回调里要短、不能阻塞，`rx` 只在回调期间有效
 - `dlc_mask`：接受的数据长度位图（第 n 位 = DLC n），默认只收 8 字节帧，`CAN_DLC_MASK_ANY` 收 0~8；长度不符当作没人认领
-- 返回 `false` 表示没人认领：计入 `diagnostics.rx_unclaimed`，有回退缓冲（`CAN_RX_RETURN_FRAMES > 0`）就放进去，可通过 `BspCanT::receive()` 自己取
+- 返回 `false` 表示没人认领：计入 `diagnostics.rx_unclaimed`，有回退缓冲（`ICBSP_CAN_RX_RETURN_FRAMES > 0`）就放进去，可通过 `BspCanT::receive()` 自己取
 
 ### 发送：`CanTxNodeT<CanT>`
 
@@ -129,10 +129,10 @@ Stats  get_stats() const;                          // sent / partial_sends / hea
 
 `can_tx_task` 每 1 ms 检查一次，满足任一条件就把这一帧发出：
 - **凑齐即发**：所有“有效”槽位都重新填过（过期的、注册了却从没填过的槽位不算）；
-- **凑不齐时限**：有槽位填了新数据，等了 `CAN_TX_GATHER_MS` 还没凑齐（计入 `partial_sends`，大于 0 说明同帧设备的刷新节拍不一致）；
-- **保底心跳**：`CAN_TX_HEARTBEAT_MS` 内没发过（计入 `heartbeat_sends`）。
+- **凑不齐时限**：有槽位填了新数据，等了 `ICBSP_CAN_TX_GATHER_MS` 还没凑齐（计入 `partial_sends`，大于 0 说明同帧设备的刷新节拍不一致）；
+- **保底心跳**：`ICBSP_CAN_TX_HEARTBEAT_MS` 内没发过（计入 `heartbeat_sends`）。
 
-槽位 `CAN_CMD_EXPIRE_MS` 没被刷新就清零并标为过期；槽位全部注销的节点不再发送。
+槽位 `ICBSP_CAN_CMD_EXPIRE_MS` 没被刷新就清零并标为过期；槽位全部注销的节点不再发送。
 发送走 `send_latest()`：同 ID 的上一帧还没发出去时这一帧不入队、下个周期发最新内容，所以总线被占满时一个节点最多在驱动里占一帧。
 
 ---

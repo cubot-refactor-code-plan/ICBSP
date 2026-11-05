@@ -4,8 +4,8 @@
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "hardware_config.h"
 
-// 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_RX_ENABLE=0 时，本模块整体不参与编译
-#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
+// 宿主工程没在 CubeMX 里开 FDCAN 或 ICBSP_CAN_RX_ENABLE=0 时，本模块整体不参与编译
+#if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_RX_ENABLE
 
 #include "bsp/bsp_can.hpp"
 #include "service/system/status.hpp"
@@ -92,7 +92,7 @@ CanRxNodeT<CanT> *CanRxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, Call
       return nullptr;
     }
   }
-  if (_num >= CAN_RX_NODE_MAX)
+  if (_num >= ICBSP_CAN_RX_NODE_MAX)
   {
     sys_state.init_error(Status::FULL);
     return nullptr;
@@ -167,6 +167,6 @@ uint32_t CanRxNodeT<CanT>::count_for(const CanT &can_item)
   return count;
 }
 
-#endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE
+#endif // HAL_FDCAN_MODULE_ENABLED && ICBSP_CAN_RX_ENABLE
 
 #endif // CAN_RX_NODE_HPP

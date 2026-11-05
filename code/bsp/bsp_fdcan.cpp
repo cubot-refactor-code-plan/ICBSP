@@ -24,7 +24,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
   {                                             \
     same = same + 1U;                           \
   }
-  BSP_CAN_INSTANCES(X)
+  ICBSP_CAN_INSTANCES(X)
 #undef X
   return listed && same == 1U;
 }
@@ -32,7 +32,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
 
 /* ==================== HAL 回调分发 ==================== */
 
-// BspCanT 只有头文件，这里只放 HAL 回调：按句柄和 BSP_CAN_INSTANCES 清单逐个比对，清单外的 FDCAN 直接忽略。
+// BspCanT 只有头文件，这里只放 HAL 回调：按句柄和 ICBSP_CAN_INSTANCES 清单逐个比对，清单外的 FDCAN 直接忽略。
 extern "C"
 {
   /**
@@ -50,7 +50,7 @@ extern "C"
   {                                              \
     name.process_fifo0_isr(RxFifo0ITs, &woken);  \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -71,7 +71,7 @@ extern "C"
   {                                        \
     name.trigger_tx_from_isr(&woken);      \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -91,7 +91,7 @@ extern "C"
   {                                         \
     name.process_error_isr(ErrorStatusITs); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {

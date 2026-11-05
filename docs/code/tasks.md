@@ -13,17 +13,17 @@
 
 | 任务 | 文件 | 周期 | 优先级宏 | 栈深宏 | 谁创建 | 创建时机 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `sys_task` | `sys_task.cpp` | **10 ms**（`SYS_TASK_PERIOD_MS`） | `SYS_TASK_PRIORITY`（idle+6） | `SYS_TASK_STACK`（256 字） | `system_init()` | 无条件（`SYS_TASK_ENABLE`） |
-| `can_rx_task` | `can_rx_task.cpp` | **1 ms** | `CAN_TASK_PRIORITY`（idle+8） | `CAN_TASK_STACK`（512 字） | `system_init()` | 开了 FDCAN 且 `CAN_RX_ENABLE` |
-| `can_tx_task` | `can_tx_task.cpp` | **1 ms** | `CAN_TASK_PRIORITY` | `CAN_TASK_STACK` | `system_start()` | 板级**有发送节点**才建 |
+| `sys_task` | `sys_task.cpp` | **10 ms**（`SYS_TASK_PERIOD_MS`） | `ICBSP_SYS_TASK_PRIORITY`（idle+6） | `ICBSP_SYS_TASK_STACK`（256 字） | `system_init()` | 无条件（`ICBSP_SYS_TASK_ENABLE`） |
+| `can_rx_task` | `can_rx_task.cpp` | **1 ms** | `ICBSP_CAN_TASK_PRIORITY`（idle+8） | `ICBSP_CAN_TASK_STACK`（512 字） | `system_init()` | 开了 FDCAN 且 `ICBSP_CAN_RX_ENABLE` |
+| `can_tx_task` | `can_tx_task.cpp` | **1 ms** | `ICBSP_CAN_TASK_PRIORITY` | `ICBSP_CAN_TASK_STACK` | `system_start()` | 板级**有发送节点**才建 |
 
 创建代码在 `code/service/system/system.cpp`：
 
 ```cpp
-system_init():   xTaskCreate(sys_task,     "sys",    SYS_TASK_STACK, NULL, SYS_TASK_PRIORITY, NULL);
-                 xTaskCreate(can_rx_task,  "can_rx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL);
+system_init():   xTaskCreate(sys_task,     "sys",    ICBSP_SYS_TASK_STACK, NULL, ICBSP_SYS_TASK_PRIORITY, NULL);
+                 xTaskCreate(can_rx_task,  "can_rx", ICBSP_CAN_TASK_STACK, NULL, ICBSP_CAN_TASK_PRIORITY, NULL);
 
-system_start():  if (has_tx_nodes()) xTaskCreate(can_tx_task, "can_tx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL);
+system_start():  if (has_tx_nodes()) xTaskCreate(can_tx_task, "can_tx", ICBSP_CAN_TASK_STACK, NULL, ICBSP_CAN_TASK_PRIORITY, NULL);
 ```
 
 `can_rx_task` / `can_tx_task` 进循环后第一句都是 `sys_state.wait_running()`：
@@ -41,10 +41,10 @@ static_assert(configTICK_RATE_HZ == 1000U, "sys_task requires a 1 kHz FreeRTOS t
 
 ```cpp
 #  define X(name) (void)name.service_recovery();
-   BSP_CAN_INSTANCES(X)        // ① CAN Bus-Off 自恢复
+   ICBSP_CAN_INSTANCES(X)        // ① CAN Bus-Off 自恢复
 
 #  define X(name) (void)name.rx_recover(); (void)name.tx_recover();
-   BSP_UART_INSTANCES(X)       // ② 串口收发卡死补救（UART_PATROL_ENABLE）
+   ICBSP_UART_INSTANCES(X)       // ② 串口收发卡死补救（ICBSP_UART_PATROL_ENABLE）
 
    Online::update();           // ③ 在线计时：超过 timeout_gap 判离线
 ```
@@ -65,12 +65,12 @@ system_set_report_hook(app_sys_report, 5000U);   // 每 5 s 在 sys_task 里调�
 for (;;)
 {
 #  define X(name) can_rx_service(name);
-   BSP_CAN_INSTANCES(X)
+   ICBSP_CAN_INSTANCES(X)
    vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1U));
 }
 ```
 
-`can_rx_service()` 每个 tick 最多取 `CAN_RX_DISPATCH_PER_TICK` 帧（防止一帧风暴饿死其它任务），
+`can_rx_service()` 每个 tick 最多取 `ICBSP_CAN_RX_DISPATCH_PER_TICK` 帧（防止一帧风暴饿死其它任务），
 每帧先校验（标准/扩展帧、数据帧、经典 CAN、DLC=8），再交给 `CanRxNodeT::dispatch()`：
 
 - 有节点认领：在**本任务里同步**执行回调（要短、不能阻塞）
@@ -84,12 +84,12 @@ for (;;)
 sys_state.wait_running();
 
 #  define X(name) CanTxNodeT<decltype(name)>::freeze(); CanTxNodeT<decltype(name)>::init_send_ticks(name, start_tick);
-   BSP_CAN_INSTANCES(X)        // 冻结注册 + 记录起始 tick
+   ICBSP_CAN_INSTANCES(X)        // 冻结注册 + 记录起始 tick
 
 for (;;)
 {
 #  define X(name) CanTxNodeT<decltype(name)>::service(name);
-   BSP_CAN_INSTANCES(X)        // 槽位聚合 + 保底心跳 + 有效期检查
+   ICBSP_CAN_INSTANCES(X)        // 槽位聚合 + 保底心跳 + 有效期检查
    vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1U));
 }
 ```
@@ -105,21 +105,21 @@ for (;;)
 全部在宿主 `user/board/hardware_config.h`：
 
 ```c
-#define SYS_TASK_ENABLE     1
-#define SYS_TASK_PRIORITY   (configMAX_PRIORITIES - 4)   // CMSIS_V2 下 52
-#define SYS_TASK_STACK      256
-#define CAN_TASK_PRIORITY   (configMAX_PRIORITIES - 2)   // 54；BMI088_TASK_PRIORITY 默认 configMAX_PRIORITIES - 3
-#define CAN_TASK_STACK      512
-#define CAN_RX_ENABLE       1
-#define CAN_TX_ENABLE       1
-#define UART_PATROL_ENABLE  1
+#define ICBSP_SYS_TASK_ENABLE     1
+#define ICBSP_SYS_TASK_PRIORITY   (configMAX_PRIORITIES - 4)   // CMSIS_V2 下 52
+#define ICBSP_SYS_TASK_STACK      256
+#define ICBSP_CAN_TASK_PRIORITY   (configMAX_PRIORITIES - 2)   // 54；ICBSP_BMI088_TASK_PRIORITY 默认 configMAX_PRIORITIES - 3
+#define ICBSP_CAN_TASK_STACK      512
+#define ICBSP_CAN_RX_ENABLE       1
+#define ICBSP_CAN_TX_ENABLE       1
+#define ICBSP_UART_PATROL_ENABLE  1
 ```
 
 库任务默认按 `configMAX_PRIORITIES` 往下取（评审 A2），**业务任务必须低于它们**：CubeMX 的 `osPriorityNormal`（24）、
 `osPriorityHigh`（40）都可以。原来的 `tskIDLE_PRIORITY + 6~8` 比 `osPriorityNormal` 还低，按 CubeMX 习惯建的业务任务一忙，
 CAN 节拍、Bus-Off 恢复、串口巡检、Online 计时、IMU 刷新都会被推迟。库里有 `static_assert` 检查取值范围。
 
-`sys_task` 每 10 ms 还推进一次 DWT 绝对时间的回绕跟踪（`bsp_dwt.get_cycles()`，C11）：`SYS_TASK_ENABLE = 0` 时宿主要自己定期调。
+`sys_task` 每 10 ms 还推进一次 DWT 绝对时间的回绕跟踪（`bsp_dwt.get_cycles()`，C11）：`ICBSP_SYS_TASK_ENABLE = 0` 时宿主要自己定期调。
 
 改这里不需要动库代码。`sys_task` 的 10 ms 是 `sys_task.cpp` 里的 `constexpr`
 （和 Online 计时、CAN 恢复节拍绑在一起），**不建议按板子改**。
@@ -134,4 +134,4 @@ CAN 节拍、Bus-Off 恢复、串口巡检、Online 计时、IMU 刷新都会被
 | `can_tx_task` 没创建 | 板级没有注册任何发送节点（没建 `DjiMotor` 之类） |
 | 电机过一会儿停一下 | 保底心跳被改短/改长，或 `can_tx_task` 优先级被业务任务压住 |
 | 接收回调里卡死整个系统 | 回调里做了阻塞操作（等信号量/打印大段日志） |
-| 串口偶发卡死 | `UART_PATROL_ENABLE = 0`，`sys_task` 不再做 `rx/tx_recover()` |
+| 串口偶发卡死 | `ICBSP_UART_PATROL_ENABLE = 0`，`sys_task` 不再做 `rx/tx_recover()` |

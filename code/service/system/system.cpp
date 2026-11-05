@@ -9,7 +9,7 @@
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "task.h"
 
-#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
+#if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_TX_ENABLE
 #  include "board_instances.hpp"
 #  include "service/comm/can_tx_node.hpp" // CanTxNodeT::count_for()
 
@@ -22,7 +22,7 @@ bool has_tx_nodes()
     {                                                     \
       return true;                                        \
     }
-  BSP_CAN_INSTANCES(X)
+  ICBSP_CAN_INSTANCES(X)
 #  undef X
   return false;
 }
@@ -31,9 +31,9 @@ bool has_tx_nodes()
 
 
 // 库任务优先级的取值检查放在库里：宿主删掉 hardware_config.h 里的检查也照样生效（评审 A2 / Q3）
-static_assert(SYS_TASK_PRIORITY > tskIDLE_PRIORITY && SYS_TASK_PRIORITY < configMAX_PRIORITIES, "SYS_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
-static_assert(CAN_TASK_PRIORITY > tskIDLE_PRIORITY && CAN_TASK_PRIORITY < configMAX_PRIORITIES, "CAN_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
-static_assert(CAN_TASK_PRIORITY > SYS_TASK_PRIORITY, "CAN 收发任务要比 sys_task 优先：1 kHz 节拍内必须跑完");
+static_assert(ICBSP_SYS_TASK_PRIORITY > tskIDLE_PRIORITY && ICBSP_SYS_TASK_PRIORITY < configMAX_PRIORITIES, "ICBSP_SYS_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
+static_assert(ICBSP_CAN_TASK_PRIORITY > tskIDLE_PRIORITY && ICBSP_CAN_TASK_PRIORITY < configMAX_PRIORITIES, "ICBSP_CAN_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
+static_assert(ICBSP_CAN_TASK_PRIORITY > ICBSP_SYS_TASK_PRIORITY, "CAN 收发任务要比 sys_task 优先：1 kHz 节拍内必须跑完");
 
 /* ==================== 全局系统状态 ==================== */
 
@@ -95,23 +95,23 @@ extern "C" void system_init(void)
 
   // 调度器启动前任务不会运行（CAN 收发任务还会先等运行态），所以可以早于用户的外设 init()；
   // 任务名受 configMAX_TASK_NAME_LEN（16）限制
-#if SYS_TASK_ENABLE
-  ICBSP_CHECK(xTaskCreate(sys_task, "sys", SYS_TASK_STACK, NULL, SYS_TASK_PRIORITY, NULL) == pdPASS);
+#if ICBSP_SYS_TASK_ENABLE
+  ICBSP_CHECK(xTaskCreate(sys_task, "sys", ICBSP_SYS_TASK_STACK, NULL, ICBSP_SYS_TASK_PRIORITY, NULL) == pdPASS);
 #endif
 
-#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
-  ICBSP_CHECK(xTaskCreate(can_rx_task, "can_rx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL) == pdPASS);
+#if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_RX_ENABLE
+  ICBSP_CHECK(xTaskCreate(can_rx_task, "can_rx", ICBSP_CAN_TASK_STACK, NULL, ICBSP_CAN_TASK_PRIORITY, NULL) == pdPASS);
 #endif
 }
 
 extern "C" void system_start(void)
 {
 
-#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE
+#if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_TX_ENABLE
   // 发送节点在 board_init() 里注册完；任意一个实例有发送节点才创建 can_tx 任务
   if (has_tx_nodes())
   {
-    ICBSP_CHECK(xTaskCreate(can_tx_task, "can_tx", CAN_TASK_STACK, NULL, CAN_TASK_PRIORITY, NULL) == pdPASS);
+    ICBSP_CHECK(xTaskCreate(can_tx_task, "can_tx", ICBSP_CAN_TASK_STACK, NULL, ICBSP_CAN_TASK_PRIORITY, NULL) == pdPASS);
   }
 
 /* ==================== */

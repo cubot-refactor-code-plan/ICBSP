@@ -1,7 +1,7 @@
 /**
  * @file system.hpp
  * @author ChoseB
- * @brief stm32_framework 的入口：建系统状态、创建库自带的后台任务、置运行态
+ * @brief icbsp 的入口：建系统状态、创建库自带的后台任务、置运行态
  * @version 0.1
  * @date 2026-10-17
  *
@@ -65,12 +65,12 @@ extern "C"
     uint32_t avg_us;  ///< 最近 1 s（100 个周期）的平均维护耗时，每 1 s 更新一次
   } SysTaskStats;
 
-  /** @brief sys_task 的循环耗时统计（定义在 tasks/sys_task.cpp；SYS_TASK_ENABLE = 0 时恒为 0） */
+  /** @brief sys_task 的循环耗时统计（定义在 tasks/sys_task.cpp；ICBSP_SYS_TASK_ENABLE = 0 时恒为 0） */
   extern volatile SysTaskStats sys_task_stats;
 
   /**
    * @brief 周期报告回调：在 sys_task 里调用，参数是当前统计的快照
-   * @note 跑在 sys_task 的栈上（SYS_TASK_STACK）；回调里打印要留够 vsnprintf 的栈，不要阻塞太久（会推迟 CAN 恢复和串口巡检）。
+   * @note 跑在 sys_task 的栈上（ICBSP_SYS_TASK_STACK）；回调里打印要留够 vsnprintf 的栈，不要阻塞太久（会推迟 CAN 恢复和串口巡检）。
    */
   typedef void (*SystemReportHook)(const SysTaskStats *stats);
 

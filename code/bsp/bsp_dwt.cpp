@@ -15,7 +15,7 @@
 Status BspDwt::init()
 {
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // 1. 总开关（脱机运行时必须自己置位）
-#if BSP_SERIES_H7
+#if ICBSP_SERIES_H7
   DWT->LAR    = 0xC5ACCE55UL;                     // 2. Cortex-M7 的软件锁解锁
 #endif
   // F4（CM4）：DWT 结构里没有 LAR（这个 CMSIS 版本把 LAR 归到 ITM），也不需要解锁
@@ -148,7 +148,7 @@ uint64_t BspDwt::update_timeline()
  */
 uint32_t BspDwt::get_cpu_clock_hz()
 {
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
   return HAL_RCC_GetHCLKFreq();
 #else
   // D1CPRE 的编码与 AHB 预分频 HPRE 相同：0xx=/1，1000=/2 … 1111=/512
