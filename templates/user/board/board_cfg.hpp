@@ -63,10 +63,20 @@
 #define __BOARD_CFG_HPP__
 
 // CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
-#include "fdcan.h"
-#include "main.h" // IWYU pragma: keep
+#include "bsp_series.hpp" // IWYU pragma: keep（BSP_SERIES_F4）
+#include "main.h"         // IWYU pragma: keep
 #include "tim.h"
 #include "usart.h"
+
+// CAN 句柄头：H7 是 FDCAN，F4 是 bxCAN。
+// 没在 CubeMX 里开 CAN 时，连 can.h / fdcan.h 都不会生成，所以整段按模块开关条件化。
+#if BSP_CAN_MODULE_ENABLED
+#  if BSP_SERIES_F4
+#    include "can.h"
+#  else
+#    include "fdcan.h"
+#  endif
+#endif
 
 #include "bsp_can.hpp"
 #include "bsp_dwt.hpp"
@@ -88,10 +98,19 @@ void board_init(void);
 /**
  * CAN1：一条总线的收发（`BspCanT<收队列帧数, 发队列帧数>`）
  *
+ * @note 两边的 BspCanT 接口完全一致，只有 Config 字段名不同：H7 写 `.hfdcan = &hfdcan1`，F4 写 `.hcan = &hcan1`。
  */
+#if BSP_CAN_MODULE_ENABLED
+#  if BSP_SERIES_F4
+inline BspCanT<16, 16> bsp_can1(
+  {.hcan  = &hcan1,
+   .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
+#  else
 inline BspCanT<16, 16> bsp_can1(
   {.hfdcan = &hfdcan1,
    .name   = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
+#  endif
+#endif
 
 /**
  * USART1：调试串口，DMA 收发，115200（`print_uart` 用的就是它）
@@ -119,6 +138,9 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 
 /**
  * 蜂鸣器 PWM：TIM12_CH2
+ *
+ * @note `timer_clk_hz` 填的是定时器计数器时钟，必须按型号改：H7 常见 275 MHz，F4 的 APB2 定时器是 168 MHz。
+ *       填错只会让频率 / 脉宽算偏，不会编译失败。
  */
 inline BspPwm bsp_pwm_buzzer(
   {.htim         = &htim12,

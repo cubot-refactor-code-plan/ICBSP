@@ -18,7 +18,7 @@
 #ifndef __BSP_DWT_HPP__
 #define __BSP_DWT_HPP__
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（DWT / CoreDebug / RCC / HAL）
+#include "bsp_series.hpp" // IWYU pragma: keep（DWT / CoreDebug / RCC / HAL）
 #include "status.hpp" // 统一状态码
 
 #include <stdint.h>
