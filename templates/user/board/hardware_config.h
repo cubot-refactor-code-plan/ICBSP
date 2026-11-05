@@ -30,7 +30,7 @@
 #define HARDWARE_CONFIG_H
 
 #include "FreeRTOS.h"      // IWYU pragma: keep（configMAX_PRIORITIES）
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
 #include "task.h"         // IWYU pragma: keep（configMAX_PRIORITIES）
 
 /* ==================== ① 功能开关：关掉就不编译对应代码、也不创建对应任务 ==================== */

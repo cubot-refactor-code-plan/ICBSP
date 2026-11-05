@@ -21,15 +21,15 @@
 #ifndef __DEVICE_EMMV5_GROUP_HPP__
 #define __DEVICE_EMMV5_GROUP_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 UART（HAL_UART_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_UART_MODULE_ENABLED
 
-#include "bsp_uart.hpp"
-#include "emmv5_protocol.hpp"
-#include "online_check.hpp"
-#include "status.hpp"
+#include "bsp/bsp_uart.hpp"
+#include "device/motor/emmv5_protocol.hpp"
+#include "service/monitor/online_check.hpp"
+#include "service/system/status.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "semphr.h"   // IWYU pragma: keep（总线互斥锁）

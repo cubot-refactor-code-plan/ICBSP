@@ -19,11 +19,11 @@
 #ifndef __BSP_CAN_HPP__
 #define __BSP_CAN_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（系列桥接）
 
 #if defined(HAL_FDCAN_MODULE_ENABLED)
 
-#  include "bsp_fdcan.hpp"
+#  include "bsp/bsp_fdcan.hpp"
 
 #elif defined(HAL_CAN_MODULE_ENABLED)
 
@@ -53,7 +53,7 @@
 #include "task.h" // IWYU pragma: keep
 
 #include "hardware_config.h" // CAN_RX_ENABLE、CAN_RX_RETURN_FRAMES、CAN_BUSOFF_RETRY_MS
-#include "status.hpp"
+#include "service/system/status_code.hpp"
 
 #include <string.h>
 

@@ -3,7 +3,7 @@
 [← 代码层索引](README.md) · [bsp](bsp.md) · [service](service.md) · [protocol](protocol.md) · [algorithm](algorithm.md)
 
 **职责**：把某个具体设备「绑定到哪个 BSP、注册到哪个节点、什么时候 init、怎么给指令」封成一个类。
-**不负责**：底层时序（→ `bsp/`）、帧字节布局（→ `protocol/`）、PID 数学（→ `algorithm/`）。
+**不负责**：底层时序（→ `bsp/`）、帧字节布局（→ `device/motor/emmv5_protocol`）、PID 数学（→ `algorithm/`）。
 
 ---
 
@@ -117,7 +117,7 @@ Status stop(uint8_t addr);
 ```
 
 `lock_bus()` / `unlock_bus()` 用于多条指令的原子性（多任务共用一条 485 时必须包起来）。
-每一帧的字节由 `protocol/emmv5_protocol.hpp` 负责，设备层只管「发给谁、发什么参数、等不等回复」。
+每一帧的字节由 `device/motor/emmv5_protocol.hpp` 负责，设备层只管「发给谁、发什么参数、等不等回复」。
 
 ### DeviceBmi088
 

@@ -26,15 +26,15 @@
 #ifndef __DEVICE_MOTOR_HPP__
 #define __DEVICE_MOTOR_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
 
-#include "bsp_encoder.hpp" // 测速反馈
-#include "bsp_pwm.hpp"     // H 桥两路输出
-#include "pid.hpp"         // 速度环
-#include "status.hpp"      // 统一状态码
+#include "bsp/bsp_encoder.hpp" // 测速反馈
+#include "bsp/bsp_pwm.hpp"     // H 桥两路输出
+#include "algorithm/pid.hpp"         // 速度环
+#include "service/system/status.hpp"      // 统一状态码
 
 #include <stddef.h>
 #include <stdint.h>

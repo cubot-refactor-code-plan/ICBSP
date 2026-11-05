@@ -63,7 +63,7 @@
 #define __BOARD_CFG_HPP__
 
 // CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
-#include "bsp_series.hpp" // IWYU pragma: keep（BSP_SERIES_F4）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（BSP_SERIES_F4）
 #include "main.h"         // IWYU pragma: keep
 #include "tim.h"
 #include "usart.h"
@@ -78,11 +78,11 @@
 #  endif
 #endif
 
-#include "bsp_can.hpp"
-#include "bsp_dwt.hpp"
-#include "bsp_pwm.hpp"
-#include "bsp_uart.hpp"
-#include "device_buzzer.hpp"
+#include "bsp/bsp_can.hpp"
+#include "bsp/bsp_dwt.hpp"
+#include "bsp/bsp_pwm.hpp"
+#include "bsp/bsp_uart.hpp"
+#include "device/actuator/device_buzzer.hpp"
 
 /** @brief 板级初始化：各实例 init()，实现在 board_cfg.cpp */
 void board_init(void);
@@ -131,8 +131,8 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 /**
  * DWT 计时基准：**由库内部初始化**
  *
- * 实例定义在 `stm32-framework/code/service/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
- * 这里只 `#include "bsp_dwt.hpp"` 后直接调用（如 `bsp_dwt.get_delta_s(&last)`）。
+ * 实例定义在 `stm32-framework/code/service/system/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
+ * 这里只 `#include "bsp/bsp_dwt.hpp"` 后直接调用（如 `bsp_dwt.get_delta_s(&last)`）。
  * 不要在这里再定义实例，也不要再调 `init()`。
  */
 

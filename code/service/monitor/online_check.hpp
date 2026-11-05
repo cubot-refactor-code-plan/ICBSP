@@ -17,7 +17,7 @@
 #define __SERVICE_ONLINE_CHECK_HPP__
 
 #include "FreeRTOS.h" // IWYU pragma: keep (TickType_t / pdMS_TO_TICKS)
-#include "status.hpp"
+#include "service/system/status.hpp"
 
 #include <stdint.h>
 

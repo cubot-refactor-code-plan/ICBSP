@@ -17,7 +17,7 @@
 #ifndef __BSP_GPIO_HPP__
 #define __BSP_GPIO_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep
 #include <stdint.h>
 
 

@@ -58,7 +58,7 @@
 #ifndef __BSP_SPI_HPP__
 #define __BSP_SPI_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
@@ -69,10 +69,10 @@
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "semphr.h"   // IWYU pragma: keep（总线锁、完成信号量）
 
-#include "bsp_gpio.hpp"       // 片选引脚
-#include "bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
+#include "bsp/bsp_gpio.hpp"       // 片选引脚
+#include "bsp/bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
 #include "hardware_config.h" // 唯一配置源（功能开关、队列深度等）
-#include "status.hpp"         // 统一状态码
+#include "service/system/status_code.hpp"         // 统一状态码
 
 
 /**
