@@ -1,5 +1,5 @@
 #include "service/system/system.hpp"
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 #include <string.h>
 
@@ -30,10 +30,7 @@ bool has_tx_nodes()
 #endif
 
 
-// 库任务优先级的取值检查放在库里：宿主删掉 hardware_config.h 里的检查也照样生效（评审 A2 / Q3）
-static_assert(ICBSP_SYS_TASK_PRIORITY > tskIDLE_PRIORITY && ICBSP_SYS_TASK_PRIORITY < configMAX_PRIORITIES, "ICBSP_SYS_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
-static_assert(ICBSP_CAN_TASK_PRIORITY > tskIDLE_PRIORITY && ICBSP_CAN_TASK_PRIORITY < configMAX_PRIORITIES, "ICBSP_CAN_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
-static_assert(ICBSP_CAN_TASK_PRIORITY > ICBSP_SYS_TASK_PRIORITY, "CAN 收发任务要比 sys_task 优先：1 kHz 节拍内必须跑完");
+// 库任务优先级等取值检查在 service/system/config_check.hpp（宿主删掉 hardware_config.h 里的检查也照样生效，评审 A2 / Q3）
 
 /* ==================== 全局系统状态 ==================== */
 

@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #include "board_instances.hpp"
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 // 维护周期：Online 计时、CAN 恢复、UART 巡检统一按这个节拍
 constexpr uint32_t SYS_TASK_PERIOD_MS = 10U;
