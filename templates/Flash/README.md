@@ -30,7 +30,9 @@ Flash\JLink_flash.bat Release
 
 Windows 上也可直接用 VS Code 任务 `OpenOCD_flash` / `JLink_flash`（`tasks.json` 里按平台自动选 `.sh` 或 `.bat`）。
 
-两个脚本都依赖 `openocd`；J-Link 版本还要求 OpenOCD 带 `jlink` 适配器（`openocd -c "adapter list" -c "shutdown"` 可确认）。
+两个脚本都依赖 `openocd`，**建议 0.12 及以上**（实测用的是 0.12；0.11 没验证过，脚本检测到旧版会提示）。
+系统包管理器装的常常是 0.11，另装了新版时用环境变量 `OPENOCD` 指定：`OPENOCD=/usr/local/bin/openocd bash Flash/OpenOCD_flash.sh`（Windows：`set OPENOCD=...`）。
+J-Link 版本还要求 OpenOCD 带 `jlink` 适配器（`openocd -c "adapter list" -c "shutdown"` 可确认）。
 `.sh` 需要可执行权限：`chmod +x Flash/*.sh`。
 
 ## 关于 SVD
@@ -47,7 +49,15 @@ Keil 的 `STM32H7xx_DFP` 包，或 ST 官网下载，放到 `Flash/` 下即可�
 
 | 文件 | 用途 |
 | --- | --- |
-| `daplink.cfg` | OpenOCD 的 CMSIS-DAP 配置（SWD + 目标芯片） |
+| `daplink.cfg` | OpenOCD 的 CMSIS-DAP 配置（SWD + 目标芯片）。部分探针（Horco v0.2）bulk 端点不响应，要取消 `cmsis-dap backend hid` 的注释 |
 | `jlink.cfg` | OpenOCD 的 SEGGER J-Link 配置（`adapter driver jlink` + SWD 4 MHz） |
+
+## 实测经验（DM-MC02 / STM32H723）
+
+- **不要注册外置 Flash bank**（OCTOSPI2 上的 W25Q64 等）：注册后 OpenOCD 在 `program` / `reset` 时会访问 OCTOSPI2，
+  固件没有重新初始化它时会把调试口卡死，只能重新上电。
+- OpenOCD 用 0.12 及以上（实测版本）。常见情况是系统包为 0.11、另装的 0.12 在 `/usr/local/bin`，用 `OPENOCD` 环境变量指定。
+- 烧录前 OpenOCD 会在目标上跑一段 CRC 校验程序，板上原来的固件若接了 `fault_on_exception()`，可能记下一条假的 HardFault
+  （BFAR = 0x04C11DB7，即 CRC-32 多项式；tick 0），复位后看 `fault_record` 时注意区分。
 
 相关配置：`.vscode/tasks.json`（烧录任务）、`.vscode/launch.json`（调试配置）。

@@ -36,8 +36,10 @@ if not exist "!ELF_FILE!" (
     exit /b 1
 )
 
-where openocd >nul 2>nul
-if errorlevel 1 (
+REM OpenOCD 建议 0.12 及以上（实测用 0.12）；另装了新版时用环境变量指定：set OPENOCD=C:\path\to\openocd.exe
+if not defined OPENOCD set "OPENOCD=openocd"
+where "!OPENOCD!" >nul 2>nul
+if errorlevel 1 if not exist "!OPENOCD!" (
     echo Error: openocd not found; this script drives J-Link through OpenOCD's jlink adapter.
     exit /b 1
 )
@@ -46,7 +48,7 @@ echo Project: !PROJECT_NAME! ^(!BUILD_TYPE!^)
 echo ELF    : !ELF_FILE!
 echo Flashing via OpenOCD jlink adapter ^(SWD 4 MHz^)...
 
-openocd -f Flash/jlink.cfg ^
+"!OPENOCD!" -f Flash/jlink.cfg ^
     -c "gdb_port disabled" ^
     -c "tcl_port disabled" ^
     -c "telnet_port disabled" ^

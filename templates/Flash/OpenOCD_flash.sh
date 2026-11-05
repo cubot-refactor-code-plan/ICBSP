@@ -48,16 +48,23 @@ if [ -z "$ELF_FILE" ] || [ ! -f "$ELF_FILE" ]; then
     exit 1
 fi
 
-if ! command -v openocd >/dev/null 2>&1; then
+# OpenOCD 建议 0.12 及以上（实测用的是 0.12；0.11 没验证过）。系统包管理器装的常常是 0.11，
+# 另装了新版时用环境变量指定：OPENOCD=/usr/local/bin/openocd bash Flash/OpenOCD_flash.sh
+OPENOCD="${OPENOCD:-openocd}"
+if ! command -v "$OPENOCD" >/dev/null 2>&1; then
     echo "❌ 未找到 openocd，请先安装：sudo apt install openocd"
     exit 1
 fi
+OPENOCD_VER="$("$OPENOCD" --version 2>&1 | head -n 1 | grep -oE '[0-9]+\.[0-9]+' | head -n 1)"
+case "$OPENOCD_VER" in
+    0.[0-9]|0.1[01]) echo "⚠️  $OPENOCD 是 $OPENOCD_VER，建议用 0.12 及以上（用 OPENOCD=<路径> 指定新版）" ;;
+esac
 
 echo "🔧 项目：$PROJECT_NAME"
 echo "📦 ELF ：$ELF_FILE"
 echo "⚡ OpenOCD 烧录中（CMSIS-DAP）..."
 
-openocd -f "$SCRIPT_DIR/daplink.cfg" \
+"$OPENOCD" -f "$SCRIPT_DIR/daplink.cfg" \
         -c "gdb_port disabled" \
         -c "tcl_port disabled" \
         -c "telnet_port disabled" \
