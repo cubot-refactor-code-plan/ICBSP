@@ -124,6 +124,11 @@ Status Online::is_online(void) const
 }
 
 
+void Online::set_state(EventState *state)
+{
+  _state = state;
+}
+
 Status Online::update(void)
 {
   // 链表只在任务里增删（构造 / 析构）：挂起调度器就能安全遍历，中断照常响应。
@@ -136,10 +141,19 @@ Status Online::update(void)
   }
   for (Online *item = _head; item != nullptr; item = item->_next)
   {
-    const ScopedTaskCritical lock;
-    const TickType_t         now       = xTaskGetTickCount();
-    const bool               timed_out = (now - item->_last_refresh_tick) >= pdMS_TO_TICKS(item->_timeout_gap);
-    item->_statu                       = timed_out ? Status::TIMEOUT : Status::OK;
+    bool dropped = false; // 本轮由在线变成离线
+    {
+      const ScopedTaskCritical lock;
+      const TickType_t         now       = xTaskGetTickCount();
+      const bool               timed_out = (now - item->_last_refresh_tick) >= pdMS_TO_TICKS(item->_timeout_gap);
+      dropped                            = timed_out && (item->_statu == Status::OK);
+      item->_statu                       = timed_out ? Status::TIMEOUT : Status::OK;
+    }
+    // 事件组 API 不能在临界区里调；挂起调度器时可以（它内部也是挂起调度器，可嵌套）
+    if (dropped && (item->_state != nullptr))
+    {
+      (void)item->_state->error(Status::TIMEOUT);
+    }
   }
   if (scheduler)
   {

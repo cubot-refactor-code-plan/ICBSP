@@ -21,8 +21,8 @@
  * @note 分层：子节点用 set_parent() 挂到父节点。错误只向上传播，父节点不聚合 running；
  *       要判断具体哪个子系统失败，查对应子节点的 error_code()。父节点必须比子节点活得久。
  *
- * @note 分层约定：只给「维护多个对象的系统」用；单个设备不许引用它，失败只 return Status。
- *       生命周期、错误传播与已知局限见同目录 status.md 与 Docs/guide/系统状态标志原理.md。
+ * @note 默认树（Q6，见 state_tree.hpp）：sys_state → 每个总线实例 → 挂在总线上的设备。设备的接口失败照常
+ *       return Status；EventState 只记初始化失败和运行期的“出过什么错”（例如掉线），给整机诊断用。
  */
 
 #ifndef __SERVICE_STATUS_HPP__

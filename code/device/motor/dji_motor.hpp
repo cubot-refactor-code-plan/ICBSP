@@ -32,6 +32,7 @@
 #include "service/comm/can_rx_node.hpp"
 
 #include <stdint.h>
+#include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
 #include "service/system/system.hpp"
 #include <string.h>
 #include <cmath>
@@ -109,6 +110,7 @@ private:
   DjiMotorRawData     _raw_data;    ///< DJI 电调反馈协议原始数据
   DjiMotorParam       _param;       ///< DJI 编码器和原始控制限幅参数
   Online              _online;      ///< 由有效反馈帧刷新的在线检查对象
+  EventState          _state;       ///< 本电机在默认树里的节点（挂在所用 CAN 的总线节点下，Q6）
   LuenbergerMotorData _lvbo_data;   ///< 可选的 Luenberger 观测结果
 
   CanT              *_can_item;     ///< 接收反馈所用的物理 CAN
@@ -158,6 +160,12 @@ public:
    * @return Online 的常量引用，可用于调用 isOnline() 查询状态。
    */
   const Online &online(void) const;
+
+  /**
+   * @brief 本电机在 EventState 默认树里的节点（第三层，挂在所用 CAN 实例的总线节点下）
+   * @return 节点的常量引用：`running()` = init() 成功；`error_bits()` 里的 TIMEOUT = 掉过线（粘滞，见 status.hpp）
+   */
+  const EventState &get_state(void) const;
 
   /**
    * @brief 获取可选的 Luenberger 观测数据
@@ -341,7 +349,7 @@ DjiMotor<type, CanT>::~DjiMotor()
     configASSERT(result == Status::OK);
     if (result != Status::OK)
     {
-      (void)sys_state.error(result);
+      (void)_state.error(result);
     }
     _tx_node = nullptr;
   }
@@ -366,9 +374,20 @@ Status DjiMotor<type, CanT>::init()
   {
     return Status::OK;
   }
+
+  // 默认树第三层（Q6）：节点挂在所用 CAN 实例的总线节点下；该实例不在清单里时（init() 会被 BAD_ARG 拦下，
+  // 这里只是兜底）直接挂 sys_state。init() / set_parent() 重复调用无害
+  if (_state.init() != Status::OK)
+  {
+    (void)sys_state.init_error(Status::FULL);
+    return Status::FULL;
+  }
+  EventState *bus = bus_state(_can_item);
+  (void)_state.set_parent((bus != nullptr) ? *bus : sys_state);
+
   if (_statu != Status::NOT_INIT)
   {
-    sys_state.init_error(_statu);
+    (void)_state.init_error(_statu);
     return _statu;
   }
 
@@ -418,7 +437,7 @@ Status DjiMotor<type, CanT>::init()
         default:
         {
           _statu = Status::BAD_ARG;
-          sys_state.init_error(_statu);
+          (void)_state.init_error(_statu);
           return _statu;
         }
       }
@@ -427,7 +446,7 @@ Status DjiMotor<type, CanT>::init()
     default:
     {
       _statu = Status::BAD_ARG;
-      sys_state.init_error(_statu);
+      (void)_state.init_error(_statu);
       return _statu;
     }
   }
@@ -437,7 +456,7 @@ Status DjiMotor<type, CanT>::init()
   if ( _tx_node == nullptr )
   {
     _statu = Status::FULL;
-    sys_state.init_error(_statu);
+    (void)_state.init_error(_statu);
     return _statu;
   }
 
@@ -451,9 +470,12 @@ Status DjiMotor<type, CanT>::init()
     (void)result;
     _tx_node = nullptr;
     _statu = Status::IO_ERROR;
+    (void)_state.init_error(_statu);
     return _statu;
   }
 
+  _online.set_state(&_state); // 由在线变离线时在本节点记 TIMEOUT
+  (void)_state.complete_init();
   _statu = Status::OK;
   return _statu;
 }
@@ -587,6 +609,12 @@ template <MotorType type, typename CanT>
 const Online &DjiMotor<type, CanT>::online(void) const
 {
   return _online;
+}
+
+template <MotorType type, typename CanT>
+const EventState &DjiMotor<type, CanT>::get_state(void) const
+{
+  return _state;
 }
 
 template <MotorType type, typename CanT>
