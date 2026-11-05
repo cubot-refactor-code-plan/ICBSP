@@ -3,7 +3,7 @@
 [← 代码层索引](README.md) · [service](service.md) · [bsp](bsp.md)
 
 **职责**：三个常驻任务的任务体。
-**不负责**：任务的创建（在 `code/service/system.cpp`）、周期/优先级/栈深的配置（在宿主 `user/board/hardware_config.h`）。
+**不负责**：任务的创建（在 `code/service/system/system.cpp`）、周期/优先级/栈深的配置（在宿主 `user/board/hardware_config.h`）。
 
 任务体是**薄**的：每个周期只做一次遍历，真正的逻辑都在 `service/` 与 `bsp/` 里。
 
@@ -17,7 +17,7 @@
 | `can_rx_task` | `can_rx_task.cpp` | **1 ms** | `CAN_TASK_PRIORITY`（idle+8） | `CAN_TASK_STACK`（512 字） | `system_init()` | 开了 FDCAN 且 `CAN_RX_ENABLE` |
 | `can_tx_task` | `can_tx_task.cpp` | **1 ms** | `CAN_TASK_PRIORITY` | `CAN_TASK_STACK` | `system_start()` | 板级**有发送节点**才建 |
 
-创建代码在 `code/service/system.cpp`：
+创建代码在 `code/service/system/system.cpp`：
 
 ```cpp
 system_init():   xTaskCreate(sys_task,     "sys",    SYS_TASK_STACK, NULL, SYS_TASK_PRIORITY, NULL);

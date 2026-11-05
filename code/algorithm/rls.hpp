@@ -49,8 +49,8 @@
 #include <math.h>
 #include <stdint.h>
 
-#include "matrix.hpp"
-#include "status_code.hpp" // 统一状态码（不依赖 RTOS，A6）
+#include "algorithm/matrix.hpp"
+#include "service/system/status_code.hpp" // 统一状态码（不依赖 RTOS，A6）
 
 /**
  * @brief 带遗忘因子的递归最小二乘

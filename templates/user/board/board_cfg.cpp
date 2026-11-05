@@ -27,7 +27,7 @@
  */
 
 #include "board_cfg.hpp"
-#include "fault_record.hpp" // ICBSP_CHECK
+#include "service/system/fault_record.hpp" // ICBSP_CHECK
 
 #include "FreeRTOS.h" // IWYU pragma: keep (configASSERT)
 

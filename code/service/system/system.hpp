@@ -29,8 +29,8 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-#include "status.hpp"
-#include "fault_record.hpp" // IWYU pragma: keep（ICBSP_CHECK）
+#include "service/system/status.hpp"
+#include "service/system/fault_record.hpp" // IWYU pragma: keep（ICBSP_CHECK）
 
 /** @brief 整个系统的状态（定义在 service/system.cpp） */
 extern EventState sys_state;

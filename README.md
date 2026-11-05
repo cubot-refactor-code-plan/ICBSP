@@ -18,11 +18,18 @@
 
 ```text
 stm32-framework/
-├─ code/         库源码（分层见 docs/code/）
+├─ code/         库源码（分层见 docs/code/；包含路径只加 code/，写成 "bsp/bsp_uart.hpp"）
 │  ├─ bsp/       CAN、UART、SPI、PWM、GPIO、Key、Encoder、DWT
-│  ├─ service/   Status / EventState、Online、CAN 收发节点、fault_record、system
-│  ├─ device/    DjiMotor、DeviceMotor、Servo、R9DS、Emm_V5、BMI088、Buzzer
-│  ├─ protocol/  emmv5_protocol（帧编解码）
+│  ├─ service/
+│  │  ├─ system/      system、Status / EventState、fault_record
+│  │  ├─ comm/        CAN 收发节点
+│  │  ├─ monitor/     Online
+│  │  └─ definition/  电机 / IMU 数据定义
+│  ├─ device/
+│  │  ├─ motor/       DjiMotor、DeviceMotor、Emm_V5（含 emmv5_protocol 帧编解码）
+│  │  ├─ sensor/      BMI088
+│  │  ├─ remote/      R9DS
+│  │  └─ actuator/    Servo、Buzzer
 │  ├─ algorithm/ PID、QuaternionPID、VQF、Quaternion、Matrix、RLS
 │  └─ tasks/     sys_task、can_rx_task、can_tx_task
 ├─ templates/    宿主接入模板（board、app、链接脚本、FreeRTOS 钩子、.vscode、Flash）

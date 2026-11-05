@@ -1,4 +1,4 @@
-#include "quaternion.hpp"
+#include "algorithm/quaternion.hpp"
 
 #include <math.h>
 

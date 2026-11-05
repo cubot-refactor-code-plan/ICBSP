@@ -72,7 +72,7 @@
 #ifndef __DEVICE_BMI088_HPP__
 #define __DEVICE_BMI088_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
@@ -83,9 +83,9 @@
 #include "semphr.h"   // IWYU pragma: keep（_run_lock）
 #include "task.h"     // IWYU pragma: keep（TaskHandle_t）
 
-#include "bsp_spi.hpp"        // 两个片选设备
-#include "imu_definition.hpp" // IMU 通用数据
-#include "status.hpp"         // 统一状态码
+#include "bsp/bsp_spi.hpp"        // 两个片选设备
+#include "service/definition/imu_definition.hpp" // IMU 通用数据
+#include "service/system/status.hpp"         // 统一状态码
 
 class VQF; // algorithm/vqf.hpp：姿态解算，只在 .cpp 里用
 

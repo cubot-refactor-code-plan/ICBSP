@@ -30,10 +30,10 @@
 #ifndef __BSP_KEY_HPP__
 #define __BSP_KEY_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep (GPIO_TypeDef, GPIO pins, HAL_GPIO_ReadPin)
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep (GPIO_TypeDef, GPIO pins, HAL_GPIO_ReadPin)
 #include <stdint.h>
 
-#include "status.hpp" // 统一状态码
+#include "service/system/status_code.hpp" // 统一状态码
 
 
 /**

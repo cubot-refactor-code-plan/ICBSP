@@ -2,7 +2,7 @@
 
 [← README](../../README.md) · [接入指南](../接入指南.md) · [常用接口](../常用接口.md) · [编辑器配置](../编辑器配置.md)
 
-源码在仓库根目录的 **`code/`** 下，按依赖关系分六层。本文是入口：先看分层图和依赖矩阵找到层，
+源码在仓库根目录的 **`code/`** 下，按依赖关系分五层（`service/`、`device/` 再按用途分子目录）。本文是入口：先看分层图和依赖矩阵找到层，
 再进该层的文档看文件表与接口。
 
 ![分层依赖](../img/layers.png)
@@ -17,11 +17,12 @@
 | 目录 | 一句话职责 | 不负责 | 文档 |
 | --- | --- | --- | --- |
 | `code/bsp/` | 一个外设怎么初始化、怎么收发（CAN / UART / SPI / PWM / GPIO / Key / Encoder / DWT） | 帧格式、设备语义、重连策略 | [bsp.md](bsp.md) |
-| `code/service/` | 系统状态、在线检查、CAN 收发节点、故障记录、库入口 | 具体设备协议 | [service.md](service.md) |
-| `code/device/` | 具体设备：DJI 电机、直流电机、舵机、R9DS 遥控、Emm_V5、BMI088、蜂鸣器 | 硬件时序细节（交给 bsp） | [device.md](device.md) |
-| `code/protocol/` | 纯编解码：Emm_V5 帧格式与扫描器 | 串口怎么发（交给 device/app） | [protocol.md](protocol.md) |
+| `code/service/` | `system/`：库入口、系统状态（EventState）、故障记录；`comm/`：CAN 收发节点；`monitor/`：在线检查；`definition/`：电机 / IMU 数据定义 | 具体设备协议 | [service.md](service.md) |
+| `code/device/` | `motor/`：DJI 电机、直流电机、Emm_V5（含纯编解码的 `emmv5_protocol`，见 [protocol.md](protocol.md)）；`sensor/`：BMI088；`remote/`：R9DS；`actuator/`：舵机、蜂鸣器 | 硬件时序细节（交给 bsp） | [device.md](device.md) |
 | `code/algorithm/` | PID、四元数 PID、VQF、矩阵、RLS | 与硬件无关，不碰 HAL | [algorithm.md](algorithm.md) |
-| `code/tasks/` | 三个库任务的任务体：sys / can_rx / can_tx | 任务创建（在 service/system.cpp） | [tasks.md](tasks.md) |
+| `code/tasks/` | 三个库任务的任务体：sys / can_rx / can_tx | 任务创建（在 service/system/system.cpp） | [tasks.md](tasks.md) |
+
+包含路径只有 `code/`，一律写全子目录：`#include "bsp/bsp_uart.hpp"`、`#include "device/motor/dji_motor.hpp"`。
 
 宿主侧的 `user/app`、`user/board`、`user/module` 不在库里，见 [接入指南 §4.2](../接入指南.md#42-userboard)。
 
@@ -31,16 +32,15 @@
 
 行 = 谁，列 = 依赖谁；`●` 直接 include，`○` 通过 X-macro 清单反向依赖。
 
-|  | board | bsp | service | device | protocol | algorithm | HAL/FreeRTOS |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **app（宿主）** | ● |  | ● | ○ |  |  |  |
-| **board（宿主）** |  | ● |  | ● |  |  | ● |
-| **tasks** | ○ | ● | ● |  |  |  | ● |
-| **device** |  | ● | ● |  | ● | ● | ● |
-| **service** |  | ● |  |  |  |  | ● |
-| **bsp** | ○ |  |  |  |  |  | ● |
-| **protocol** |  |  |  |  |  |  |  |
-| **algorithm** |  |  | ● |  |  |  |  |
+|  | board | bsp | service | device | algorithm | HAL/FreeRTOS |
+| --- | --- | --- | --- | --- | --- | --- |
+| **app（宿主）** | ● |  | ● | ○ |  |  |
+| **board（宿主）** |  | ● |  | ● |  | ● |
+| **tasks** | ○ | ● | ● |  |  | ● |
+| **device** |  | ● | ● |  | ● | ● |
+| **service** |  | ● |  |  |  | ● |
+| **bsp** | ○ |  |  |  |  | ● |
+| **algorithm** |  |  | ● |  |  |  |
 
 两条硬规则：
 

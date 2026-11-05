@@ -1,4 +1,4 @@
-#include "emmv5_protocol.hpp"
+#include "device/motor/emmv5_protocol.hpp"
 
 #include <string.h> // memmove
 

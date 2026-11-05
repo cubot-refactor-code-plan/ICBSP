@@ -1,10 +1,10 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // F4：bxCAN 的 HAL 回调（H7 的 FDCAN 回调在 bsp_fdcan.cpp）
 #if defined(HAL_CAN_MODULE_ENABLED)
 
 #include "board_instances.hpp"
-#include "bsp_can.hpp"
+#include "bsp/bsp_can.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 

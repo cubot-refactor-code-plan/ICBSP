@@ -12,7 +12,7 @@
 #ifndef __DJI_MOTOR_HPP__
 #define __DJI_MOTOR_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"     // taskENTER_CRITICAL（snapshot / DataUnpack 写回）
 #include "hardware_config.h"
@@ -20,14 +20,14 @@
 // DjiMotor 同时依赖 CAN 接收和发送路径
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE && CAN_TX_ENABLE
 
-#include "bsp_can.hpp"
-#include "motor_definition.hpp"
-#include "online_check.hpp"
-#include "can_tx_node.hpp"
-#include "can_rx_node.hpp"
+#include "bsp/bsp_can.hpp"
+#include "service/definition/motor_definition.hpp"
+#include "service/monitor/online_check.hpp"
+#include "service/comm/can_tx_node.hpp"
+#include "service/comm/can_rx_node.hpp"
 
 #include <stdint.h>
-#include "system.hpp"
+#include "service/system/system.hpp"
 #include <string.h>
 #include <cmath>
 #include <cstdlib>

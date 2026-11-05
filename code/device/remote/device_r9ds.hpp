@@ -31,16 +31,16 @@
 #ifndef __DEVICE_R9DS_HPP__
 #define __DEVICE_R9DS_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 UART（HAL_UART_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_UART_MODULE_ENABLED
 
 
-#include "status.hpp"
+#include "service/system/status.hpp"
 #include <stdint.h>
 #include "FreeRTOS.h"  // IWYU pragma: keep (pdMS_TO_TICKS)
-#include "bsp_uart.hpp" // IWYU pragma: keep（BspUartT 实例化与 UART 宏）
+#include "bsp/bsp_uart.hpp" // IWYU pragma: keep（BspUartT 实例化与 UART 宏）
 #include "task.h"     // xTaskGetTickCount
 
 

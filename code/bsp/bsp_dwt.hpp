@@ -18,8 +18,8 @@
 #ifndef __BSP_DWT_HPP__
 #define __BSP_DWT_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（DWT / CoreDebug / RCC / HAL）
-#include "status.hpp" // 统一状态码
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（DWT / CoreDebug / RCC / HAL）
+#include "service/system/status_code.hpp" // 统一状态码
 
 #include <stdint.h>
 
@@ -135,7 +135,7 @@ private:
 /**
  * @brief 库内唯一的 DWT 实例
  *
- * @note 定义在 `code/service/system.cpp`（与 `system_init()` 同一文件）。
+ * @note 定义在 `code/service/system/system.cpp`（与 `system_init()` 同一文件）。
  *       宿主**不要**再定义同名实例、也不要再调 `init()`：包含本头文件后直接使用即可
  *       （例如 `bsp_dwt.get_delta_s(&last)`）。
  */

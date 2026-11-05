@@ -1,8 +1,8 @@
-#include "bsp_can.hpp" // 未开 FDCAN 时为空
-#include "bsp_dwt.hpp"
-#include "bsp_uart.hpp" // 未开 UART 时为空
-#include "online_check.hpp"
-#include "system.hpp"
+#include "bsp/bsp_can.hpp" // 未开 FDCAN 时为空
+#include "bsp/bsp_dwt.hpp"
+#include "bsp/bsp_uart.hpp" // 未开 UART 时为空
+#include "service/monitor/online_check.hpp"
+#include "service/system/system.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"

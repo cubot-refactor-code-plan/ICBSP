@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-#include "vqf.hpp"
+#include "algorithm/vqf.hpp"
 
 #include <algorithm>
 #include <limits>

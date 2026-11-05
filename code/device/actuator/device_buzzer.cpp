@@ -1,10 +1,10 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
 
 #include "FreeRTOS.h" // IWYU pragma: keep (vTaskDelay)
-#include "device_buzzer.hpp"
+#include "device/actuator/device_buzzer.hpp"
 #include "task.h" // IWYU pragma: keep (pdMS_TO_TICKS)
 
 

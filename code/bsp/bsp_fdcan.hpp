@@ -27,7 +27,7 @@
 #ifndef __BSP_FDCAN_HPP__
 #define __BSP_FDCAN_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_FDCAN_MODULE_ENABLED
@@ -37,7 +37,7 @@
 #include "task.h" // IWYU pragma: keep
 
 #include "hardware_config.h" // CAN_RX_ENABLE、CAN_RX_RETURN_FRAMES、CAN_BUSOFF_RETRY_MS
-#include "status.hpp"
+#include "service/system/status_code.hpp"
 
 #include <stddef.h>
 #include <stdint.h>
