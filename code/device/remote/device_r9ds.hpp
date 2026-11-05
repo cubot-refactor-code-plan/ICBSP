@@ -16,10 +16,10 @@
  *       串口参数在 CubeMX 里配，`init()` 只做兜底校验，一个字节都不改；接收机侧要拨到 SBUS 模式。
  *
  * @note flags = frame[23]：bit0/bit1 是数字通道 17/18，bit2 = 本帧丢失，bit3 = 失控保护激活
- *       （用 `frame_lost()` / `failsafe()` 暴露；失控时怎么处置是上层的事）。
+ *       （用 `is_frame_lost()` / `is_failsafe()` 暴露；失控时怎么处置是上层的事）。
  *
- * @note 两套量别混用：`raw_channels()` 是协议原始值（上 200 / 中 1000 / 下 1800）；
- *       `rc()` 是遥控器语义值（连续通道 −100 ~ +100，开关给挡位），**写控制逻辑用这一套**。
+ * @note 两套量别混用：`get_raw_channels()` 是协议原始值（上 200 / 中 1000 / 下 1800）；
+ *       `get_rc()` 是遥控器语义值（连续通道 −100 ~ +100，开关给挡位），**写控制逻辑用这一套**。
  *       通道表、开关判挡与死区说明见 device_r9ds.md。
  *
  * @warning 不是线程安全的：update() 只允许由一个任务调用；查询接口返回实时引用，
@@ -209,16 +209,16 @@ public:
   bool is_online(void) const;
 
   /** @brief 遥控器语义值（**控制逻辑用这个**），实时引用：update() 在别的任务里跑时请用 snapshot() */
-  const Rc &rc(void) const;
+  const Rc &get_rc(void) const;
 
   /** @brief 最近一帧的 16 个原始通道值（协议侧：上 200 / 中 1000 / 下 1800），下标 = 通道号 - 1 */
-  const uint16_t *raw_channels(void) const;
+  const uint16_t *get_raw_channels(void) const;
 
   /** @brief 最近一帧的「本帧丢失」标志（frame[23] 的 bit2） */
-  bool frame_lost(void) const;
+  bool is_frame_lost(void) const;
 
   /** @brief 最近一帧的「失控保护激活」标志（frame[23] 的 bit3） */
-  bool failsafe(void) const;
+  bool is_failsafe(void) const;
 
   /** @brief 诊断计数快照 */
   Diag get_diag(void) const;
@@ -395,28 +395,28 @@ bool DeviceR9dsT<Uart>::is_online(void) const
 
 /** @brief 遥控器语义值（控制逻辑用这个返回值），实时引用 */
 template <typename Uart>
-const typename DeviceR9dsT<Uart>::Rc &DeviceR9dsT<Uart>::rc(void) const
+const typename DeviceR9dsT<Uart>::Rc &DeviceR9dsT<Uart>::get_rc(void) const
 {
   return _rc;
 }
 
 /** @brief 最近一帧的 16 个原始通道值（协议侧） */
 template <typename Uart>
-const uint16_t *DeviceR9dsT<Uart>::raw_channels(void) const
+const uint16_t *DeviceR9dsT<Uart>::get_raw_channels(void) const
 {
   return _raw;
 }
 
 /** @brief 最近一帧的「本帧丢失」标志 */
 template <typename Uart>
-bool DeviceR9dsT<Uart>::frame_lost(void) const
+bool DeviceR9dsT<Uart>::is_frame_lost(void) const
 {
   return _frame_lost;
 }
 
 /** @brief 最近一帧的「失控保护激活」标志 */
 template <typename Uart>
-bool DeviceR9dsT<Uart>::failsafe(void) const
+bool DeviceR9dsT<Uart>::is_failsafe(void) const
 {
   return _failsafe;
 }

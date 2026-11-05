@@ -54,7 +54,7 @@ extern "C"
     }
 
 #  define X(name)                                       \
-    else if (hspi == name.handle())                     \
+    else if (hspi == name.get_handle())                     \
     {                                                   \
       name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); \
     }
@@ -77,7 +77,7 @@ extern "C"
     }
 
 #  define X(name)                                   \
-    else if (hspi == name.handle())                 \
+    else if (hspi == name.get_handle())                 \
     {                                               \
       name.on_error_isr(&xHigherPriorityTaskWoken); \
     }
@@ -113,7 +113,7 @@ bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi)
     {                                             \
       listed = true;                              \
     }                                             \
-    if (name.handle() == hspi)                    \
+    if (name.get_handle() == hspi)                    \
     {                                             \
       same = same + 1U;                           \
     }
@@ -188,7 +188,7 @@ Status BspSpi::init()
   return Status::OK;
 }
 
-bool BspSpi::is_init() const
+bool BspSpi::is_initialized() const
 {
   return _init;
 }
@@ -356,7 +356,7 @@ void BspSpi::on_error_isr(BaseType_t *pxHigherPriorityTaskWoken)
   }
 }
 
-BspSpi::Diag BspSpi::diag() const
+BspSpi::Diag BspSpi::get_diag() const
 {
   Diag d;
   d.poll_cnt         = _poll_cnt;
@@ -380,11 +380,11 @@ BspSpiDevice::BspSpiDevice(BspSpi &bus, const Config &cfg) : _bus(bus), _cs(BspG
 
 Status BspSpiDevice::init()
 {
-  if (!_bus.is_init())
+  if (!_bus.is_initialized())
   {
     return Status::NOT_INIT;
   }
-  if (_cs.port() == nullptr || _cs.pin() == 0U)
+  if (_cs.get_port() == nullptr || _cs.get_pin() == 0U)
   {
     return Status::BAD_ARG;
   }

@@ -43,7 +43,7 @@
  * @brief 电机设备类
  *
  * @note 生命周期：init() 一次 → 每拍 update(dt_s)；init() 前 update() 安全返回 false。
- * @note 不绑定串口：JustFloat 帧由 pid_frame() 组好交给调用方，发送在 App 层做。
+ * @note 不绑定串口：JustFloat 帧由 get_pid_frame() 组好交给调用方，发送在 App 层做。
  */
 class DeviceMotor
 {
@@ -155,7 +155,7 @@ public:
    *
    * @note 帧尾固定 00 00 80 7F；本函数只组帧，发送由调用方负责。
    */
-  size_t pid_frame(uint8_t *buf, uint8_t fields = PID_ALL) const;
+  size_t get_pid_frame(uint8_t *buf, uint8_t fields = PID_ALL) const;
 
   /* ==================== */
   /* ==================== 查询 ==================== */
@@ -164,22 +164,22 @@ public:
   bool is_bound() const { return _config.pwm_a != nullptr && _config.pwm_b != nullptr && _config.encoder != nullptr; }
 
   /** @brief 是否已成功 init() */
-  bool initialized() const { return _initialized; }
+  bool is_initialized() const { return _initialized; }
 
   /** @brief 换算结果：每厘米多少个计数（由机械参数算出） */
-  float counts_per_cm() const { return _counts_per_cm; }
+  float get_counts_per_cm() const { return _counts_per_cm; }
 
   /** @brief 最近一拍实测速度 (cm/s) */
-  float speed_cm_s() const { return _speed_cm_s; }
+  float get_speed_cm_s() const { return _speed_cm_s; }
 
   /** @brief 最近一拍占空比（带符号，%）：正 = pwm_a 出力，负 = pwm_b 出力 */
-  float output_pct() const { return _output_pct; }
+  float get_output_pct() const { return _output_pct; }
 
   /** @brief 当前模式 */
-  Mode mode() const { return _mode; }
+  Mode get_mode() const { return _mode; }
 
   /** @brief 当前目标速度 (cm/s) */
-  float target_cm_s() const { return _target_cm_s; }
+  float get_target_cm_s() const { return _target_cm_s; }
 
   /* ==================== */
 private:

@@ -86,7 +86,7 @@
 #define ICBSP_CAN_RX_NODE_MAX 50
 /** @brief 发送节点总数上限（全部总线合计，≤255） */
 #define ICBSP_CAN_TX_NODE_MAX 50
-/** @brief 控制指令有效期 (ms)：发送槽位超过这么久没被 FillData() 刷新就清零（必须大于心跳） */
+/** @brief 控制指令有效期 (ms)：发送槽位超过这么久没被 fill_data() 刷新就清零（必须大于心跳） */
 #define ICBSP_CAN_CMD_EXPIRE_MS 100
 /** @brief 保底心跳 (ms)：发送节点至少这么久整帧发一次 */
 #define ICBSP_CAN_TX_HEARTBEAT_MS 5

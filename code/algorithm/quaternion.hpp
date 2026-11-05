@@ -23,7 +23,7 @@
  *   Quaternion q = Quaternion::from_array(d.quaternion);
  *
  *   // 2) 安装旋转：q_mount = 机构系 → 芯片系的固定旋转（例如芯片绕机构 y 轴转了 90°）
- *   const Quaternion q_mount = Quaternion::from_axis_angle({0.0, 1.0, 0.0}, PI_D / 2.0);
+ *   const Quaternion q_mount = Quaternion::from_axis_angle({0.0, 1.0, 0.0}, ICBSP_PI / 2.0);
  *   Quaternion q_body = q * q_mount;      // 机构系 → 世界系
  *
  *   // 3) 云台：取枪管（机构 x 轴）在世界系的水平角与仰角，不算 roll，只有竖直朝天 / 朝地时奇异
@@ -43,7 +43,7 @@
 #ifndef __QUATERNION_HPP__
 #define __QUATERNION_HPP__
 
-constexpr double PI_D = 3.14159265358979323846; ///< 双精度 π（imu_definition.hpp 的 PI 是 float）
+#include "algorithm/math_constants.hpp" // IWYU pragma: export（ICBSP_PI，原 PI_D）
 
 /**
  * @brief 三维向量（聚合类型，可 {x, y, z} 初始化）

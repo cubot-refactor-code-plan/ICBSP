@@ -39,7 +39,7 @@ PID::Data d = speed.get();   // {target, feedback, output}，一次加锁取三�
 ```
 
 - `i_max = 0` 表示积分上限跟随 `out_max`，**计算时取**：构造后再用链式 `limit_output()` 改输出限幅，积分上限也跟着变（评审 F4）。
-- 输入（目标、反馈、增量、前馈）不是有限值（NaN / Inf）时丢弃这一拍：状态不变、输出保持上一拍，计入 `nonfinite_count()`。
+- 输入（目标、反馈、增量、前馈）不是有限值（NaN / Inf）时丢弃这一拍：状态不变、输出保持上一拍，计入 `get_nonfinite_count()`。
   NaN 进了积分就永远出不来，所以在入口挡住（评审 F1）。
 - `Quaternion::rotation_vector()` / `normalized()` 对零四元数、非有限值有防护（分别返回零向量 / 单位四元数）。
 
@@ -97,7 +97,7 @@ A.norm();  A.normalized();  A.trace();  A.approx_equal(B, tol);
 Rls<X_DIM, Y_DIM> rls;
 rls.init(omega0);        // 初始参数估计
 rls.update(x, y);        // 递推一步
-rls.reject_count();      // 诊断：被剔除的异常点
+rls.get_reject_count();      // 诊断：被剔除的异常点
 ```
 
 `Rls` 内部对协方差矩阵做迹检查与重置，避免长时间运行后数值发散。

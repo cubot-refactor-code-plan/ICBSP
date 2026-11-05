@@ -38,7 +38,7 @@
 #include <cmath>
 #include <cstdlib>
 
-/** @todo 将以下临时协议常量迁移到按 MotorType 特化的 traits，随后删除宏。 */
+/** @todo 将以下临时协议常量迁移到按 DjiMotorType 特化的 traits，随后删除宏。 */
 // #define K_ECD_TO_ANGLE 0.043945f       ///< 编码器计数到机械角度的临时换算系数，单位：度/count
 // #define ECD_RANGE_FOR_3508 8191        ///< M3508 编码器原始值上限（包含 0，共 8192 个计数）
 // #define CURRENT_LIMIT_FOR_3508 16000   ///< M3508/C620 软件限制使用的原始电流指令绝对值
@@ -53,11 +53,11 @@
  *
  * @note 电机型号用于选择反馈格式、合法 ID 范围、控制帧 ID、槽位和默认减速比。
  */
-enum MotorType
+enum class DjiMotorType : uint8_t
 {
-  Motor3508 = 0x00U, ///< M3508 电机配合 C620 电调
-  Motor6020 = 0x01U, ///< GM6020 电机
-  Motor2006 = 0x02U, ///< M2006 电机配合 C610 电调
+  M3508  = 0x00U, ///< M3508 电机配合 C620 电调
+  GM6020 = 0x01U, ///< GM6020 电机
+  M2006  = 0x02U, ///< M2006 电机配合 C610 电调
 };
 
 /**
@@ -91,7 +91,7 @@ struct DjiMotorParam
   uint16_t current_limit;  ///< 原始控制指令允许的绝对值上限
 };
 
-template <MotorType type, typename CanT>
+template <DjiMotorType type, typename CanT>
 class DjiMotor;
 
 /**
@@ -102,7 +102,7 @@ class DjiMotor;
  * @details CanTxNode 聚合发送槽位，CanRxNode 按总线和反馈 ID 分发接收帧。
  * @note 对象不可复制或移动，以保证在线检查节点和控制帧槽位的身份稳定。
  */
-template <MotorType type, typename CanT>
+template <DjiMotorType type, typename CanT>
 class DjiMotor
 {
 private:
@@ -133,7 +133,7 @@ public:
    * @return 内部 MotorData 的常量引用。
    * @warning 返回实时引用而非快照：can_rx_task 随时可能在改它，跨任务读请用 snapshot()。
    */
-  const MotorData &data(void) const;
+  const MotorData &get_data(void) const;
 
   /**
    * @brief 拷贝一份同一帧的反馈（临界区内拷贝，跨任务读用它，F5）
@@ -147,23 +147,23 @@ public:
    * @return 内部 DjiMotorRawData 的常量引用。
    * @warning 返回实时引用而非快照；跨任务读请用 snapshot()。
    */
-  const DjiMotorRawData &raw_data(void) const;
+  const DjiMotorRawData &get_raw_data(void) const;
 
   /**
    * @brief 获取 DJI 编码器和原始控制限幅参数
    * @return 内部 DjiMotorParam 的常量引用，构造完成后不再修改。
    */
-  const DjiMotorParam &param(void) const;
+  const DjiMotorParam &get_param(void) const;
 
   /**
    * @brief 获取本电机的在线检查对象
-   * @return Online 的常量引用，可用于调用 isOnline() 查询状态。
+   * @return Online 的常量引用，可用于调用 is_online() 查询状态。
    */
-  const Online &online(void) const;
+  const Online &get_online(void) const;
 
   /**
    * @brief 本电机在 EventState 默认树里的节点（第三层，挂在所用 CAN 实例的总线节点下）
-   * @return 节点的常量引用：`running()` = init() 成功；`error_bits()` 里的 TIMEOUT = 掉过线（粘滞，见 status.hpp）
+   * @return 节点的常量引用：`is_running()` = init() 成功；`get_error_bits()` 里的 TIMEOUT = 掉过线（粘滞，见 status.hpp）
    */
   const EventState &get_state(void) const;
 
@@ -172,15 +172,15 @@ public:
    * @return 内部 LuenbergerMotorData 的常量引用。
    * @note 观测器未启用时，该数据不应作为有效控制依据。
    */
-  const LuenbergerMotorData &lvboData(void) const;
+  const LuenbergerMotorData &get_lvbo_data(void) const;
 
   /**
    * @brief 查询对象构造校验或初始化状态
    * @return Status::OK 表示初始化成功；其他值表示未初始化或初始化错误。
-   * @note 收发操作结果由 DataUnpack() 和 FillData() 的返回值提供，不更新此状态。
+   * @note 收发操作结果由 unpack() 和 fill_data() 的返回值提供，不更新此状态。
    * @warning 不得与 init() 并发调用。
    */
-  Status statu(void) const;
+  Status get_status(void) const;
 
   /**
    * @brief 构造单个 DJI 电机对象并校验参数
@@ -193,7 +193,7 @@ public:
    * @param control_mode GM6020 的控制模式；其他电机型号忽略该参数
    * @param online_timeout_ms 多久收不到有效反馈判离线（ms，默认 30，评审 I4）
    *
-   * @note 构造后调用 init() 注册收发节点；错误可通过 statu() 查询。
+   * @note 构造后调用 init() 注册收发节点；错误可通过 get_status() 查询。
    * @note 构造阶段不会调用 BspCanT::init() 或发送 CAN 帧。
    */
   DjiMotor(CanT &can_item,
@@ -226,7 +226,7 @@ public:
    * @note 首帧以绝对编码器位置初始化多圈角度；单圈角度为输出轴角度对 2π 取模。
    * @note 不计算角加速度；通用数据中的 acceleration 保持初始零值，不代表实际角加速度。
    */
-  Status DataUnpack(const CanRxMsg &rx);
+  Status unpack(const CanRxMsg &rx);
 
   /**
    * @brief 设置下一周期发送的原始控制量
@@ -237,7 +237,7 @@ public:
    *
    * @note 本函数只更新发送槽位，实际发送由 can_tx_task 统一完成。
    */
-  Status FillData(int16_t output);
+  Status fill_data(int16_t output);
 
   // 禁止复制/移动
   DjiMotor(const DjiMotor &) = delete;
@@ -252,7 +252,7 @@ private:
 /* ==================== 成员函数定义（只有头文件：任意 CAN / UART 类型都能实例化，评审 N23） ==================== */
 
 
-template<MotorType type, typename CanT>
+template<DjiMotorType type, typename CanT>
 DjiMotor<type, CanT>::DjiMotor(CanT &can_item,
         uint8_t motor_id,
         float ratio,
@@ -274,7 +274,7 @@ _statu(Status::NOT_INIT),
 _total_ecd(0),
 _feedback_ready(false)
 {
-  if (sys_state.running())  // 只允许在初始化期使用
+  if (sys_state.is_running())  // 只允许在初始化期使用
   {
     return;
   }
@@ -283,7 +283,7 @@ _feedback_ready(false)
     this->_statu = Status::BAD_ARG;
     return;
   }
-  else if ( motor_id == 8 && type == Motor6020 )  // 6020无ID8
+  else if ( motor_id == 8 && type == DjiMotorType::GM6020 )  // 6020无ID8
   {
     this->_statu = Status::BAD_ARG;
     return;
@@ -297,15 +297,15 @@ _feedback_ready(false)
   if (ratio <= 0)   // 按照说明书中的减速比配置默认减速比
   {
     switch (type) {
-      case Motor2006:{
+      case DjiMotorType::M2006:{
         ratio = 36;
         break;
       }
-      case Motor3508:{
+      case DjiMotorType::M3508:{
         ratio = 3591.0f/187.0f;
         break;
       }
-      case Motor6020:{
+      case DjiMotorType::GM6020:{
         ratio = 1;
         break;
       }
@@ -316,19 +316,19 @@ _feedback_ready(false)
   _data.param.offset = offset;
   _param.ecd_full_range = 8192;
   switch (type) {
-    case Motor3508:
+    case DjiMotorType::M3508:
       _param.current_limit = 16000;
       break;
-    case Motor2006:
+    case DjiMotorType::M2006:
       _param.current_limit = 10000;
       break;
-    case Motor6020:
+    case DjiMotorType::GM6020:
       _param.current_limit = _control_mode == DjiMotorControlMode::CURRENT ? 16384 : 25000;
       break;
   }
 }
 
-template <MotorType type, typename CanT>
+template <DjiMotorType type, typename CanT>
 DjiMotor<type, CanT>::~DjiMotor()
 {
   // 接收节点持有 this；必须在上下文销毁之前成功注销。
@@ -357,7 +357,7 @@ DjiMotor<type, CanT>::~DjiMotor()
   // _online 是成员对象，其析构函数会自动注销在线检查节点。
 }
 
-template<MotorType type, typename CanT>
+template<DjiMotorType type, typename CanT>
 Status DjiMotor<type, CanT>::init()
 {
   // 系统事件未就绪时保留对象状态，允许初始化流程稍后重试。
@@ -365,7 +365,7 @@ Status DjiMotor<type, CanT>::init()
   {
     return Status::NOT_INIT;
   }
-  if (sys_state.running())  // 只允许在初始化期使用
+  if (sys_state.is_running())  // 只允许在初始化期使用
   {
     return Status::NOT_SUPPORTED;
   }
@@ -394,8 +394,8 @@ Status DjiMotor<type, CanT>::init()
   // 确定发送can id
   uint32_t tx_can_id = 0x00;
   switch (type) {
-    case Motor2006:
-    case Motor3508:
+    case DjiMotorType::M2006:
+    case DjiMotorType::M3508:
     {
       if (_motor_id <= 4 )
       {
@@ -407,7 +407,7 @@ Status DjiMotor<type, CanT>::init()
       }
       break;
     }
-    case Motor6020:
+    case DjiMotorType::GM6020:
     {
       switch (_control_mode) {
         case DjiMotorControlMode::CURRENT:
@@ -460,7 +460,7 @@ Status DjiMotor<type, CanT>::init()
     return _statu;
   }
 
-  const uint32_t feedback_id = (type == Motor6020 ? 0x204U : 0x200U) + _motor_id;
+  const uint32_t feedback_id = (type == DjiMotorType::GM6020 ? 0x204U : 0x200U) + _motor_id;
   _rx_node = CanRxNodeT<CanT>::regist(*_can_item, feedback_id, &DjiMotor<type, CanT>::rx_callback, this);
   if (_rx_node == nullptr)
   {
@@ -480,20 +480,20 @@ Status DjiMotor<type, CanT>::init()
   return _statu;
 }
 
-template <MotorType type, typename CanT>
+template <DjiMotorType type, typename CanT>
 Status DjiMotor<type, CanT>::rx_callback(void *context, const CanRxMsg &rx)
 {
-  return static_cast<DjiMotor<type, CanT> *>(context)->DataUnpack(rx);
+  return static_cast<DjiMotor<type, CanT> *>(context)->unpack(rx);
 }
 
-template <MotorType type, typename CanT>
-Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
+template <DjiMotorType type, typename CanT>
+Status DjiMotor<type, CanT>::unpack(const CanRxMsg &rx)
 {
   if (_tx_node == nullptr)
   {
     return Status::NOT_INIT;
   }
-  if (rx.header.Identifier != ((type == Motor6020 ? 0x204U : 0x200U) + _motor_id) || rx.header.IdType != FDCAN_STANDARD_ID || rx.header.RxFrameType != FDCAN_DATA_FRAME || rx.header.FDFormat != FDCAN_CLASSIC_CAN || rx.header.DataLength != FDCAN_DLC_BYTES_8)
+  if (rx.header.Identifier != ((type == DjiMotorType::GM6020 ? 0x204U : 0x200U) + _motor_id) || rx.header.IdType != FDCAN_STANDARD_ID || rx.header.RxFrameType != FDCAN_DATA_FRAME || rx.header.FDFormat != FDCAN_CLASSIC_CAN || rx.header.DataLength != FDCAN_DLC_BYTES_8)
   {
     return Status::BAD_ARG;
   }
@@ -508,8 +508,8 @@ Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
   DjiMotorRawData raw  = _raw_data;
   raw.rpm              = static_cast<int16_t>((rx.data[2] << 8) | rx.data[3]);
   raw.torque_current   = static_cast<int16_t>((rx.data[4] << 8) | rx.data[5]);
-  raw.temperature      = type == Motor2006 ? 0U : rx.data[6];
-  data.radian_data.velocity = raw.rpm / data.param.ratio * (PI / 30.0f);
+  raw.temperature      = type == DjiMotorType::M2006 ? 0U : rx.data[6];
+  data.radian_data.velocity = raw.rpm / data.param.ratio * (ICBSP_PI_F / 30.0f);
 
   if (!_feedback_ready)
   {
@@ -533,12 +533,12 @@ Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
   raw.ecd = static_cast<int16_t>(ecd);
 
   // 保留双精度中间角度，避免多圈累计后单圈取模损失精度；多圈角度字段是 double，直接存（F11：原来先转 float 再存，精度还是 float）
-  const double angle                  = (static_cast<double>(_total_ecd) * (2.0 * PI) / _param.ecd_full_range - data.param.offset) / data.param.ratio;
+  const double angle                  = (static_cast<double>(_total_ecd) * (2.0 * ICBSP_PI) / _param.ecd_full_range - data.param.offset) / data.param.ratio;
   data.radian_data.angle_multi_round  = angle;
-  data.radian_data.angle_single_round = static_cast<float>(std::fmod(angle, 2.0 * PI));
+  data.radian_data.angle_single_round = static_cast<float>(std::fmod(angle, 2.0 * ICBSP_PI));
   if (data.radian_data.angle_single_round < 0.0f)
   {
-    data.radian_data.angle_single_round += 2.0f * PI;
+    data.radian_data.angle_single_round += 2.0f * ICBSP_PI_F;
   }
 
   taskENTER_CRITICAL();
@@ -551,8 +551,8 @@ Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
   return Status::OK;
 }
 
-template<MotorType type, typename CanT>
-Status DjiMotor<type, CanT>::FillData(int16_t output)
+template<DjiMotorType type, typename CanT>
+Status DjiMotor<type, CanT>::fill_data(int16_t output)
 {
   if (_statu != Status::OK )
   {
@@ -571,17 +571,17 @@ Status DjiMotor<type, CanT>::FillData(int16_t output)
   tx_data[0] = static_cast<uint8_t>(static_cast<uint16_t>(output)>>8);
   tx_data[1] = static_cast<uint8_t>(output);
 
-  return _tx_node->filldata(tx_data, _bus_slot);
+  return _tx_node->fill_data(tx_data, _bus_slot);
 
 }
 
-template <MotorType type, typename CanT>
-const MotorData &DjiMotor<type, CanT>::data(void) const
+template <DjiMotorType type, typename CanT>
+const MotorData &DjiMotor<type, CanT>::get_data(void) const
 {
   return _data;
 }
 
-template <MotorType type, typename CanT>
+template <DjiMotorType type, typename CanT>
 void DjiMotor<type, CanT>::snapshot(MotorData &data, DjiMotorRawData *raw) const
 {
   taskENTER_CRITICAL();
@@ -593,38 +593,38 @@ void DjiMotor<type, CanT>::snapshot(MotorData &data, DjiMotorRawData *raw) const
   taskEXIT_CRITICAL();
 }
 
-template <MotorType type, typename CanT>
-const DjiMotorRawData &DjiMotor<type, CanT>::raw_data(void) const
+template <DjiMotorType type, typename CanT>
+const DjiMotorRawData &DjiMotor<type, CanT>::get_raw_data(void) const
 {
   return _raw_data;
 }
 
-template <MotorType type, typename CanT>
-const DjiMotorParam &DjiMotor<type, CanT>::param(void) const
+template <DjiMotorType type, typename CanT>
+const DjiMotorParam &DjiMotor<type, CanT>::get_param(void) const
 {
   return _param;
 }
 
-template <MotorType type, typename CanT>
-const Online &DjiMotor<type, CanT>::online(void) const
+template <DjiMotorType type, typename CanT>
+const Online &DjiMotor<type, CanT>::get_online(void) const
 {
   return _online;
 }
 
-template <MotorType type, typename CanT>
+template <DjiMotorType type, typename CanT>
 const EventState &DjiMotor<type, CanT>::get_state(void) const
 {
   return _state;
 }
 
-template <MotorType type, typename CanT>
-const LuenbergerMotorData &DjiMotor<type, CanT>::lvboData(void) const
+template <DjiMotorType type, typename CanT>
+const LuenbergerMotorData &DjiMotor<type, CanT>::get_lvbo_data(void) const
 {
   return _lvbo_data;
 }
 
-template <MotorType type, typename CanT>
-Status DjiMotor<type, CanT>::statu(void) const
+template <DjiMotorType type, typename CanT>
+Status DjiMotor<type, CanT>::get_status(void) const
 {
   return _statu;
 }

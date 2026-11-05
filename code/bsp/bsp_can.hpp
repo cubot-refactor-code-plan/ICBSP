@@ -194,7 +194,7 @@ public:
   }
 
   /** @brief 底层句柄（供 HAL 回调分发） */
-  CAN_HandleTypeDef *handle() const
+  CAN_HandleTypeDef *get_handle() const
   {
     return _hcan;
   }

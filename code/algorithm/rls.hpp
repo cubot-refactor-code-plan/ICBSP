@@ -101,7 +101,7 @@ public:
    * @param x 回归向量（X_DIM×1）
    * @param y 观测（Y_DIM×1）
    * @return OK=已更新；NOT_INIT=init() 没成功过；BAD_ARG=x / y 含 NaN / inf 或本次结果非有限，样本被丢弃、状态不变
-   * @note P 失去正定时自动重置为 p0·I 并继续本次更新（仍返回 OK），次数见 covariance_reset_count()。
+   * @note P 失去正定时自动重置为 p0·I 并继续本次更新（仍返回 OK），次数见 get_covariance_reset_count()。
    */
   Status update(const MatrixF32<X_DIM, 1> &x, const MatrixF32<Y_DIM, 1> &y);
 
@@ -136,25 +136,25 @@ public:
   }
 
   /** @brief 成功更新的样本数 */
-  uint32_t update_count() const
+  uint32_t get_update_count() const
   {
     return _update_cnt;
   }
 
   /** @brief 因非有限值被丢弃的样本数 */
-  uint32_t reject_count() const
+  uint32_t get_reject_count() const
   {
     return _reject_cnt;
   }
 
   /** @brief P 失去正定而重置的次数；持续增加说明单精度不够或模型 / 数据有问题 */
-  uint32_t covariance_reset_count() const
+  uint32_t get_covariance_reset_count() const
   {
     return _reset_cnt;
   }
 
   /** @brief tr(P) 触到上限而限制放大的次数；持续增加说明输入激励不足 */
-  uint32_t trace_limit_count() const
+  uint32_t get_trace_limit_count() const
   {
     return _trace_limit_cnt;
   }

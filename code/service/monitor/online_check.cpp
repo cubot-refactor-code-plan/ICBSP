@@ -117,10 +117,10 @@ Status Online::refresh_isr(void)
 }
 
 
-Status Online::is_online(void) const
+bool Online::is_online(void) const
 {
   const ScopedTaskCritical lock;
-  return _statu;
+  return _statu == Status::OK;
 }
 
 
