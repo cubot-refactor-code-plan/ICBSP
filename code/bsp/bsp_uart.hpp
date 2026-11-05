@@ -33,7 +33,7 @@
 #ifndef __BSP_UART_HPP__
 #define __BSP_UART_HPP__
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 UART（HAL_UART_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_UART_MODULE_ENABLED
@@ -71,13 +71,18 @@ inline TickType_t ms_to_ticks(uint32_t ms)
  * @brief 地址能否被 DMA1 / DMA2 访问
  * @note ITCM（0x0000_0000 起）与 DTCM（0x2000_0000 ~ 0x2400_0000）只连 CPU 与 MDMA，DMA1 / DMA2 访问会出传输错误。
  *       CubeMX 默认把 .bss 放在 DTCM，所以 DMA 收发的实例必须放进 .dma_buffer。
+ * @note F4：主 SRAM 全部可 DMA，`.dma_buffer` 段不生成；只有 CCM RAM（0x1000_0000 ~ 0x1000_FFFF）不可 DMA。
  */
 inline bool dma_reachable(const void *addr)
 {
+#if BSP_SERIES_F4
+  return bsp_series::dma_reachable(addr);
+#else
   const uintptr_t a    = reinterpret_cast<uintptr_t>(addr);
   const bool      itcm = a < 0x08000000U;
   const bool      dtcm = a >= 0x20000000U && a < 0x24000000U;
   return !itcm && !dtcm;
+#endif
 }
 
 /** @brief 串口实例对应的 NVIC 中断号；不认识的实例返回 false */
@@ -503,11 +508,13 @@ private:
   {
     constexpr uint32_t BYTE_BITS = USART_CR1_RXNEIE_RXFNEIE | USART_CR1_IDLEIE;
     const bool         byte_irq  = (huart->Instance->CR1 & BYTE_BITS) == BYTE_BITS;
+#if BSP_UART_HAS_FIFO
     if (huart->FifoMode == UART_FIFOMODE_ENABLE)
     {
       const bool fifo_irq = ((huart->Instance->CR3 & USART_CR3_RXFTIE) != 0U) && ((huart->Instance->CR1 & USART_CR1_IDLEIE) != 0U);
       return fifo_irq || byte_irq;
     }
+#endif
     return byte_irq;
   }
 };
@@ -919,7 +926,8 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::init()
   // 打开 UART 硬件 FIFO（16 字节）。CubeMX 默认关着，此时接收只有 RDR 一级缓冲：搬运稍晚一点下一个字节就 ORE。
   // 2026-10-17 实测：不开 FIFO 时连续流在 2 Mbps 以上几乎全丢，开了之后 4 Mbps 也基本无损。
   // 代价：tx_recover() 中止发送时会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）。
-#if UART_ENABLE_FIFO
+  // F4 没有硬件 FIFO（BSP_UART_HAS_FIFO = 0），也没有 HAL_UARTEx_EnableFifoMode()，整段不编译。
+#if UART_ENABLE_FIFO && BSP_UART_HAS_FIFO
   (void)HAL_UARTEx_EnableFifoMode(_huart);
 #endif
 
@@ -1088,7 +1096,12 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
     // 只看计数不够：一段末尾计数已是 0、UART / DMA FIFO 里的字节还在发，相邻两次巡检都落在段尾会误判（实测）。
     // 真卡死时两条都不成立：DMAT 被清 → 计数不动、移位完后 TC 置位；完成中断丢失 → 计数 0 且 TC 已置位。
     const size_t remaining = Transport::tx_remaining(_huart);
+#if BSP_SERIES_F4
+    // F4：状态寄存器是 SR，TC 位宏是 USART_SR_TC
+    const bool   shifting  = (_huart->Instance->SR & USART_SR_TC) == 0U;
+#else
     const bool   shifting  = (_huart->Instance->ISR & USART_ISR_TC) == 0U;
+#endif
     if (remaining != _tx_last_remaining || shifting)
     {
       _tx_last_remaining     = remaining;
@@ -1304,7 +1317,15 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::arm_reception()
   }
 
   // 先清掉残留的 UART 错误标志：否则 HAL 会因为“启动前已有挂起的 ORE / FE / NE”拒绝启动
+#if BSP_SERIES_F4
+  // F4 没有 ICR / UART_CLEAR_xxx：错误标志靠「先读 SR 再读 DR」清除
+  __HAL_UART_CLEAR_PEFLAG(_huart);
+  __HAL_UART_CLEAR_FEFLAG(_huart);
+  __HAL_UART_CLEAR_NEFLAG(_huart);
+  __HAL_UART_CLEAR_OREFLAG(_huart);
+#else
   __HAL_UART_CLEAR_FLAG(_huart, UART_CLEAR_PEF | UART_CLEAR_FEF | UART_CLEAR_NEF | UART_CLEAR_OREF);
+#endif
 
   if (Transport::CIRCULAR_RX)
   {

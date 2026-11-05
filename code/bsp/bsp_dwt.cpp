@@ -15,7 +15,10 @@
 Status BspDwt::init()
 {
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // 1. 总开关（脱机运行时必须自己置位）
+#if BSP_SERIES_H7
   DWT->LAR    = 0xC5ACCE55UL;                     // 2. Cortex-M7 的软件锁解锁
+#endif
+  // F4（CM4）：DWT 结构里没有 LAR（这个 CMSIS 版本把 LAR 归到 ITM），也不需要解锁
   DWT->CYCCNT = 0U;                               // 3. 清零
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;            // 4. 使能计数
   for (uint32_t i = 0U; i < 16U; ++i)             // 5. 使能后约 8 周期计数才稳定
@@ -129,18 +132,23 @@ uint32_t BspDwt::update_timeline()
 }
 
 /**
- * @brief 算出 CPU 时钟（Hz）= SYSCLK / D1CPRE
+ * @brief 算出 CPU 时钟（Hz）= SYSCLK / D1CPRE（H7）、HCLK（F4）
  *
  * @note D1CPRE 的编码与 AHB 预分频 HPRE 相同：0xx=/1，1000=/2 … 1111=/512。
+ * @note F4：CM4 没有 D1 域，CPU 时钟就是 HCLK。
  */
 uint32_t BspDwt::get_cpu_clock_hz()
 {
+#if BSP_SERIES_F4
+  return HAL_RCC_GetHCLKFreq();
+#else
   // D1CPRE 的编码与 AHB 预分频 HPRE 相同：0xx=/1，1000=/2 … 1111=/512
   static const uint16_t div_tbl[8] = {2U, 4U, 8U, 16U, 64U, 128U, 256U, 512U};
   const uint32_t        d1cpre     = (RCC->D1CFGR & RCC_D1CFGR_D1CPRE_Msk) >> RCC_D1CFGR_D1CPRE_Pos;
 
   const uint32_t sysclk = HAL_RCC_GetSysClockFreq();
   return (d1cpre < 8U) ? sysclk : (sysclk / div_tbl[d1cpre - 8U]);
+#endif
 }
 
 /* ==================== */
