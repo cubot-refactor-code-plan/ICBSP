@@ -34,6 +34,10 @@ inline DjiMotor<Motor3508, decltype(bsp_can1)> chassis_lf(bsp_can1, 1U);  // 1 =
 - 模板参数 `type` 决定：**合法 ID 范围**、反馈解析、控制帧映射、限幅、默认减速比
 - 构造后必须 `init()`：内部会 `CanRxNodeT::regist()` 注册反馈帧、`CanTxNodeT` 申请发送槽位
 - `DjiMotorControlMode::VOLTAGE` / `CURRENT` 只对 GM6020 有效（M3508/C620、M2006/C610 固定电流协议）
+- 跨任务读反馈用 `snapshot(MotorData &, DjiMotorRawData *)`（临界区内拷贝同一帧）；`data()` 是实时引用，can_rx_task 随时在改。
+  原来的互斥锁去掉了（读者拿不到锁，try-lock 失败时反而把帧当成没人认领，评审 F5）
+- 构造函数最后一个参数 `online_timeout_ms`（默认 30）：多久收不到有效反馈判离线（评审 I4）
+- 多圈角度 `angle_multi_round` 是 double，直接存双精度结果（评审 F11）
 - 对象**不可复制/移动**：在线检查节点与控制帧槽位靠对象地址标识
 - `DataUnpack(rx)` 由接收节点回调调用，`FillData(output)` 往发送槽位填值，一般业务只用 `statu()` 和设置输出
 
@@ -96,7 +100,8 @@ inline DeviceServo servo({.pwm = &bsp_pwm_servo,
 inline DeviceR9dsT<decltype(bsp_uart3)> rc(bsp_uart3);
 ```
 
-`init()` 注册串口帧处理，`update(timeout_ms)` 取最新通道值，`is_online()` / `frame_lost()` / `failsafe()`
+`init()` 注册串口帧处理，`update(timeout_ms)` 取最新通道值，`is_online()` / `frame_lost()` / `failsafe()`；
+`update()` 在别的任务里跑时用 `snapshot(Rc &, uint16_t *raw)` 读（评审 F5）。诊断计数 `byte_cnt` / `frame_cnt` 是 `uint32_t`（N34）
 用于失控保护。
 
 ### DeviceEmmv5GroupT&lt;Uart&gt;
@@ -125,6 +130,10 @@ inline DeviceBmi088 imu(bsp_spi_acc, bsp_spi_gyro,
 - `init()` 做自检与量程配置（加速度计和陀螺仪是两条独立片选）
 - `update(timeout_ms)` 读原始数据并跑 VQF，`snapshot(ImuData&, Bmi088RawData*)` 取一致的一份快照
 - 诊断计数：`acc_saturation_count()`、`gyro_saturation_count()`、`update_fail_count()`、`attitude_skip_count()`
+- `attitude_ready()`：姿态解算过至少一帧才为真；之前 `ImuData` 的四元数是单位四元数（不是全 0），姿态控制要先等它（评审 F1）
+- 运行中重新 `init()` 与内部刷新任务互斥（刷新锁），不会和正在解算的那一帧并发改 VQF / 芯片（评审 F8）
+- 调度器启动前的等待用 DWT 忙等，不依赖 HAL 时基中断的优先级（评审 A3）
+- 自动模式只按陀螺仪节奏刷新，加速度计 INT1 只计数：不需要时宿主可以不转调、或者不开对应 EXTI
 - `attach_task(handle)` 可绑定任务句柄，让中断/错误能唤醒该任务
 
 ### DeviceBuzzer

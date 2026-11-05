@@ -43,6 +43,7 @@
 #include "bsp_pwm.hpp" // 被驱动的 PWM 通道
 #include "status.hpp"
 
+#include <atomic>
 #include <stdint.h>
 
 
@@ -186,8 +187,11 @@ private:
   /* ==================== 跨任务变量 ==================== */
   // 只允许单条 32 位存储的直接赋值（见文件头的"线程模型"），多加一步就可能被读到中间态
 
-  float _target_deg  = 0.0f;  ///< 跨任务：目标角度，set_angle() 写、update() 读
-  bool  _enabled_req = false; ///< 跨任务：要输出，set_angle() 置真、off() 置假、update() 执行
+  // 跨任务变量用 std::atomic（N37）：“单条 32 位存储天然原子”只保证不撕裂，不保证编译器不缓存 / 不重排；
+  // Cortex-M7 上 32 位 atomic 无锁，读写就是普通的 LDR / STR 加内存屏障
+  std::atomic<float> _target_deg {0.0f};  ///< 跨任务：目标角度，set_angle() 写、update() 读
+  std::atomic<bool>  _enabled_req {false}; ///< 跨任务：要输出，set_angle() 置真、off() 置假、update() 执行
+  static_assert(std::atomic<float>::is_always_lock_free && std::atomic<bool>::is_always_lock_free, "舵机的跨任务变量要求无锁原子");
 
   /* ==================== */
   /* ==================== 成员变量 ==================== */

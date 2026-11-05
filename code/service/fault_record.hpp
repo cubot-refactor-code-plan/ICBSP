@@ -7,7 +7,10 @@
  *
  * @copyright Copyright (c) 2026
  *
- * @details 三个入口（C 链接，内核与 freertos.c 也能调）：
+ * @details 故障异常（HardFault / MemManage / BusFault / UsageFault）用 fault_on_exception() 记录（stm32h7xx_it.c 的 USER CODE 段）。
+ *          上电（POR / BOR）时 fault_record 整体清零（AXI SRAM 带 ECC，上电后的内容和校验位都是随机的），复位原因记进 boot_rsr。
+ *          还提供 ICBSP_CHECK(expr)：有副作用的初始化检查（init()、xTaskCreate()）用它，不会随断言一起被编译掉（评审 A1）。
+ *          三个入口（C 链接，内核与 freertos.c 也能调）：
  *            - fault_on_assert()         —— configASSERT 失败（定义见 FreeRTOSConfig.h 的 USER CODE 1）
  *            - fault_on_stack_overflow() —— vApplicationStackOverflowHook（freertos.c 的 USER CODE 4）
  *            - fault_on_malloc_failed()  —— vApplicationMallocFailedHook（freertos.c 的 USER CODE 5）
@@ -38,6 +41,10 @@ enum class FaultKind : uint32_t
   ASSERT         = 1, ///< configASSERT 失败
   STACK_OVERFLOW = 2, ///< 任务栈溢出
   MALLOC_FAILED  = 3, ///< pvPortMalloc 失败
+  HARD_FAULT     = 4, ///< HardFault（评审 A5）
+  MEM_MANAGE     = 5, ///< MemManage（MPU / 执行权限）
+  BUS_FAULT      = 6, ///< BusFault（访问不存在的地址、ECC 错误等）
+  USAGE_FAULT    = 7, ///< UsageFault（未定义指令、非对齐、除零等）
 };
 
 /** @brief 故障现场（布局固定，调试器直接读；按 8 字节对齐，见文件头 ECC 说明） */
@@ -53,6 +60,17 @@ struct alignas(8) FaultRecord
   uint32_t  ipsr;     ///< 故障时的 IPSR：0 = 任务上下文，非 0 = 异常号（在中断里断言）
   char      file[48]; ///< 断言所在源文件名（只留文件名，不含目录）
   char      task[16]; ///< 溢出的任务名 / 故障时正在运行的任务名（调度器未启动时为空）
+  // 以下只对 HARD_FAULT ~ USAGE_FAULT 有意义（其他种类为 0）：故障状态寄存器与被打断现场
+  uint32_t cfsr;       ///< SCB->CFSR（MemManage / Bus / Usage 三组状态位）
+  uint32_t hfsr;       ///< SCB->HFSR（FORCED = 由可配置故障升级而来）
+  uint32_t mmfar;      ///< SCB->MMFAR（CFSR.MMARVALID 时有效）
+  uint32_t bfar;       ///< SCB->BFAR（CFSR.BFARVALID 时有效）
+  uint32_t pc;         ///< 出错指令地址（被打断现场的 PC；0 = 没能解码，见 exc_return）
+  uint32_t lr;         ///< 被打断现场的 LR
+  uint32_t xpsr;       ///< 被打断现场的 xPSR
+  uint32_t exc_return; ///< 进异常时的 EXC_RETURN：bit2 = 1 说明现场在 PSP（任务里出错），PC / LR 从 PSP 解码；= 0 在 MSP（中断里或调度器启动前），不解码
+  uint32_t boot_rsr;   ///< 本次启动时的 RCC->RSR（复位原因；读完已清，评审 A8）
+  uint32_t reserved;   ///< 保留（让 flush 落在 64 位边界）
   uint32_t  flush[2]; ///< 独占一个 64 位字：停机前写它一次，把前面还在 ECC 缓冲里的写入挤到 SRAM（内容无意义）
 };
 
@@ -72,9 +90,32 @@ extern "C"
 
   /** @brief 内存分配失败钩子：记下当前任务名后停机（不返回） */
   void fault_on_malloc_failed(void);
+  /**
+   * @brief 故障异常：记下故障状态寄存器与被打断现场后停机（不返回，评审 A5）
+   * @param kind       FaultKind 的值（4 = HardFault、5 = MemManage、6 = BusFault、7 = UsageFault）
+   * @param exc_return 进异常时的 LR（EXC_RETURN），在处理函数里用 __builtin_return_address(0) 取
+   * @note 在 stm32h7xx_it.c 对应处理函数的 USER CODE 段里调用，片段见 templates/stm32h7xx_it_user_code.c。
+   */
+  void fault_on_exception(uint32_t kind, uint32_t exc_return);
 
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ * @brief 求值并检查：表达式为假时记下文件名 / 行号后停机（与 configASSERT 失败同一个入口）
+ * @note 和 configASSERT 的区别：表达式**总会求值**。configASSERT 可能被定义成空（FreeRTOS 默认、或者发布构建关掉断言），
+ *       写在它里面的 init() / xTaskCreate() 会被整个删掉，系统静默什么都不做（评审 A1）。有副作用的检查一律用它：
+ *         ICBSP_CHECK(bsp_can1.init() == Status::OK);
+ *       纯粹的条件检查（没有副作用）照旧用 configASSERT。
+ */
+#define ICBSP_CHECK(expr)                  \
+  do                                       \
+  {                                        \
+    if (!(expr))                           \
+    {                                      \
+      fault_on_assert(__FILE__, __LINE__); \
+    }                                      \
+  } while (0)
 
 #endif // __SERVICE_FAULT_RECORD_HPP__

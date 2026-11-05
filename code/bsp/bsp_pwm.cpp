@@ -25,12 +25,22 @@ Status BspPwm::init()
       IS_TIM_CCX_INSTANCE(_config.htim->Instance, _config.channel) == 0U)
     return Status::BAD_ARG;
 
-  // 与 CubeMX 配置对齐一次 ARR，之后由 set_freq() 动态改（_counter_clk_hz / _period 构造时已算好）
+  // 与 CubeMX 配置对齐一次 ARR，之后由 set_freq() 动态改（_counter_clk_hz / _period 构造时已算好）。
+  // 打开 ARR 预装载（F10）：之后改 ARR 只在周期结束时生效，不会因为新 ARR 小于当前计数值而多出一个超长周期
+  SET_BIT(_config.htim->Instance->CR1, TIM_CR1_ARPE);
+  __HAL_TIM_ENABLE_OCxPRELOAD(_config.htim, _config.channel); // CCR 也预装载（HAL 的 PWM 配置一般已经开了），和 ARR 同时生效
   __HAL_TIM_SET_AUTORELOAD(_config.htim, _period);
 
   // 关键：先把 CCR 清 0，保证启动瞬间是 0% 占空比（CubeMX 里 Pulse 可能非 0）
   _duty_pct = 0.0f;
   __HAL_TIM_SET_COMPARE(_config.htim, _config.channel, 0U);
+
+  // 预装载的 ARR / CCR 要等更新事件才进影子寄存器：定时器还没跑时发一次 UG 立刻装进去；
+  // 同定时器的别的通道已经在跑时不发（UG 会把计数清零），等本周期结束自然生效
+  if ((_config.htim->Instance->CR1 & TIM_CR1_CEN) == 0U)
+  {
+    _config.htim->Instance->EGR = TIM_EGR_UG;
+  }
 
   if (HAL_TIM_PWM_Start(_config.htim, _config.channel) != HAL_OK)
     return Status::IO_ERROR;
@@ -59,8 +69,8 @@ void BspPwm::set_pulse_us(float width_us)
   if (!_initialized || _counter_clk_hz == 0U)
     return;
 
-  // 周期时长 (us) = 计数个数 / 计数器时钟
-  const float period_us = static_cast<float>(_period + 1U) * 1000000.0f / static_cast<float>(_counter_clk_hz);
+  // 周期时长 (us) = 计数个数 / 计数器时钟（计数个数用 64 位：32 位定时器 ARR = 0xFFFFFFFF 时 +1 会溢出成 0，F10）
+  const float period_us = static_cast<float>(get_period_cnt()) * 1000000.0f / static_cast<float>(_counter_clk_hz);
   if (period_us <= 0.0f)
     return;
 
@@ -68,26 +78,36 @@ void BspPwm::set_pulse_us(float width_us)
 }
 
 /** @brief 动态改频率：ARR = 计数器时钟 / 频率 - 1，PSC 保持不变 */
-void BspPwm::set_freq(uint32_t freq_hz)
+Status BspPwm::set_freq(uint32_t freq_hz)
 {
-  if (!_initialized || freq_hz == 0U || _counter_clk_hz == 0U)
-    return;
+  if (!_initialized || _counter_clk_hz == 0U)
+    return Status::NOT_INIT;
+  if (freq_hz == 0U)
+    return Status::BAD_ARG;
 
-  uint32_t arr = _counter_clk_hz / freq_hz;
+  bool     clamped = false;
+  uint32_t arr     = _counter_clk_hz / freq_hz;
   if (arr == 0U)
-    arr = 1U; // 频率高于计数器时钟时取最小周期
+  {
+    arr     = 1U; // 频率高于计数器时钟时取最小周期
+    clamped = true;
+  }
   arr -= 1U;
 
-  // 上限取决于计数器位宽：TIM2 为 32 位，其余为 16 位
+  // 上限取决于计数器位宽：TIM2 / TIM5 / TIM23 / TIM24 为 32 位，其余为 16 位
   const uint32_t arr_max = IS_TIM_32B_COUNTER_INSTANCE(_config.htim->Instance) ? 0xFFFFFFFFUL : 0xFFFFUL;
   if (arr > arr_max)
-    arr = arr_max;
+  {
+    arr     = arr_max;
+    clamped = true;
+  }
 
   _period = arr;
-  __HAL_TIM_SET_AUTORELOAD(_config.htim, arr);
+  __HAL_TIM_SET_AUTORELOAD(_config.htim, arr); // ARPE 已开：本周期结束时生效
 
-  // 按新周期重算 CCR，保持占空比不变
+  // 按新周期重算 CCR，保持占空比不变（CCR 同样是预装载的，和 ARR 一起生效）
   _apply_duty();
+  return clamped ? Status::NOT_SUPPORTED : Status::OK;
 }
 
 /** @brief 关断输出（CCR=0，引脚保持低电平） */
@@ -111,10 +131,12 @@ void BspPwm::_apply_duty()
   if (pct > 100.0f)
     pct = 100.0f;
 
-  const uint32_t period_cnt = _period + 1U;
-  uint32_t       ccr        = static_cast<uint32_t>(pct * static_cast<float>(period_cnt) / 100.0f + 0.5f);
+  const uint64_t period_cnt = get_period_cnt();
+  uint64_t       ccr        = static_cast<uint64_t>(static_cast<double>(pct) * static_cast<double>(period_cnt) / 100.0 + 0.5);
   if (ccr > period_cnt)
     ccr = period_cnt;
+  if (ccr > 0xFFFFFFFFULL)
+    ccr = 0xFFFFFFFFULL; // CCR 是 32 位：ARR = 0xFFFFFFFF 的定时器 100% 时写最大值
 
   _duty_pct = pct;
   __HAL_TIM_SET_COMPARE(_config.htim, _config.channel, ccr);
@@ -138,9 +160,9 @@ uint32_t BspPwm::get_counter_clk_hz() const
 }
 
 /** @brief 当前周期计数个数（ARR + 1） */
-uint32_t BspPwm::get_period_cnt() const
+uint64_t BspPwm::get_period_cnt() const
 {
-  return _period + 1U;
+  return static_cast<uint64_t>(_period) + 1U;
 }
 
 /** @brief 当前频率 (Hz) */
@@ -149,7 +171,7 @@ uint32_t BspPwm::get_freq_hz() const
   if (_counter_clk_hz == 0U)
     return 0U;
 
-  return _counter_clk_hz / (_period + 1U);
+  return static_cast<uint32_t>(_counter_clk_hz / get_period_cnt());
 }
 
 /* ==================== */

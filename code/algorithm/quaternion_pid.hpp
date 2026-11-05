@@ -49,11 +49,11 @@ public:
   {
     /** @brief 按序构造（参数顺序 = 字段顺序） */
     Config(const PID::Config &x = PID::Config(), const PID::Config &y = PID::Config(), const PID::Config &z = PID::Config(),
-           DiffMode diff_mode = DiffMode::DIFF_FEEDBACK, float dt = 0.001f, float out_norm_max = 0.0f)
+           DiffMode diff_mode_ = DiffMode::DIFF_FEEDBACK, float dt_ = 0.001f, float out_norm_max_ = 0.0f)
       : axis{x, y, z},
-        diff_mode(diff_mode),
-        dt(dt),
-        out_norm_max(out_norm_max)
+        diff_mode(diff_mode_),
+        dt(dt_),
+        out_norm_max(out_norm_max_)
     {
     }
 

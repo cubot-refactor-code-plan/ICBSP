@@ -28,7 +28,7 @@
  *
  *   // 辨识 y = a·u + b（x = {u, 1}，Ω = {a; b}），遗忘因子 0.99、P0 = 1000·I
  *   Rls<2, 1> rls({0.99f, 1000.0f});
- *   configASSERT(rls.init() == Status::OK);   // 初值 Ω = 0；也可传入先验 rls.init(omega0)
+ *   ICBSP_CHECK(rls.init() == Status::OK);   // 初值 Ω = 0；也可传入先验 rls.init(omega0)
  *
  *   // 每个样本
  *   const float x_data[2] = {u, 1.0f};
@@ -50,7 +50,7 @@
 #include <stdint.h>
 
 #include "matrix.hpp"
-#include "status.hpp" // 统一状态码
+#include "status_code.hpp" // 统一状态码（不依赖 RTOS，A6）
 
 /**
  * @brief 带遗忘因子的递归最小二乘
@@ -67,7 +67,7 @@ public:
   struct Config
   {
     /** @brief 按序构造（参数顺序 = 字段顺序） */
-    Config(float lambda = 1.0f, float p0 = 1000.0f, float p_trace_max = 0.0f) : lambda(lambda), p0(p0), p_trace_max(p_trace_max)
+    Config(float lambda_ = 1.0f, float p0_ = 1000.0f, float p_trace_max_ = 0.0f) : lambda(lambda_), p0(p0_), p_trace_max(p_trace_max_)
     {
     }
 

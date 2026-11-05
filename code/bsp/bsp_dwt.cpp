@@ -25,9 +25,8 @@ Status BspDwt::init()
   DWT->CYCCNT = 0U; // 6. 稳定后再清零
 
   _cpu_hz   = get_cpu_clock_hz();
-  _round_s  = 4294967296.0 / (double)_cpu_hz; // 2^32 / CPU 时钟
-  _base_s   = 0.0;
-  _last_cnt = 0U;
+  _wrap_cycles = 0U;
+  _last_cnt    = 0U;
 
   // 复核：NOCYCCNT=1（本内核无 CYCCNT）或使能位没写进去 ⇒ 计时不可信
   _inited = ((DWT->CTRL & DWT_CTRL_NOCYCCNT_Msk) == 0U) && ((DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk) != 0U);
@@ -47,11 +46,17 @@ double BspDwt::get_delta_s(uint32_t *last) const
 /** @brief 绝对时间（秒，自 init() 起算） */
 double BspDwt::get_time_s()
 {
-  // 必须先调用 update_timeline()（它会累加 _base_s 的副作用），再取 _base_s。
-  // 若写成 `_base_s + update_timeline()/...`，则 "+" 两侧求值顺序未定义：
-  // 编译器可能先取旧的 _base_s，导致回绕那一次调用少一整圈（时间倒退 7.809 s）。
-  const uint32_t now = update_timeline();
-  return _base_s + (double)now / (double)_cpu_hz;
+  if (!_inited)
+  {
+    return 0.0;
+  }
+  return (double)update_timeline() / (double)_cpu_hz;
+}
+
+/** @brief 64 位周期数（回绕已展开） */
+uint64_t BspDwt::get_cycles()
+{
+  return _inited ? update_timeline() : 0U;
 }
 
 /** @brief 绝对时间（毫秒） */
@@ -114,18 +119,22 @@ void BspDwt::wait_cycles(double cycles) const
   }
 }
 
-/** @brief 回绕检测 + 累加，返回本次读到的 CYCCNT（绝对时间轴唯一的状态更新点） */
-uint32_t BspDwt::update_timeline()
+/** @brief 回绕检测 + 累加，返回 64 位周期数（绝对时间轴唯一的状态更新点） */
+uint64_t BspDwt::update_timeline()
 {
+  // 读 CYCCNT、比较、写 _last_cnt 必须是一个整体：两个任务交错时，后读的先写，另一个回来会看到 now < _last_cnt，
+  // 误判成回绕、时间往前跳一圈（C11）。关中断只有十几条指令，任务 / ISR / 调度器启动前都能用。
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   const uint32_t now = DWT->CYCCNT;
-
   if (now < _last_cnt) // 计数器回绕：补上一圈
   {
-    _base_s += _round_s;
+    _wrap_cycles += 4294967296ULL;
   }
-  _last_cnt = now;
-
-  return now;
+  _last_cnt             = now;
+  const uint64_t cycles = _wrap_cycles + now;
+  __set_PRIMASK(primask);
+  return cycles;
 }
 
 /**

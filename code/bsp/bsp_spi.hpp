@@ -26,8 +26,8 @@
  *   BspSpiDevice bmi088_gyro_spi(bsp_spi2, {GYRO_GYRO_CS_GPIO_Port, GYRO_GYRO_CS_Pin, 0x80U, 0U});
  *
  *   // 3) 初始化阶段（system_init() 之后、system_start() 之前），总线先于设备
- *   configASSERT(bsp_spi2.init() == Status::OK);
- *   configASSERT(bmi088_acc_spi.init() == Status::OK);
+ *   ICBSP_CHECK(bsp_spi2.init() == Status::OK);
+ *   ICBSP_CHECK(bmi088_acc_spi.init() == Status::OK);
  *
  *   // 4) 访问（任务上下文）
  *   uint8_t id = 0U;

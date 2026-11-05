@@ -36,7 +36,7 @@
  * 【加实例的三步（以 CAN2 为例）】
  *   1. `board_cfg.hpp`：`inline BspCanT<16, 16> bsp_can2({.hfdcan = &hfdcan2, .name = "CAN2"});`
  *   2. 本文件：`BSP_CAN_INSTANCES(X)` 里加一行 `X(bsp_can2)`（续行用反斜杠，**最后一项后面不加逗号**）
- *   3. `board_cfg.cpp`：`configASSERT(bsp_can2.init() == Status::OK);`
+ *   3. `board_cfg.cpp`：`ICBSP_CHECK(bsp_can2.init() == Status::OK);`
  */
 
 #ifndef __BOARD_INSTANCES_HPP__

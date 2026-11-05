@@ -59,14 +59,28 @@ public:
    */
   double get_delta_s(uint32_t *last) const;
 
-  /** @brief 当前绝对时间（秒，自 init() 起算）—— 会推进内部累加量，仅任务上下文调用 */
+  /**
+   * @brief 当前绝对时间（秒，自 init() 起算）
+   * @note 任何上下文都能调（任务 / ISR / 调度器启动前）：回绕检测在一段很短的关中断区里做（C11）。
+   * @note 回绕要求两次调用间隔小于一圈（550 MHz 下 7.8 s）：sys_task 每 10 ms 调一次 get_cycles() 保证这一点；
+   *       SYS_TASK_ENABLE = 0 时由宿主自己定期调用。
+   */
   double get_time_s();
 
-  /** @brief 当前绝对时间（毫秒）—— 会推进内部累加量，仅任务上下文调用 */
+  /** @brief 当前绝对时间（毫秒），同 get_time_s() */
   double get_time_ms();
 
-  /** @brief 当前绝对时间（微秒）—— 会推进内部累加量，仅任务上下文调用 */
+  /** @brief 当前绝对时间（微秒），同 get_time_s() */
   double get_time_us();
+
+  /** @brief 自 init() 起的 64 位 CPU 周期数（回绕已展开），同 get_time_s() 的调用约束 */
+  uint64_t get_cycles();
+
+  /** @brief init() 是否成功（未成功时 delay_*() 不等待、时间恒为 0） */
+  bool is_init() const
+  {
+    return _inited;
+  }
 
   /**
    * @brief 忙等指定纳秒（纯忙等，不让出 CPU）
@@ -99,8 +113,8 @@ public:
 private:
   /* ==================== 私有实现 ==================== */
 
-  /** @brief 回绕检测 + 累加，返回本次读到的 CYCCNT（绝对时间轴唯一的状态更新点） */
-  uint32_t update_timeline();
+  /** @brief 回绕检测 + 累加（短关中断区），返回 64 位周期数（绝对时间轴唯一的状态更新点） */
+  uint64_t update_timeline();
 
   /** @brief 四个 delay_* 的公共实现：忙等 cycles 个 CPU 周期 */
   void wait_cycles(double cycles) const;
@@ -111,8 +125,7 @@ private:
   // 成员变量
 
   uint32_t _cpu_hz   = 0U;    ///< CPU 时钟（Hz），即 CYCCNT 计数频率
-  double   _round_s  = 0.0;   ///< 一圈回绕对应的秒数（2^32 / _cpu_hz）
-  double   _base_s   = 0.0;   ///< 已完成回绕的累计秒数
+  uint64_t _wrap_cycles = 0U;  ///< 已完成回绕的累计周期数（2^32 的整数倍）
   uint32_t _last_cnt = 0U;    ///< 上次回绕检测时的 CYCCNT 快照
   bool     _inited   = false; ///< 初始化成功标志
 

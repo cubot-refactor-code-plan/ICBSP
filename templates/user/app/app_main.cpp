@@ -86,14 +86,15 @@ extern "C" void app_init(void)
   system_set_report_hook(sys_report, 5000U);
 
   // 3. 业务任务（可选）：示例任务不自动创建，需要时在这里加，例如：
-  //      configASSERT(xTaskCreate(heartbeat_task, "heartbeat", 256, NULL,
+  //      ICBSP_CHECK(xTaskCreate(heartbeat_task, "heartbeat", 256, NULL,
   //                               tskIDLE_PRIORITY + 3, NULL) == pdPASS);
   //    任务入口开头请先调 sys_state.wait_running()（原因见文件头）。
-  //    优先级建议 ≤ tskIDLE_PRIORITY + 5：让库的 CAN / sys 任务（+8 / +7）先跑。
+  //    优先级必须低于库任务（CAN / BMI088 / sys 默认是 configMAX_PRIORITIES - 2 / -3 / -4，见 hardware_config.h）：
+  //    CubeMX 的 osPriorityNormal（24）、osPriorityHigh（40）都可以。
   //
   //    monitor：每秒打印 heap / min / tasks / stack 四个值（实现见 task/demo_task.cpp）。
   //    默认不建；栈给 384 字（1.5 KB）而不是 256，因为里面要跑 vsnprintf。
-  //  configASSERT(xTaskCreate(monitor_task, "monitor", 384, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
+  //  ICBSP_CHECK(xTaskCreate(monitor_task, "monitor", 384, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
 
   // 4. 放行：置运行位，放行所有在 wait_running() 上等待的任务。
   //    初始化阶段有失败记录（例如 CAN 节点注册失败、外设 init() 失败）时，

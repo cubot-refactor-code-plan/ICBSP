@@ -25,20 +25,6 @@ TickType_t ms_to_ticks(uint32_t ms)
   return (ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(ms);
 }
 
-/**
- * @brief 地址能否被 DMA1 / DMA2 访问
- *
- * @note STM32H7 的 ITCM（0x0000_0000 起）与 DTCM（0x2000_0000 起，到 AXI SRAM 0x2400_0000 之前）
- *       只连到 CPU 与 MDMA，DMA1 / DMA2 访问会出传输错误。任务栈、默认 .bss 都在 DTCM。
- */
-bool dma_reachable(const void *addr)
-{
-  const uintptr_t a    = reinterpret_cast<uintptr_t>(addr);
-  const bool      itcm = a < 0x08000000U;
-  const bool      dtcm = a >= 0x20000000U && a < 0x24000000U;
-  return !itcm && !dtcm;
-}
-
 /** @brief 调度器是否已经启动（启动前不取锁、不等信号量，一律轮询） */
 bool scheduler_running()
 {
@@ -175,7 +161,7 @@ Status BspSpi::init()
       return Status::BAD_ARG;
     }
     // 弹跳缓冲是对象成员，DMA 直接读写：实例必须放进 .dma_buffer
-    if (!dma_reachable(_tx_bounce) || !dma_reachable(_rx_bounce))
+    if (!icbsp_dma_reachable(_tx_bounce, _hspi->hdmatx) || !icbsp_dma_reachable(_rx_bounce, _hspi->hdmarx))
     {
       return Status::BAD_ARG;
     }
@@ -257,8 +243,8 @@ Status BspSpi::transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint3
 
   // 每个方向单独决定：调用方缓冲能直接用（轮询总能用，DMA 要在 DMA 可达内存里）就直接用，
   // 否则走弹跳缓冲（tx 为空 = 弹跳缓冲填 0xFF，rx 为空 = 收进弹跳缓冲丢掉）
-  const bool tx_direct = tx != nullptr && (!use_dma || dma_reachable(tx));
-  const bool rx_direct = rx != nullptr && (!use_dma || dma_reachable(rx));
+  const bool tx_direct = tx != nullptr && (!use_dma || icbsp_dma_reachable(tx, _hspi->hdmatx));
+  const bool rx_direct = rx != nullptr && (!use_dma || icbsp_dma_reachable(rx, _hspi->hdmarx));
   // 调用方缓冲 DMA 访问不到、必须中转（只计这种，填充 / 丢弃不算）
   const bool bounced = use_dma && ((tx != nullptr && !tx_direct) || (rx != nullptr && !rx_direct));
   // 任一方向用弹跳缓冲，每段就不能超过它

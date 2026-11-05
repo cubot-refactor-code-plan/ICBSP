@@ -457,6 +457,48 @@ def plan_freertos_c(host, plan, rep):
         rep.skip(step, "钩子与 app_init() 已接好")
 
 
+def plan_it_c(host, plan, rep):
+    """stm32h7xx_it.c：四个故障处理函数的 USER CODE 0 段转调 fault_on_exception()（评审 A5）"""
+    step = "stm32h7xx_it.c"
+    path = host / "Core/Src/stm32h7xx_it.c"
+    if not path.is_file():
+        rep.warn(step, "没有 Core/Src/stm32h7xx_it.c：故障异常不会记进 fault_record")
+        return
+    tf = TextFile(path)
+    tpl = read_template("stm32h7xx_it_user_code.c")
+    done = []
+    skipped = []
+    for name, marker in (
+        ("0", "fault_on_exception("),
+        ("HardFault_IRQn 0", "fault_on_exception("),
+        ("MemoryManagement_IRQn 0", "fault_on_exception("),
+        ("BusFault_IRQn 0", "fault_on_exception("),
+        ("UsageFault_IRQn 0", "fault_on_exception("),
+    ):
+        current = section_text(tf.text, name)
+        if current is None:
+            skipped.append(name)
+            continue
+        if marker in current:
+            continue
+        add = section_text(tpl, name)
+        if compact(current) == "":
+            tf.text = replace_section(tf.text, name, add)
+        elif name == "0":
+            tf.text = replace_section(tf.text, name, current + add)  # 原型追加在已有代码后面
+        else:
+            rep.warn(step, f"USER CODE {name} 里已有自己的代码：没有改动，请手动加 fault_on_exception()")
+            continue
+        done.append(name)
+    if skipped:
+        rep.warn(step, f"没找到 USER CODE {' / '.join(skipped)} 段")
+    if done:
+        plan.edit(tf)
+        rep.ok(step, f"USER CODE {' / '.join(done)}：故障异常记进 fault_record")
+    else:
+        rep.skip(step, "故障处理函数已接好 fault_on_exception()")
+
+
 # ==================== 5. 应用模板 ====================
 
 
@@ -1248,6 +1290,7 @@ def main():
         plan_linker(host, plan, rep, args.linker_script, args.ram_region)
         plan_freertos_config(host, plan, rep)
         plan_freertos_c(host, plan, rep)
+        plan_it_c(host, plan, rep)
         plan_app(host, plan, rep, args.board_dir, args.app_dir)
         if not args.no_hardware_config:
             plan_hardware_config(host, plan, rep, args.board_dir)

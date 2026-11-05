@@ -8,6 +8,10 @@
 
 #include <new>
 
+#include "bsp_dwt.hpp" // 调度器启动前的忙等
+#include "hardware_config.h"
+
+static_assert(BMI088_TASK_PRIORITY > tskIDLE_PRIORITY && BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "BMI088_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
 #include "quaternion.hpp"
 #include "vqf.hpp"
 
@@ -75,7 +79,32 @@ DeviceBmi088::DeviceBmi088(BspSpiDevice &acc, BspSpiDevice &gyro, const Config &
  */
 Status DeviceBmi088::init()
 {
-  _init = false;
+  // 运行中重新 init()：先拿到刷新锁，内部任务正在做的那一帧做完、之后的帧等 init() 结束（F8）
+  const bool scheduler = xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED;
+  if (_run_lock == nullptr)
+  {
+    _run_lock = xSemaphoreCreateMutex();
+    if (_run_lock == nullptr)
+    {
+      return Status::IO_ERROR;
+    }
+  }
+  if (scheduler)
+  {
+    (void)xSemaphoreTake(_run_lock, portMAX_DELAY);
+  }
+  const Status st = init_locked();
+  if (scheduler)
+  {
+    (void)xSemaphoreGive(_run_lock);
+  }
+  return st;
+}
+
+Status DeviceBmi088::init_locked()
+{
+  _init           = false;
+  _attitude_ready = false;
 
   uint8_t id = 0U;
   Status  st = Status::OK;
@@ -338,6 +367,7 @@ Status DeviceBmi088::read_frame(uint32_t timeout_ms, uint32_t gyro_steps)
     {
       _data.quaternion[i] = data.quaternion[i];
     }
+    _attitude_ready = true;
   }
   _temperature = temperature;
   if ((sat & 0x07U) != 0U)
@@ -425,9 +455,11 @@ void DeviceBmi088::run()
   {
     // 陀螺仪数据就绪中断唤醒，返回值 = 上次以来的数据就绪次数；没有中断（没开 drdy_int、宿主没转调 EXTI）时最多等 10 ms 也刷新一次
     const uint32_t drdy = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10U));
+    (void)xSemaphoreTake(_run_lock, portMAX_DELAY); // 与 init() 互斥（F8）
     if (!_init)
     {
-      continue; // 正在重新 init()
+      (void)xSemaphoreGive(_run_lock);
+      continue; // init() 失败过，等下一次成功的 init()
     }
 
     // 姿态按陀螺仪样本周期积分：只在数据就绪唤醒时解算；超时唤醒不知道过了几个样本，只刷新读数
@@ -444,7 +476,9 @@ void DeviceBmi088::run()
         steps = ATTITUDE_MAX_GYRO_STEPS;
       }
     }
-    if (refresh(SPI_TRANSFER_TIMEOUT_MS, steps) == Status::OK)
+    const Status st = refresh(SPI_TRANSFER_TIMEOUT_MS, steps);
+    (void)xSemaphoreGive(_run_lock);
+    if (st == Status::OK)
     {
       TaskHandle_t task = _notify_task;
       if (task != nullptr)
@@ -504,7 +538,15 @@ void DeviceBmi088::delay_ms(uint32_t ms)
 {
   if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
   {
-    HAL_Delay(ms);
+    // 调度器启动前不用 HAL_Delay()：xTaskCreate() 之后 BASEPRI 一直挡着优先级 ≥ 5 的中断，HAL 时基优先级低于它时 tick 不走、永远等不完（A3）
+    if (bsp_dwt.is_init())
+    {
+      bsp_dwt.delay_ms(static_cast<double>(ms));
+    }
+    else
+    {
+      HAL_Delay(ms);
+    }
   }
   else
   {

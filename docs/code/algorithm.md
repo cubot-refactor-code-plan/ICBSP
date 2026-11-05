@@ -5,7 +5,7 @@
 **职责**：纯数学。不 include HAL、不碰 FreeRTOS 任务、不知道外设存在。
 **不负责**：什么时候算、算什么目标（→ `device/` 或 `app/`）。
 
-唯一的例外是 `pid.hpp` 用了 `service/status.hpp` 的 `Status`（出错时返回码统一）。
+只依赖 `service/status_code.hpp` 的 `Status`（纯枚举，不包含 FreeRTOS 头文件；1.4 从 `status.hpp` 拆出来，评审 A6），主机上也能直接编译。
 
 ---
 
@@ -31,12 +31,17 @@ PID::Config cfg {
 PID speed(cfg);
 
 float out = speed.calc(target, feedback);              // 常规
-float out = speed.calc(target, feedback, df_dt);       // 微分项外部直给（用陀螺仪，避免差分噪声）
+float out = speed.calc(target, feedback, delta_feedback); // 微分项外部直给：本拍反馈增量（例如陀螺仪角速度 × 周期），不是每秒导数
 speed.feed_forward(ff);                                // 前馈，叠加在输出上
 speed.reset();
 
 PID::Data d = speed.get();   // {target, feedback, output}，一次加锁取三个值
 ```
+
+- `i_max = 0` 表示积分上限跟随 `out_max`，**计算时取**：构造后再用链式 `limit_output()` 改输出限幅，积分上限也跟着变（评审 F4）。
+- 输入（目标、反馈、增量、前馈）不是有限值（NaN / Inf）时丢弃这一拍：状态不变、输出保持上一拍，计入 `nonfinite_count()`。
+  NaN 进了积分就永远出不来，所以在入口挡住（评审 F1）。
+- `Quaternion::rotation_vector()` / `normalized()` 对零四元数、非有限值有防护（分别返回零向量 / 单位四元数）。
 
 - `calc()` 每周期调一次，内部顺序是「算输入 → 算微分 → 算积分 → 限幅输出」
 - 输出限幅与积分限幅都在 `Config` 里，**积分抗饱和已内置**（限幅时回退积分）
@@ -103,7 +108,7 @@ rls.reject_count();      // 诊断：被剔除的异常点
 
 | 现象 | 原因 |
 | --- | --- |
-| PID 输出在 0 附近高频抖 | 微分用差分且编码器有 ±1 抖动 → 改用 `calc(target, feedback, df_dt)` 喂陀螺仪/滤波值 |
+| PID 输出在 0 附近高频抖 | 微分用差分且编码器有 ±1 抖动 → 改用 `calc(target, feedback, delta_feedback)` 喂陀螺仪 × 周期 / 滤波值 |
 | 积分饱和退不回来 | 只设了输出限幅没设积分限幅（`Config` 两个都要给） |
 | 姿态跟着电机转但方向反 | 四元数误差的轴向定义与实际机体轴不一致（检查轴的符号） |
 | VQF 越跑越偏 | `delta` 与真实采样周期不一致，或陀螺零偏没标定 |

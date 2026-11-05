@@ -32,7 +32,7 @@
 ### 2.2 `init()` 一律返回 `Status`
 
 ```cpp
-configASSERT(bsp_can1.init() == Status::OK);
+ICBSP_CHECK(bsp_can1.init() == Status::OK);
 ```
 
 失败不要在库里 `printf` 后继续，直接在 `board_init()` 里 `configASSERT` 停机：
@@ -106,6 +106,11 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 - `init()` 核对实例在 `BSP_UART_INSTANCES` 清单里、且是清单里唯一绑该句柄的实例，否则返回 `BAD_ARG`；
   DMA 模式下还要求配了用到的 RX / TX DMA、实例在 DMA 可达的内存里（`.dma_buffer`）。
 - RS485 只支持 UART 硬件 DE（CubeMX 里选 RS485 模式），库不提供软件 DE。
+- `receive()` **单读者**：同一个串口只能由一个任务读（FreeRTOS 流缓冲区的限制）；`send()` / `printf()` 多写者安全。
+- `RxDiag` 里 `pe_cnt` / `fe_cnt` / `ne_cnt` / `ore_cnt` 分别计数线路错误：DMA 模式下 FE / NE / PE 不会中止接收，坏字节照常进流缓冲区，只能靠它们发现（评审 F7）。
+- `printf()`：取锁超时返回 `TIMEOUT`，空串返回 `OK`；`tx_recover()` 在 `Config::baudrate = 0` 时按 CubeMX 的波特率估算卡死阈值。
+- DMA 可达性按 DMA 控制器判断（`icbsp_dma_reachable()`，`bsp_dma_buffer.hpp`）：DMA1 / DMA2 访问不到 ITCM / DTCM；
+  BDMA（LPUART1、SPI6 等）只能访问 SRAM4，`.dma_buffer` 在 AXI SRAM，这些外设的实例 `init()` 会返回 `BAD_ARG`（评审 A4）。
 
 ### BspSpi / BspSpiDevice
 
@@ -150,13 +155,18 @@ inline BspPwm bsp_pwm_buzzer(
 
 `set_duty(pct)`、`set_pulse_us(us)`、`set_freq(hz)`、`off()`、`get_freq_hz()`。
 
+- `init()` 打开 ARR 预装载（ARPE）：`set_freq()` 改的 ARR 在当前周期结束时才生效，不会因为新 ARR 小于当前计数值而多出一个超长周期（蜂鸣器爆音、舵机超长脉冲，评审 F10）。
+- `set_freq()` 返回 `Status`：`OK`、`NOT_SUPPORTED`（超出范围，已按边界生效，实际频率看 `get_freq_hz()`）、`BAD_ARG`（0 Hz）、`NOT_INIT`。
+- 32 位定时器（TIM2 / 5 / 23 / 24）ARR = 0xFFFFFFFF 时周期计数是 2^32，`get_period_cnt()` 返回 `uint64_t`。
+- 没有默认构造（必须给 Config）。
+
 ### BspGpio / BspKey / BspEncoder
 
 | 类 | 构造 | 常用 |
 | --- | --- | --- |
 | `BspGpio` | `{port, pin}`，`constexpr` | `set() / reset() / toggle() / set_level(bool) / get_level()` |
 | `BspKey` | `{port, pin, active_low, ...}` | `init()` 开中断，`pressed()` 读稳定态 |
-| `BspEncoder` | `{htim, ...}` | `init()`，`read_delta()` 取本周期增量，`position()` 累计值，`reset()` 清零 |
+| `BspEncoder` | `{htim, ...}` | `init()`，`read_delta()` 取本周期增量，`position()` 累计值，`reset()` 清零；增量按 16 位回绕算，CubeMX 的 Period 必须是 0xFFFF（32 位定时器 0xFFFFFFFF），否则 `init()` 返回 `BAD_ARG`（N37） |
 
 ### BspDwt
 

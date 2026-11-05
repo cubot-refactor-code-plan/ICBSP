@@ -144,8 +144,8 @@ public:
    */
   struct Diag
   {
-    float byte_cnt;       ///< 从串口读到的总字节数
-    float frame_cnt;      ///< 帧头帧尾都正确、已解析的帧数
+    uint32_t byte_cnt;    ///< 从串口读到的总字节数（N34：原来是 float，过 2^24 后就不再增加）
+    uint32_t frame_cnt;   ///< 帧头帧尾都正确、已解析的帧数
     uint32_t bad_footer_cnt; ///< 帧头对上了但帧尾不是 0x00 的帧数
     uint32_t skip_byte_cnt;  ///< 为了找帧头而丢掉的字节数（正常应远小于 byte_cnt）
     uint32_t lost_streak;    ///< 【实时值】连续多少帧带「本帧丢失」，收到一帧不带就清 0
@@ -208,7 +208,7 @@ public:
    */
   bool is_online(void) const;
 
-  /** @brief 遥控器语义值（**控制逻辑用这个**），实时引用，读期间不得并发 update()，无线程安全 */
+  /** @brief 遥控器语义值（**控制逻辑用这个**），实时引用：update() 在别的任务里跑时请用 snapshot() */
   const Rc &rc(void) const;
 
   /** @brief 最近一帧的 16 个原始通道值（协议侧：上 200 / 中 1000 / 下 1800），下标 = 通道号 - 1 */
@@ -222,6 +222,13 @@ public:
 
   /** @brief 诊断计数快照 */
   Diag get_diag(void) const;
+
+  /**
+   * @brief 拷贝一份同一帧的遥控器数据（临界区内拷贝，跨任务读用它，F5）
+   * @param rc  遥控器语义值
+   * @param raw 可选：同一帧的 16 个原始通道值（CHANNEL_NUM 个）；nullptr = 不要
+   */
+  void snapshot(Rc &rc, uint16_t *raw = nullptr) const;
   /* ==================== */
 private:
   /* ==================== 帧解析 ==================== */
@@ -324,7 +331,7 @@ void DeviceR9dsT<Uart>::update(uint32_t timeout_ms)
 
     wait_ms = 0U; // 后续字节不再等待
 
-    _diag.byte_cnt += 1.0f;
+    _diag.byte_cnt = _diag.byte_cnt + 1U;
 
     // 还没进入帧：跳过一切非帧头的字节
     if ((_fill == 0U) && (byte != FRAME_HEADER))
@@ -344,7 +351,7 @@ void DeviceR9dsT<Uart>::update(uint32_t timeout_ms)
     // 拼满 25 字节：帧尾必须是 0x00，否则整帧作废、重新找帧头
     if (_frame[FRAME_SIZE - 1U] == FRAME_FOOTER)
     {
-      _diag.frame_cnt += 1.0f;
+      _diag.frame_cnt = _diag.frame_cnt + 1U;
       _parse_frame(_frame);
     }
     else
@@ -369,14 +376,14 @@ void DeviceR9dsT<Uart>::update(uint32_t timeout_ms)
  * @note ① 自己按 tick 现算，不走 Online 节点、也不需要任何周期任务喂它：
  *       好处是调用频率只影响分辨率、不会漏判；代价是结果只在调用这一刻成立
  *       需要定时调用update,如果以此工程为准的话，推荐在sys_task中10ms调用一次
- * @note 单独判一次 frame_cnt <= 0，是为了让“从没收到过帧”的初始状态就是离线，
+ * @note 单独判一次 frame_cnt == 0，是为了让“从没收到过帧”的初始状态就是离线，
  *       而不必在 init() 里提前去读 tick。
  */
 template <typename Uart>
 bool DeviceR9dsT<Uart>::is_online(void) const
 {
   // ① 收到过帧，且最近一帧还在 ONLINE_TIMEOUT_MS 之内（无符号差值，tick 回绕安全）
-  if ((_diag.frame_cnt <= 0.0f) ||
+  if ((_diag.frame_cnt == 0U) ||
       ((static_cast<uint32_t>(xTaskGetTickCount()) - _last_frame_tick) >= pdMS_TO_TICKS(ONLINE_TIMEOUT_MS)))
   {
     return false;
@@ -439,6 +446,8 @@ typename DeviceR9dsT<Uart>::Diag DeviceR9dsT<Uart>::get_diag(void) const
 template <typename Uart>
 void DeviceR9dsT<Uart>::_parse_frame(const uint8_t *frame)
 {
+  // 解析结果整帧写回，与 snapshot() 互斥（几百条指令，F5）
+  taskENTER_CRITICAL();
   uint32_t bit_index = 0U;
   for (uint32_t i = 0U; i < CHANNEL_NUM; ++i)
   {
@@ -491,6 +500,22 @@ void DeviceR9dsT<Uart>::_parse_frame(const uint8_t *frame)
   // 帧完整且帧尾正确 = 接收机确实在发帧：记下时刻，作为①“接收机没静默”的依据。
   // 注意这里只记“接收机还在发帧”这一件事：遥控器跟它有没有失联，由 is_online() 用 flags 判。
   _last_frame_tick = static_cast<uint32_t>(xTaskGetTickCount());
+  taskEXIT_CRITICAL();
+}
+
+template <typename Uart>
+void DeviceR9dsT<Uart>::snapshot(Rc &rc, uint16_t *raw) const
+{
+  taskENTER_CRITICAL();
+  rc = _rc;
+  if (raw != nullptr)
+  {
+    for (uint32_t i = 0U; i < CHANNEL_NUM; ++i)
+    {
+      raw[i] = _raw[i];
+    }
+  }
+  taskEXIT_CRITICAL();
 }
 /* ==================== */
 /* ==================== 原始值换算 ==================== */

@@ -89,7 +89,7 @@ double Quaternion::norm() const
 Quaternion Quaternion::normalized() const
 {
   const double n = norm();
-  if (n <= 0.0)
+  if (!(n > 0.0) || !isfinite(n)) // 零模长、NaN、Inf 都退回单位四元数（F1）
   {
     return identity();
   }
@@ -137,8 +137,14 @@ void Quaternion::to_matrix(double r[3][3]) const
 
 Vector3 Quaternion::rotation_vector() const
 {
-  // q 与 -q 同一姿态：取 w ≥ 0 的那个，转角落在 [0, π]
-  const double sign = (w < 0.0) ? -1.0 : 1.0;
+  // 零四元数 / 非有限值没有对应的转动（F1：未初始化的 ImuData 曾是全 0，2 / qw 会算出 Inf / NaN）：按“不转”处理
+  const double n = norm();
+  if (!(n > 0.0) || !isfinite(n))
+  {
+    return {0.0, 0.0, 0.0};
+  }
+  // 先归一化（非单位输入也按它代表的姿态算）；q 与 -q 同一姿态：取 w ≥ 0 的那个，转角落在 [0, π]
+  const double sign = ((w < 0.0) ? -1.0 : 1.0) / n;
   const double qw   = sign * w;
   const double qx   = sign * x;
   const double qy   = sign * y;
