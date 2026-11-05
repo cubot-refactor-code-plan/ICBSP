@@ -6,7 +6,7 @@
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "bsp_dwt.hpp" // 计时基准（库内实例，本文件负责 init）
 #include "status.hpp"
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "task.h"
 
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE

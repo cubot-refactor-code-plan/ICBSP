@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# stm32_framework：以 git submodule + add_subdirectory 方式接入 STM32H7 CubeMX（CMake）工程的板级库
+# stm32_framework：以 git submodule + add_subdirectory 方式接入 STM32H7 / STM32F4 CubeMX（CMake）工程的板级库
 #
 # 宿主工程（CubeMX 生成的根 CMakeLists.txt，##### User ##### 段）：
 #
@@ -76,7 +76,29 @@ if(NOT _stm32_framework_ld)
     string(REGEX MATCH "-T[ \t]*([^ \t\"]+)" _stm32_framework_ld_match "${CMAKE_EXE_LINKER_FLAGS}")
     set(_stm32_framework_ld "${CMAKE_MATCH_1}")
 endif()
-if(_stm32_framework_ld AND EXISTS "${_stm32_framework_ld}")
+
+# 系列探测：从 CubeMX 的包含目录里找 hal_conf.h。
+# H7 需要 .dma_buffer + .noinit 两段；F4 主 SRAM 可直接被 DMA 访问，只需要 .noinit。
+set(_stm32_framework_series "")
+foreach(_stm32_framework_dir IN LISTS _stm32_framework_mx_inc)
+    if(EXISTS "${_stm32_framework_dir}/stm32h7xx_hal_conf.h")
+        set(_stm32_framework_series "h7")
+    elseif(EXISTS "${_stm32_framework_dir}/stm32f4xx_hal_conf.h")
+        set(_stm32_framework_series "f4")
+    endif()
+endforeach()
+
+if(_stm32_framework_ld AND EXISTS "${_stm32_framework_ld}" AND _stm32_framework_series STREQUAL "f4")
+    # F4：只查 .noinit（fault_record 靠它保留复位现场）；.dma_buffer 在 F4 上不生成，不用查
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_stm32_framework_ld}")
+    file(READ "${_stm32_framework_ld}" _stm32_framework_ld_text)
+    if(NOT _stm32_framework_ld_text MATCHES "\\.noinit[ \t]*(\\(NOLOAD\\))?[ \t\r\n]*:")
+        message(FATAL_ERROR
+            "stm32_framework: 链接脚本 ${_stm32_framework_ld} 缺少 .noinit 段（fault_record 用它保留复位现场）。"
+            "请把 ${CMAKE_CURRENT_SOURCE_DIR}/templates/linker_sections.ld 里的 .noinit 段加进 SECTIONS。")
+    endif()
+    message(STATUS "stm32_framework: 链接脚本检查通过（F4 只需要 .noinit）：${_stm32_framework_ld}")
+elseif(_stm32_framework_ld AND EXISTS "${_stm32_framework_ld}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_stm32_framework_ld}")
     file(READ "${_stm32_framework_ld}" _stm32_framework_ld_text)
     set(_stm32_framework_ld_missing "")

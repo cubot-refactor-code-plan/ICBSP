@@ -1,7 +1,7 @@
 #ifndef CAN_TX_NODE_HPP
 #define CAN_TX_NODE_HPP
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关来自 stm32h7xx_hal_conf.h）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "hardware_config.h"
 
 // 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_TX_ENABLE=0 时，本模块整体不参与编译
