@@ -106,14 +106,20 @@ for (;;)
 
 ```c
 #define SYS_TASK_ENABLE     1
-#define SYS_TASK_PRIORITY   (tskIDLE_PRIORITY + 6)
+#define SYS_TASK_PRIORITY   (configMAX_PRIORITIES - 4)   // CMSIS_V2 下 52
 #define SYS_TASK_STACK      256
-#define CAN_TASK_PRIORITY   (tskIDLE_PRIORITY + 8)
+#define CAN_TASK_PRIORITY   (configMAX_PRIORITIES - 2)   // 54；BMI088_TASK_PRIORITY 默认 configMAX_PRIORITIES - 3
 #define CAN_TASK_STACK      512
 #define CAN_RX_ENABLE       1
 #define CAN_TX_ENABLE       1
 #define UART_PATROL_ENABLE  1
 ```
+
+库任务默认按 `configMAX_PRIORITIES` 往下取（评审 A2），**业务任务必须低于它们**：CubeMX 的 `osPriorityNormal`（24）、
+`osPriorityHigh`（40）都可以。原来的 `tskIDLE_PRIORITY + 6~8` 比 `osPriorityNormal` 还低，按 CubeMX 习惯建的业务任务一忙，
+CAN 节拍、Bus-Off 恢复、串口巡检、Online 计时、IMU 刷新都会被推迟。库里有 `static_assert` 检查取值范围。
+
+`sys_task` 每 10 ms 还推进一次 DWT 绝对时间的回绕跟踪（`bsp_dwt.get_cycles()`，C11）：`SYS_TASK_ENABLE = 0` 时宿主要自己定期调。
 
 改这里不需要动库代码。`sys_task` 的 10 ms 是 `sys_task.cpp` 里的 `constexpr`
 （和 Online 计时、CAN 恢复节拍绑在一起），**不建议按板子改**。

@@ -97,19 +97,35 @@
 
 ### 1.4 评审里的已有问题（fork 里同样存在）
 
-- [ ] **F1** 四元数初值改为单位四元数，加 `attitude_ready()`；`rotation_vector()` / `normalized()` 防零模长；PID 遇到非有限输入时丢弃并计数（评审 F1）
-- [ ] **A1** 初始化动作挪出 `configASSERT`（`system.cpp`、模板、编码规范）；`configASSERT` 改成 `do { } while (0)` 形式（评审 A1）
-- [ ] **F4** PID 积分上限在计算时取实际值（`i_max == 0` 时跟随 `out_max`），链式配置和 Config 配置语义一致（评审 F4）
-- [ ] **F5** DjiMotor 提供 `snapshot()`，去掉没用的互斥锁；R9DS 同样处理（评审 F5）
-- [ ] **A3** BMI088 调度器启动前改用 DWT 忙等（fork 已有 `bsp_dwt`），不再依赖 HAL 时基中断优先级。**1.1 的 DMA 循环模式要把 TIM8 改回 15 验证，必须先完成这一项。**（评审 A3）
-- [ ] A3 完成后：CubeMX 把 TIM8 时基优先级改回 15，Debug 与 -O2 跑 UART / RS485 全部用例 + U14 浸泡，确认不再卡死（1.1 的循环 DMA 已去掉串口中断里的 `HAL_DMA_Abort()`）
-- [ ] **A2** 库任务默认优先级按 `configMAX_PRIORITIES` 取，加 `static_assert`（含 BMI088；fork 的 sys 是 +6，与 BMI088 同级）（评审 A2）
-- [ ] **A4** DMA 可达性按 DMA1/2 和 BDMA 分别判断；合并两份 `dma_reachable`（评审 A4）
-- [ ] **A5** 新增 `fault_on_exception()` 和 HardFault / MemManage / BusFault 的 USER CODE 片段（评审 A5）
-- [ ] **F11** 去掉 `dji_motor.cpp:311` 的 `static_cast<float>`（fork 只把字段改成了 double，存进去的仍是 float 精度）
-- [ ] 其余低级别条目：A6（`algorithm/` 不依赖 RTOS）、A8、A9、F7 其余部分、F8、F10、I4、I5、I6 / I7（和 Q10 一起）、D3、PWM 去掉默认构造（I8 剩余）、DWT `get_time_s()` 线程安全与回绕（C11：加临界区；sys_task 保留周期性的回绕跟踪，Q5 去掉打印时不能一起删掉）、N37（编码器 ARR 检查、舵机跨任务变量改 atomic、`PID::calc` 的 `df_dt` 改名或按秒计）
-- [ ] 回填时**不能弄丢** fork 已修好的：F9（re-init / RF0L）、I3、I8（GPIO / Key）、Key 长按饱和、F11 的 double 字段类型、F7（`hw_error_cnt`）、PID 去 virtual / `print`、A7（可加载 `.dma_buffer`）
-- [ ] 1.1~1.4 完成后按对比评估附录 B 逐条核对 N1~N37
+2026-11-04 完成，TIM8 改回 15 的 -O2 验证 2026-11-05 补完，记录 `docs/bsp_test/review_1_4_2026-11-04.md`。
+
+- [x] **F1** 四元数初值改为单位四元数，加 `attitude_ready()`；`rotation_vector()` / `normalized()` 防零模长；PID 遇到非有限输入时丢弃并计数（评审 F1）
+  - `ImuData` 四元数初值单位四元数、`attitude_ready()`、四元数零模长 / NaN 防护、PID `nonfinite_count()`；实测 Y06 / Y07
+- [x] **A1** 初始化动作挪出 `configASSERT`（`system.cpp`、模板、编码规范）；`configASSERT` 改成 `do { } while (0)` 形式（评审 A1）
+  - `ICBSP_CHECK(expr)`（`fault_record.hpp`），库 / 模板 / 宿主 / 编码规范全部改用；实测 Y11
+- [x] **F4** PID 积分上限在计算时取实际值（`i_max == 0` 时跟随 `out_max`），链式配置和 Config 配置语义一致（评审 F4）
+  - 实测 Y06：链式配置与 Config 配置积分都限在 out_max
+- [x] **F5** DjiMotor 提供 `snapshot()`，去掉没用的互斥锁；R9DS 同样处理（评审 F5）
+  - DjiMotor 写回改短临界区（不再 try-lock 丢帧）；R9DS 同样加 `snapshot()`，顺带做了 N34（诊断计数 `uint32_t`）
+- [x] **A3** BMI088 调度器启动前改用 DWT 忙等（fork 已有 `bsp_dwt`），不再依赖 HAL 时基中断优先级。**1.1 的 DMA 循环模式要把 TIM8 改回 15 验证，必须先完成这一项。**（评审 A3）
+  - BMI088 用 `bsp_dwt.delay_ms()`；另外 UART 停 DMA 流的两处 `HAL_GetTick()` 等待也改成 CYCCNT + 循环上限
+- [x] A3 完成后：CubeMX 把 TIM8 时基优先级改回 15，Debug 与 -O2 跑 UART / RS485 全部用例 + U14 浸泡，确认不再卡死（1.1 的循环 DMA 已去掉串口中断里的 `HAL_DMA_Abort()`）
+  - 2026-11-04 用户确认后 CubeMX 改成 15。Debug 与 -O2（各五组 + 5 分钟浸泡）都通过：正常启动、U14 / R06 / C09 / P05 无损（-O2 于 2026-11-05 补跑）
+- [x] **A2** 库任务默认优先级按 `configMAX_PRIORITIES` 取，加 `static_assert`（含 BMI088；fork 的 sys 是 +6，与 BMI088 同级）（评审 A2）
+  - CAN −2 / BMI088 −3 / sys −4（54 / 53 / 52）；实测 Y09
+- [x] **A4** DMA 可达性按 DMA1/2 和 BDMA 分别判断；合并两份 `dma_reachable`（评审 A4）
+  - `icbsp_dma_reachable()`（`bsp_dma_buffer.hpp`）；实测 Y10
+- [x] **A5** 新增 `fault_on_exception()` 和 HardFault / MemManage / BusFault 的 USER CODE 片段（评审 A5）
+  - 另有 UsageFault；`integrate.py` 自动写入 `stm32h7xx_it.c`。实测：故意的 BusFault 记下 PC = 出错函数里的地址，复位后 Y12 读到
+- [x] **F11** 去掉 `dji_motor.cpp:311` 的 `static_cast<float>`（fork 只把字段改成了 double，存进去的仍是 float 精度）
+  - 多圈角度直接存 double
+- [x] 其余低级别条目：A6（`algorithm/` 不依赖 RTOS）、A8、A9、F7 其余部分、F8、F10、I4、I5、I6 / I7（和 Q10 一起）、D3、PWM 去掉默认构造（I8 剩余）、DWT `get_time_s()` 线程安全与回绕（C11：加临界区；sys_task 保留周期性的回绕跟踪，Q5 去掉打印时不能一起删掉）、N37（编码器 ARR 检查、舵机跨任务变量改 atomic、`PID::calc` 的 `df_dt` 改名或按秒计）
+  - 做了：A6（`status_code.hpp`）、A8（上电清零 + `boot_rsr`）、A9（弱 `__malloc_lock`）、F7（RX 分类计数、单读者、`tx_recover` 波特率 0、`printf` 返回码）、F8（刷新锁、文档）、F10（ARPE、64 位周期、`set_freq` 返回 `Status`）、I4、D3（`-Wall -Wextra -Wshadow`、`CXX_EXTENSIONS OFF`）、PWM 去默认构造、C11（64 位时间轴 + 关中断区，sys_task 每 10 ms 跟踪）、N37（编码器 ARR、舵机 atomic、`delta_feedback`）
+  - **推迟到阶段 2 的 Q10 命名统一**：I5、I6、I7（都是改名 / 返回值约定，避免同一批接口改两次）
+- [x] 回填时**不能弄丢** fork 已修好的：F9（re-init / RF0L）、I3、I8（GPIO / Key）、Key 长按饱和、F11 的 double 字段类型、F7（`hw_error_cnt`）、PID 去 virtual / `print`、A7（可加载 `.dma_buffer`）
+  - 核对过：F9（RF0L 计数、re-init）、I3（`CanMode` 已删）、I8（GPIO 无默认构造）、Key 长按饱和、F11 double 字段、F7 `hw_error_cnt`、PID 无 virtual / `print`、A7 可加载 `.dma_buffer` 都在
+- [x] 1.1~1.4 完成后按对比评估附录 B 逐条核对 N1~N37
+  - 核对结果见 `docs/bsp_test/review_1_4_2026-11-04.md` 末尾：除 N11（按决定不恢复软件 DE）外 1.1 ~ 1.4 都做了；N26（文档悬空引用）、N33（Emm_V5 接口）按原计划在后面的阶段
 
 ## 阶段 2：加入新功能
 

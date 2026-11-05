@@ -21,5 +21,6 @@ void fault_on_malloc_failed(void);
 }
 #endif
 #endif
-#define configASSERT( x ) if ((x) == 0) { fault_on_assert(__FILE__, __LINE__); }
+/* do { } while (0)：接在 if / else 后面不会出现悬挂 else（评审 A1） */
+#define configASSERT( x ) do { if ((x) == 0) { fault_on_assert(__FILE__, __LINE__); } } while (0)
 /* USER CODE END 1 */

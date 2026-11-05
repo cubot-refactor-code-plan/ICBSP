@@ -53,12 +53,12 @@ public:
    * @brief 初始化阶段注册发送节点（同一 CAN、同一 ID 的节点共用一帧，按槽位区分）
    * @param can_item 所属 CAN 实例
    * @param can_id   帧 ID（标准帧 11 位 / 扩展帧 29 位）
-   * @param division 一帧 8 字节划分的槽位数（1 / 2 / 4 / 8）
+   * @param division_ 一帧 8 字节划分的槽位数（1 / 2 / 4 / 8）
    * @param slot     本节点占用的槽位
    * @param id_type  FDCAN_STANDARD_ID / FDCAN_EXTENDED_ID
    * @return 节点；参数非法、槽位冲突、资源不足返回 nullptr 并记初始化错误；运行态之后调用返回 nullptr
    */
-  static CanTxNodeT *regist(CanT &can_item, uint32_t can_id, uint8_t division = 1U, uint8_t slot = 0U, uint32_t id_type = FDCAN_STANDARD_ID);
+  static CanTxNodeT *regist(CanT &can_item, uint32_t can_id, uint8_t division_ = 1U, uint8_t slot = 0U, uint32_t id_type = FDCAN_STANDARD_ID);
 
   /** @brief 释放一个槽位（节点保留，供其他槽位继续用）；槽位全部释放后节点不再发送 */
   static Status unregist(CanTxNodeT *node, uint8_t slot);
@@ -109,9 +109,9 @@ private:
   static inline uint32_t    _num    = 0U;
   static inline bool        _frozen = false;
 
-  CanTxNodeT(CanT &can_item, uint32_t can_id, uint8_t division, uint32_t id_type) :
+  CanTxNodeT(CanT &can_item, uint32_t can_id, uint8_t division_, uint32_t id_type) :
     txBuffer {},
-    division(division),
+    division(division_),
     _statu(Status::NOT_INIT),
     bufferRegister(0U),
     bufferUnsend(0U),
@@ -167,7 +167,7 @@ Status CanTxNodeT<CanT>::init()
 }
 
 template <typename CanT>
-CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint8_t division, uint8_t slot, uint32_t id_type)
+CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint8_t division_, uint8_t slot, uint32_t id_type)
 {
   if (_frozen)
   {
@@ -176,8 +176,8 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
     return nullptr;
   }
   const uint32_t id_max = (id_type == FDCAN_EXTENDED_ID) ? 0x1FFFFFFFU : 0x7FFU;
-  if ((id_type != FDCAN_STANDARD_ID && id_type != FDCAN_EXTENDED_ID) || can_id > id_max || division == 0U || division > 8U ||
-      (8U % division) != 0U || slot >= division)
+  if ((id_type != FDCAN_STANDARD_ID && id_type != FDCAN_EXTENDED_ID) || can_id > id_max || division_ == 0U || division_ > 8U ||
+      (8U % division_) != 0U || slot >= division_)
   {
     sys_state.init_error(Status::BAD_ARG);
     return nullptr;
@@ -187,7 +187,7 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
   {
     if (node->_can == &can_item && node->txBuffer.id == can_id && node->txBuffer.id_type == id_type)
     {
-      if (node->division == division && (node->bufferRegister & (1U << slot)) == 0U)
+      if (node->division == division_ && (node->bufferRegister & (1U << slot)) == 0U)
       {
         node->bufferRegister |= static_cast<uint8_t>(1U << slot);
         return node;
@@ -202,7 +202,7 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
     sys_state.init_error(Status::FULL);
     return nullptr;
   }
-  CanTxNodeT *node = new (std::nothrow) CanTxNodeT(can_item, can_id, division, id_type);
+  CanTxNodeT *node = new (std::nothrow) CanTxNodeT(can_item, can_id, division_, id_type);
   if (node == nullptr)
   {
     sys_state.init_error(Status::FULL);

@@ -33,33 +33,9 @@
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "event_groups.h"
 
+#include "status_code.hpp" // IWYU pragma: export（Status、status_bit）
 
-/**
- * @brief 统一状态码
- *
- * @note 枚举值即事件组位号，因此**顺序不可随意调整**（调整会改变对外可观测行为）。
- */
-enum class Status : uint8_t
-{
-  OK = 0,        ///< 成功
-  BUSY,          ///< 资源被占用（DMA 正在发送等）
-  TIMEOUT,       ///< 等待超时
-  FULL,          ///< 缓冲满
-  IO_ERROR,      ///< 硬件/传输错误
-  BAD_ARG,       ///< 参数非法
-  NOT_INIT,      ///< 资源未初始化（未调用 init 或创建失败）
-  NOT_SUPPORTED, ///< 不支持的操作/模式
-};
 
-/**
- * @brief 取某个状态码对应的事件组位掩码
- * @param statu 状态码
- * @return 该状态码对应的位掩码
- */
-constexpr uint32_t status_bit(Status statu)
-{
-  return 1U << static_cast<uint8_t>(statu);
-}
 
 
 /**

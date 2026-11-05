@@ -119,7 +119,7 @@ inline uint32_t dlc_to_len(uint32_t dlc_code)
  * @note 用法（实例写在 board_cfg.hpp）：
  *
  *   inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
- *   // board_instances.hpp 的 BSP_CAN_INSTANCES 里加 X(bsp_can1)；board_init() 里 configASSERT(bsp_can1.init() == Status::OK);
+ *   // board_instances.hpp 的 BSP_CAN_INSTANCES 里加 X(bsp_can1)；board_init() 里 ICBSP_CHECK(bsp_can1.init() == Status::OK);
  *
  *   uint8_t d[8] = {...};
  *   bsp_can1.send(0x200, d);                                   // 标准帧 8 字节

@@ -31,7 +31,7 @@
 
 #include "FreeRTOS.h"      // IWYU pragma: keep（configMAX_PRIORITIES）
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
-#include "task.h"          // IWYU pragma: keep（tskIDLE_PRIORITY）
+#include "task.h"          // IWYU pragma: keep（configMAX_PRIORITIES）
 
 /* ==================== ① 功能开关：关掉就不编译对应代码、也不创建对应任务 ==================== */
 
@@ -60,15 +60,18 @@
 /* ==================== */
 /* ==================== 库任务（system_init() 创建） ==================== */
 
-/** @brief 系统维护任务 sys_task 的优先级：低于业务任务（常用 idle+7），低于 CAN 收发任务
- *  @note sys_task 只做 10 ms 维护（CAN 恢复 / 串口巡检 / Online 计时），
- *        让业务任务与 CAN 收发先跑；与业务任务同优先级会导致时间片轮转、控制周期抖动。 */
-#define SYS_TASK_PRIORITY (tskIDLE_PRIORITY + 6)
+/** @brief 系统维护任务 sys_task 的优先级（默认 configMAX_PRIORITIES - 4，CMSIS_V2 下是 52）
+ *  @note 库任务的优先级按 configMAX_PRIORITIES 往下取（评审 A2）：CAN 收发（-2）> BMI088（-3）> sys（-4），最高一档留给用户。
+ *        **业务任务必须低于这三个**：CubeMX 的 osPriorityNormal（24）、osPriorityHigh（40）都可以；
+ *        原来的 tskIDLE_PRIORITY + 6~8 比 osPriorityNormal 还低，按 CubeMX 习惯建的业务任务一忙，CAN 节拍、Bus-Off 恢复、
+ *        串口巡检、Online 计时、IMU 刷新都会被推迟。
+ *  @note sys_task 每 10 ms 只做几十微秒的维护（CAN 恢复 / 串口巡检 / Online 计时），放得高也不会占住 CPU。 */
+#define SYS_TASK_PRIORITY (configMAX_PRIORITIES - 4)
 /** @brief sys_task 栈深（字） */
 #define SYS_TASK_STACK 256
 
-/** @brief CAN 收 / 发任务的优先级：最高，1 kHz 节拍内必须跑完 */
-#define CAN_TASK_PRIORITY (tskIDLE_PRIORITY + 8)
+/** @brief CAN 收 / 发任务的优先级（默认 configMAX_PRIORITIES - 2）：库任务里最高，1 kHz 节拍内必须跑完 */
+#define CAN_TASK_PRIORITY (configMAX_PRIORITIES - 2)
 /** @brief CAN 收 / 发任务栈深（字）：接收节点回调在 can_rx_task 里同步执行，回调用栈多就加大 */
 #define CAN_TASK_STACK 512
 
@@ -114,8 +117,8 @@
 /* ==================== */
 /* ==================== BMI088 ==================== */
 
-/** @brief DeviceBmi088 自动刷新任务的优先级：低于库的 sys / CAN 任务，高于一般业务任务 */
-#define BMI088_TASK_PRIORITY (tskIDLE_PRIORITY + 6)
+/** @brief DeviceBmi088 自动刷新任务的优先级（默认 configMAX_PRIORITIES - 3）：低于 CAN 收发、高于 sys 与业务任务 */
+#define BMI088_TASK_PRIORITY (configMAX_PRIORITIES - 3)
 /** @brief DeviceBmi088 自动刷新任务栈深（字）：含 VQF 姿态解算 */
 #define BMI088_TASK_STACK 512
 
@@ -129,6 +132,7 @@ static_assert(CAN_TX_ENABLE == 0 || CAN_TX_ENABLE == 1, "hardware_config.h: CAN_
 static_assert(UART_PATROL_ENABLE == 0 || UART_PATROL_ENABLE == 1, "hardware_config.h: UART_PATROL_ENABLE 取 0 或 1");
 static_assert(SYS_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: SYS_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
 static_assert(CAN_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: CAN_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
+static_assert(BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: BMI088_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
 static_assert(SYS_TASK_STACK >= 128 && CAN_TASK_STACK >= 128, "hardware_config.h: 库任务栈深至少 128 字");
 static_assert(CAN_RX_RETURN_FRAMES >= 0, "hardware_config.h: CAN_RX_RETURN_FRAMES 不能为负（0 = 不建回退缓冲）");
 static_assert(CAN_RX_DISPATCH_PER_TICK >= 1 && CAN_RX_DISPATCH_PER_TICK <= 64, "hardware_config.h: CAN_RX_DISPATCH_PER_TICK 取 1~64");

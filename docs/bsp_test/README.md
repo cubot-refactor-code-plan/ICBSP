@@ -13,6 +13,7 @@
 | `uart_u7_u10.md` | UART U7 ⇄ U10：用例、方案、现象、结论，3 个专项诊断 |
 | `can_backfill_2026-11-04.md` | **当前实现**：undo 1.2 CAN 回填后的 CAN 回归，以及 TX 队列模式同 ID 乱序的诊断 |
 | `arch_1_3_2026-11-04.md` | **当前实现**：undo 1.3 架构问题修复后的回归（SPI / BMI088 组适配新库、新增服务层组 Y01 ~ Y05，-O2 全组） |
+| `review_1_4_2026-11-04.md` | undo 1.4：评审遗留问题修复、TIM8 时基改回 15；服务层组 Y06 ~ Y12（含故意触发 BusFault 验证故障现场），Debug 与 -O2 全组回归 |
 | `uart_backfill_2026-11-04.md` | **当前实现**：undo 1.1 UART 回填后的 UART / RS485 回归（Debug + -O2 浸泡），以及测试时钟回绕导致 R03 假超时的诊断 |
 | `rs485_u2_u3.md` | RS485 U2 ⇄ U3 |
 | `can1_can2.md` | CAN1 ⇄ CAN2 |

@@ -67,19 +67,6 @@ inline TickType_t ms_to_ticks(uint32_t ms)
   return (ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(ms);
 }
 
-/**
- * @brief 地址能否被 DMA1 / DMA2 访问
- * @note ITCM（0x0000_0000 起）与 DTCM（0x2000_0000 ~ 0x2400_0000）只连 CPU 与 MDMA，DMA1 / DMA2 访问会出传输错误。
- *       CubeMX 默认把 .bss 放在 DTCM，所以 DMA 收发的实例必须放进 .dma_buffer。
- */
-inline bool dma_reachable(const void *addr)
-{
-  const uintptr_t a    = reinterpret_cast<uintptr_t>(addr);
-  const bool      itcm = a < 0x08000000U;
-  const bool      dtcm = a >= 0x20000000U && a < 0x24000000U;
-  return !itcm && !dtcm;
-}
-
 /** @brief 串口实例对应的 NVIC 中断号；不认识的实例返回 false */
 inline bool uart_irqn(const USART_TypeDef *instance, IRQn_Type *irqn)
 {
@@ -243,6 +230,22 @@ inline bool repair_dma_handle(DMA_HandleTypeDef *hdma)
 }
 
 /**
+ * @brief 最多约 10 ms 等 DMA 流的 EN 清零
+ * @note 不用 HAL_GetTick()：调度器启动前（board_init() 里 init()）HAL 时基中断可能被 BASEPRI 挡住、tick 不走（评审 A3）。
+ *       用 CYCCNT 计时，另加循环次数上限：DWT 没开时 CYCCNT 不动，也能在有限时间内退出。
+ */
+inline void wait_stream_off(const DMA_Stream_TypeDef *s)
+{
+  const uint32_t limit = SystemCoreClock / 100U; // 10 ms 的周期数
+  const uint32_t t0    = DWT->CYCCNT;
+  uint32_t       spins = 0U;
+  while ((s->CR & DMA_SxCR_EN) != 0U && (DWT->CYCCNT - t0) < limit && spins < limit)
+  {
+    spins = spins + 1U;
+  }
+}
+
+/**
  * @brief 停掉 DMA 流并把 HAL 句柄复位到 READY（运行中重新 init() / deinit() 用，调度器启动前也可调用）
  * @note HAL_DMA_Abort() 超时会把句柄留在 ERROR；这里请求停流后有限时间内等 EN 清零，再复位句柄（2026-10-17 实测）。
  */
@@ -254,10 +257,7 @@ inline void stop_dma_stream(DMA_HandleTypeDef *hdma)
   }
   DMA_Stream_TypeDef *const s = reinterpret_cast<DMA_Stream_TypeDef *>(hdma->Instance);
   __HAL_DMA_DISABLE(hdma);
-  const uint32_t t0 = HAL_GetTick();
-  while ((s->CR & DMA_SxCR_EN) != 0U && (HAL_GetTick() - t0) < 10U)
-  {
-  }
+  wait_stream_off(s);
   (void)repair_dma_handle(hdma);
 }
 
@@ -278,10 +278,7 @@ inline void disable_dma_stream(DMA_HandleTypeDef *hdma)
     return;
   }
   __HAL_DMA_DISABLE(hdma);
-  const uint32_t t0 = HAL_GetTick();
-  while ((s->CR & DMA_SxCR_EN) != 0U && (HAL_GetTick() - t0) < 10U)
-  {
-  }
+  wait_stream_off(s);
 }
 
 /** @brief 结束任务侧中止后，把 HAL 的 RX 状态强制回到 READY（中止若因 DMA 超时提前返回，状态会停在 BUSY） */
@@ -563,7 +560,7 @@ enum class UartDir : uint8_t
  *
  *   inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
  *     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
- *   // board_instances.hpp 的 BSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 configASSERT(bsp_uart1.init() == Status::OK);
+ *   // board_instances.hpp 的 BSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 ICBSP_CHECK(bsp_uart1.init() == Status::OK);
  *
  *   bsp_uart1.send(buf, 8);             // 写进发送流缓冲区，自动发出去
  *   bsp_uart1.printf("v=%d\r\n", 42);   // 格式化输出（10 ms 入队超时）
@@ -605,7 +602,11 @@ public:
   {
     uint32_t arm_fail_cnt;   ///< 启动接收失败的次数（包括 init 时的第一次和运行期重启）
     uint32_t drop_bytes;     ///< 接收流缓冲区满，被丢掉的字节数
-    uint32_t hw_error_cnt;   ///< HAL 错误回调里的 RX 硬件错误次数（ORE / FE / NE / PE / RTO）
+    uint32_t hw_error_cnt;   ///< HAL 错误回调里的 RX 硬件错误次数（ORE / FE / NE / PE / RTO，合计）
+    uint32_t pe_cnt;         ///< 其中带奇偶校验错误（PE）的次数（F7：DMA 模式下 HAL 不中止接收，坏字节照常进流缓冲区）
+    uint32_t fe_cnt;         ///< 其中带帧错误（FE）的次数：波特率不对、线上有干扰
+    uint32_t ne_cnt;         ///< 其中带噪声错误（NE）的次数：共地 / 线材问题
+    uint32_t ore_cnt;        ///< 其中带溢出（ORE）的次数：搬运不及时，丢了字节
     uint32_t error_cnt;      ///< rx_recover() 真正重建 RX 的次数
     uint32_t dma_repair_cnt; ///< rx_recover() 发现 RX DMA 句柄卡在非 READY（如 ERROR）并复位的次数
   };
@@ -670,6 +671,7 @@ public:
   /**
    * @brief 格式化输出，用法和 printf 一样（只能在任务里调用，超长截断为 TX_SIZE - 1 字节）
    * @note 取锁与入队都只等 10 ms：发送卡住时不把调用任务一直挂住。没全部写进去就返回 TIMEOUT，已进去的部分照常发。
+   * @return OK=全部入队（空串也是 OK）；TIMEOUT=取锁超时或只进去一部分；BAD_ARG=fmt 为空或格式串错误；IO_ERROR=没启用发送 / 没初始化
    */
   Status printf(const char *fmt, ...);
 
@@ -681,6 +683,7 @@ public:
    * @param timeout_ms 最多等多久（毫秒）；portMAX_DELAY = 一直等
    * @param received   返回实际读到的字节数，不需要可以传 nullptr
    * @return OK=读到了；TIMEOUT=没有数据；BAD_ARG=参数非法；IO_ERROR=没启用接收 / 没初始化
+   * @warning **单读者**：FreeRTOS 流缓冲区只允许一个读者，同一个串口只能由一个任务 receive()（F7）；多写者的 send() 才是安全的。
    */
   Status receive(uint8_t *buffer, size_t size, uint32_t timeout_ms = portMAX_DELAY, size_t *received = nullptr);
 
@@ -692,7 +695,7 @@ public:
    *          → **连续两次**巡检都看到才重新启动（send() 入队后、自己启动前被打断的一瞬间也是这样，不算卡死）；
    *       ② 通道忙，但发送没有推进（剩余计数不变且串口不在移位）达到阈值 → 中止，按剩余计数算出已发多少，
    *          只续发剩下的（不重复、不丢），之后再从流缓冲区取新数据。
-   * @note 阈值 = 一整包按 Config::baudrate 发完所需时间的 2 倍；但只有“没推进”才计时，
+   * @note 阈值 = 一整包按 Config::baudrate（为 0 时取 CubeMX 的波特率）发完所需时间的 2 倍；但只有“没推进”才计时，
    *       Config::baudrate 填错（比实际快）也不会把正常发送误判成卡死。
    * @return true=这次确实恢复了一次
    */
@@ -778,6 +781,10 @@ private:
   volatile uint32_t _rx_arm_fail_cnt   = 0U;
   volatile uint32_t _rx_drop_bytes     = 0U;
   volatile uint32_t _rx_hw_error_cnt   = 0U;
+  volatile uint32_t _rx_pe_cnt         = 0U; ///< RX 奇偶校验错误次数
+  volatile uint32_t _rx_fe_cnt         = 0U; ///< RX 帧错误次数
+  volatile uint32_t _rx_ne_cnt         = 0U; ///< RX 噪声错误次数
+  volatile uint32_t _rx_ore_cnt        = 0U; ///< RX 溢出次数
   volatile uint32_t _rx_error_cnt      = 0U;
   volatile uint32_t _rx_dma_repair_cnt = 0U;
 
@@ -866,7 +873,8 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::init()
       return Status::BAD_ARG;
     }
     // 收发暂存区是对象成员，DMA 直接读写：实例忘了放进 .dma_buffer（或链接脚本把它放进了 DTCM）就拒绝
-    if (!uart_detail::dma_reachable(_rx_buffer) || !uart_detail::dma_reachable(_tx_buffer))
+    // DMA1/2 与 BDMA 能访问的内存不同，按各方向实际用的 DMA 判断（A4）
+    if ((rx_enabled() && !icbsp_dma_reachable(_rx_buffer, _huart->hdmarx)) || (tx_enabled() && !icbsp_dma_reachable(_tx_buffer, _huart->hdmatx)))
     {
       return Status::BAD_ARG;
     }
@@ -996,7 +1004,7 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::printf(const char *fmt, ...)
   }
   if (xSemaphoreTake(_printf_lock, pdMS_TO_TICKS(PRINTF_TIMEOUT_MS)) != pdTRUE)
   {
-    return Status::IO_ERROR;
+    return Status::TIMEOUT; // 别的任务正在 printf（F7：原来返回 IO_ERROR）
   }
 
   va_list args;
@@ -1006,8 +1014,9 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::printf(const char *fmt, ...)
 
   if (len <= 0)
   {
+    // 0 = 空串（printf("")），没有东西要发，算成功；< 0 = 格式串错误（F7：原来两种都返回 BAD_ARG）
     (void)xSemaphoreGive(_printf_lock);
-    return Status::BAD_ARG;
+    return (len == 0) ? Status::OK : Status::BAD_ARG;
   }
   if (static_cast<size_t>(len) >= sizeof(_printf_buffer))
   {
@@ -1042,13 +1051,19 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::receive(uint8_t *buffer, size_t si
 template <typename Transport, size_t RX_SIZE, size_t TX_SIZE>
 bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
 {
-  if (_huart == nullptr || _tx_stream_buffer == nullptr || _tx_lock == nullptr || _baudrate == 0U)
+  if (_huart == nullptr || _tx_stream_buffer == nullptr || _tx_lock == nullptr)
+  {
+    return false;
+  }
+  // Config::baudrate 填 0 时按 CubeMX 配的波特率估算（F7：原来直接返回，卡死恢复整个被关掉）
+  const uint32_t baud = (_baudrate != 0U) ? _baudrate : _huart->Init.BaudRate;
+  if (baud == 0U)
   {
     return false;
   }
 
   // 卡死判定阈值 (ms) = 一包发送耗时的 2 倍（向上取整）：TX_SIZE × 10 bit ÷ 波特率 × 1000 × 2
-  const uint32_t stall_ms = static_cast<uint32_t>((static_cast<uint64_t>(TX_SIZE) * 20000U + _baudrate - 1U) / _baudrate);
+  const uint32_t stall_ms = static_cast<uint32_t>((static_cast<uint64_t>(TX_SIZE) * 20000U + baud - 1U) / baud);
 
   if (xStreamBufferBytesAvailable(_tx_stream_buffer) == 0U && _tx_chunk_len == 0U)
   {
@@ -1224,9 +1239,27 @@ void BspUartT<Transport, RX_SIZE, TX_SIZE>::on_error_isr()
   }
   // 接收侧线路错误：ORE 说明搬运不及时，FE / NE / PE 说明波特率、共地或线材有问题
   constexpr uint32_t RX_HW_ERROR_MASK = HAL_UART_ERROR_PE | HAL_UART_ERROR_NE | HAL_UART_ERROR_FE | HAL_UART_ERROR_ORE | HAL_UART_ERROR_RTO;
-  if ((_huart->ErrorCode & RX_HW_ERROR_MASK) != 0U)
+  const uint32_t ec = _huart->ErrorCode;
+  if ((ec & RX_HW_ERROR_MASK) != 0U)
   {
     _rx_hw_error_cnt = _rx_hw_error_cnt + 1U;
+  }
+  // 分别计数（F7）：DMA 模式下 FE / NE / PE 不会中止接收，坏字节照常投进流缓冲区，只能靠这几个计数发现
+  if ((ec & HAL_UART_ERROR_PE) != 0U)
+  {
+    _rx_pe_cnt = _rx_pe_cnt + 1U;
+  }
+  if ((ec & HAL_UART_ERROR_FE) != 0U)
+  {
+    _rx_fe_cnt = _rx_fe_cnt + 1U;
+  }
+  if ((ec & HAL_UART_ERROR_NE) != 0U)
+  {
+    _rx_ne_cnt = _rx_ne_cnt + 1U;
+  }
+  if ((ec & HAL_UART_ERROR_ORE) != 0U)
+  {
+    _rx_ore_cnt = _rx_ore_cnt + 1U;
   }
 }
 
@@ -1277,6 +1310,10 @@ typename BspUartT<Transport, RX_SIZE, TX_SIZE>::RxDiag BspUartT<Transport, RX_SI
   d.arm_fail_cnt   = _rx_arm_fail_cnt;
   d.drop_bytes     = _rx_drop_bytes;
   d.hw_error_cnt   = _rx_hw_error_cnt;
+  d.pe_cnt         = _rx_pe_cnt;
+  d.fe_cnt         = _rx_fe_cnt;
+  d.ne_cnt         = _rx_ne_cnt;
+  d.ore_cnt        = _rx_ore_cnt;
   d.error_cnt      = _rx_error_cnt;
   d.dma_repair_cnt = _rx_dma_repair_cnt;
   return d;
