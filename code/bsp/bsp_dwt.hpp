@@ -63,7 +63,7 @@ public:
    * @brief 当前绝对时间（秒，自 init() 起算）
    * @note 任何上下文都能调（任务 / ISR / 调度器启动前）：回绕检测在一段很短的关中断区里做（C11）。
    * @note 回绕要求两次调用间隔小于一圈（550 MHz 下 7.8 s）：sys_task 每 10 ms 调一次 get_cycles() 保证这一点；
-   *       SYS_TASK_ENABLE = 0 时由宿主自己定期调用。
+   *       ICBSP_SYS_TASK_ENABLE = 0 时由宿主自己定期调用。
    */
   double get_time_s();
 

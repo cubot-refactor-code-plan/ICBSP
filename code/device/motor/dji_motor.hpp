@@ -18,7 +18,7 @@
 #include "hardware_config.h"
 
 // DjiMotor 同时依赖 CAN 接收和发送路径
-#if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE && CAN_TX_ENABLE
+#if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_RX_ENABLE && ICBSP_CAN_TX_ENABLE
 
 #include "bsp/bsp_can.hpp"
 #include "service/definition/motor_definition.hpp"
@@ -596,6 +596,6 @@ Status DjiMotor<type, CanT>::statu(void) const
   return _statu;
 }
 
-#endif // HAL_FDCAN_MODULE_ENABLED && CAN_RX_ENABLE && CAN_TX_ENABLE
+#endif // HAL_FDCAN_MODULE_ENABLED && ICBSP_CAN_RX_ENABLE && ICBSP_CAN_TX_ENABLE
 
 #endif // __DJI_MOTOR_HPP__

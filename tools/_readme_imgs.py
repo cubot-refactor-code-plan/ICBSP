@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-OLD_TREE = """stm32-framework/
+OLD_TREE = """ICBSP/
 ├─ bsp/          CAN、UART、SPI、PWM、GPIO、Key、Encoder、DWT
 ├─ service/      Status / EventState、Online、CAN 收发节点、fault_record、system
 ├─ tasks/        sys_task、can_rx_task、can_tx_task
@@ -18,7 +18,7 @@ OLD_TREE = """stm32-framework/
 ├─ docs/         接入指南、常用接口、编码规范、器件手册、历史测试记录
 └─ CMakeLists.txt"""
 
-NEW_TREE = """stm32-framework/
+NEW_TREE = """ICBSP/
 ├─ code/         库源码（分层见 docs/code/）
 │  ├─ bsp/       CAN、UART、SPI、PWM、GPIO、Key、Encoder、DWT
 │  ├─ service/   Status / EventState、Online、CAN 收发节点、fault_record、system

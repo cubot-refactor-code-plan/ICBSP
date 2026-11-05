@@ -1,6 +1,6 @@
 /**
  * @file matrix.hpp
- * @author yssickjgd (1345578933@qq.com)（原作 alg_matrix.h / alg_matrix.cpp）；ChoseB（移植到 stm32_framework 并修改）
+ * @author yssickjgd (1345578933@qq.com)（原作 alg_matrix.h / alg_matrix.cpp）；ChoseB（移植到 ICBSP 并修改）
  * @brief 定长单精度矩阵：四则运算、转置、求逆（报告奇异）、向量模长 / 归一化 / 点乘 / 叉乘、常用旋转矩阵
  * @version 0.2
  * @date 2026-10-31

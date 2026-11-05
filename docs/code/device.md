@@ -153,7 +153,7 @@ buzzer.tone(1000, 50);    // 持续音，音量 50%
 | `DjiMotor` 编译报 ID 越界 | `Motor3508` 只接受 1–8，`Motor2006` 1–8，`Motor6020` 1–7（以头文件注释为准） |
 | 电机抖动不动 | `DeviceMotor` 的 `encoder_multiplier` 与 CubeMX 编码器模式不匹配（TI12 = 4，TI1 = 2） |
 | 电机低速嗡嗡响 | `deadband_cm_s` 太小，静止时的 ±1 计数被 P 放大成占空比抖动 |
-| 多电机只动一个 | 同 ID 冲突，或没写进 `BSP_CAN_INSTANCES` |
+| 多电机只动一个 | 同 ID 冲突，或没写进 `ICBSP_CAN_INSTANCES` |
 | Emm_V5 偶发丢指令 | 多任务共用 485 却没 `lock_bus()` |
 | BMI088 姿态乱跳 | 片选 `read_dummy` 配错（陀螺仪 1、加速度计 0），或没开 `MasterKeepIOState` |
 | 波形发不出去 | `pid_frame()` 只组帧；要在 App 里调 `bsp_uart1.send()` |

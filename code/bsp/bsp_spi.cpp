@@ -44,7 +44,7 @@ extern "C"
 {
   /**
    * @brief DMA 全双工传输完成（SPI EOT 中断里由 HAL 调用）
-   * @note 只处理 BSP_SPI_INSTANCES 清单里的实例，清单外的 SPI 直接忽略。
+   * @note 只处理 ICBSP_SPI_INSTANCES 清单里的实例，清单外的 SPI 直接忽略。
    */
   void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   {
@@ -58,7 +58,7 @@ extern "C"
     {                                                   \
       name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); \
     }
-    BSP_SPI_INSTANCES(X)
+    ICBSP_SPI_INSTANCES(X)
 #  undef X
     else
     {
@@ -81,7 +81,7 @@ extern "C"
     {                                               \
       name.on_error_isr(&xHigherPriorityTaskWoken); \
     }
-    BSP_SPI_INSTANCES(X)
+    ICBSP_SPI_INSTANCES(X)
 #  undef X
     else
     {
@@ -117,7 +117,7 @@ bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi)
     {                                             \
       same = same + 1U;                           \
     }
-  BSP_SPI_INSTANCES(X)
+  ICBSP_SPI_INSTANCES(X)
 #  undef X
   return listed && same == 1U;
 }
@@ -248,7 +248,7 @@ Status BspSpi::transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint3
   // 调用方缓冲 DMA 访问不到、必须中转（只计这种，填充 / 丢弃不算）
   const bool bounced = use_dma && ((tx != nullptr && !tx_direct) || (rx != nullptr && !rx_direct));
   // 任一方向用弹跳缓冲，每段就不能超过它
-  const size_t max_seg = (tx_direct && rx_direct) ? HAL_MAX_SEGMENT : SPI_DMA_BUFFER_SIZE;
+  const size_t max_seg = (tx_direct && rx_direct) ? HAL_MAX_SEGMENT : ICBSP_SPI_DMA_BUFFER_SIZE;
 
   size_t done = 0U;
   while (done < len)

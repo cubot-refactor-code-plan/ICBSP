@@ -438,7 +438,7 @@ def fig_startup(c):
     arrow(c, [(rail_b, 580), (rail_b, 838), (1035, 838), (1035, ty)], LINE["int"], dashed=True)
     label(c, (700, 846), "③ system_start 有节点才创建 can_tx_task", LINE["int"], size=11, anchor="la")
 
-    label(c, (100, 852), "优先级 / 栈深在宿主 hardware_config.h：CAN_TASK_PRIORITY 最高", SUB, size=11, anchor="la")
+    label(c, (100, 852), "优先级 / 栈深在宿主 hardware_config.h：ICBSP_CAN_TASK_PRIORITY 最高", SUB, size=11, anchor="la")
 
 
 # ==================== 入口 ====================
