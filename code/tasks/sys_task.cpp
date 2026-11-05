@@ -50,7 +50,7 @@ extern "C" void sys_task(void *argument)
   uint64_t   window_sum  = 0U; // 平均值窗口内的耗时和 (µs)
   constexpr uint32_t AVG_WINDOW = 1000U / SYS_TASK_PERIOD_MS;
 
-  vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1000));
+  // 不等开机 1 s（Q5）：Online 初始就是离线，Bus-Off 恢复与串口巡检在没出故障时什么都不做，上电立刻开始维护没有副作用
   for (;;)
   {
     // 本轮计时基准（无状态，首次结果丢弃）

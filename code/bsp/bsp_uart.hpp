@@ -762,6 +762,7 @@ private:
 
   static constexpr size_t   RX_STREAM_SIZE         = 2U * RX_SIZE; ///< 接收流缓冲区容量
   static constexpr uint32_t PRINTF_TIMEOUT_MS      = 10U;          ///< printf() 取锁 / 入队的等待上限
+  static constexpr uint32_t TX_STALL_MIN_MS        = 10U;          ///< 发送卡死判定阈值的下限 (ms)，= sys_task 巡检周期
 
   UART_HandleTypeDef  *_huart;                      ///< UART 句柄
   StreamBufferHandle_t _rx_stream_buffer = nullptr; ///< 接收流缓冲区（写者：接收中断；读者：receive()）
@@ -1065,8 +1066,10 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
     return false;
   }
 
-  // 卡死判定阈值 (ms) = 一包发送耗时的 2 倍（向上取整）：TX_SIZE × 10 bit ÷ 波特率 × 1000 × 2
-  const uint32_t stall_ms = static_cast<uint32_t>((static_cast<uint64_t>(TX_SIZE) * 20000U + baud - 1U) / baud);
+  // 卡死判定阈值 (ms) = 一包发送耗时的 2 倍（向上取整）：TX_SIZE × 10 bit ÷ 波特率 × 1000 × 2，
+  // 下限是巡检周期 TX_STALL_MIN_MS（Q5）：tick 只有 1 ms 分辨率，阈值 1~2 ms 时刚开始的一次传输就可能被判成卡死并中止
+  const uint32_t pack_ms  = static_cast<uint32_t>((static_cast<uint64_t>(TX_SIZE) * 20000U + baud - 1U) / baud);
+  const uint32_t stall_ms = (pack_ms < TX_STALL_MIN_MS) ? TX_STALL_MIN_MS : pack_ms;
 
   if (xStreamBufferBytesAvailable(_tx_stream_buffer) == 0U && _tx_chunk_len == 0U)
   {

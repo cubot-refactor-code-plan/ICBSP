@@ -139,7 +139,8 @@
   - 2026-11-06：`code/service/system/config_check.hpp` 是库读配置的唯一入口（库内不再直接包含 `hardware_config.h`），依次做缺宏 `#error`（21 个宏）→ HAL 模块没开时强制关开关 → 开关依赖 → 取值范围；`system.cpp` / `device_bmi088.cpp` 里零散的检查、`bsp_can` / `bsp_fdcan` / `can_tx_node` 里的缺宏检查并进来。模板删掉了检查段，宿主 `Core/Inc/hardware_config.h` 按模板重新同步。反向测试：缺宏、非法值、依赖不满足、关 CAN 发送后包含 DjiMotor 都会报错
 - [x] 功能开关（Q4）：放进 `hardware_config.h`，注释写清后果，依赖用 `static_assert`
   - 2026-11-06：模板里四个开关逐个写明关掉之后失去什么；依赖：`ICBSP_UART_PATROL_ENABLE` 需要 `ICBSP_SYS_TASK_ENABLE`（static_assert），DjiMotor 需要 CAN 收发都开（开了 CAN 外设却关了任一路径时 `#error`，没开 CAN 外设仍是空头文件）
-- [ ] sys_task（Q5）：10 ms；去掉开机 1 s 等待；`sys_task_stats`（DWT 计时）+ 可选回调；`CAN_BUSOFF_RETRY_MS` 等按 10 ms 粒度检查
+- [x] sys_task（Q5）：10 ms；去掉开机 1 s 等待；`sys_task_stats`（DWT 计时）+ 可选回调；`CAN_BUSOFF_RETRY_MS` 等按 10 ms 粒度检查
+  - 10 ms、`sys_task_stats` + `system_set_report_hook()`、`ICBSP_CAN_BUSOFF_RETRY_MS ≥ 10` 在 1.3 / 1.4 已做；2026-11-06 去掉开机 1 s 等待；串口发送卡死阈值（一包耗时 × 2）加下限 10 ms（= 巡检周期；高波特率下阈值只有 1 tick 时，刚开始的传输可能被误判卡死并中止）。Online 的离线判定本来就按 ms，巡检周期只决定判定延迟，不用改
 - [ ] EventState 默认树（Q6）：`sys_state` → BSP 实例 → 设备；子节点错误只置父错误位、不清 RUNNING；照搬 fork 81 条判据并补建树用例
 - [ ] 命名统一（Q10）：GPIO / Key / PWM 改名；编码规范写入“查询 `get_`、布尔 `is_` / `has_`”并扫一遍全部接口（GPIO 改回 `get_port/get_pin`）
 - [ ] 编码器进核心库 `bsp/bsp_encoder`（Q11 更正），补 `HAL_TIM_MODULE_ENABLED` 保护
