@@ -50,7 +50,7 @@
  * @note 手动刷新：Config::auto_update = false 时不建任务，attach_task() 的任务在数据就绪中断里收到 ACC_DRDY_BIT / GYRO_DRDY_BIT，
  *       由调用方自己 update()。临时对象（测试里切量程等）必须用手动模式。手动模式不解算姿态（update() 只刷新读数）。
  * @note 自动刷新的负载：每次 update() 约 75 µs（-O2）~ 140 µs（-O0）；默认陀螺仪 1000 Hz（HZ1000_BW116）时约占 CPU 7.5%~14%，
- *       改成 2000 Hz（HZ2000_BW230 / HZ2000_BW532）翻倍，嫌高可以再调低。任务优先级 / 栈深见 BMI088_TASK_PRIORITY / BMI088_TASK_STACK。
+ *       改成 2000 Hz（HZ2000_BW230 / HZ2000_BW532）翻倍，嫌高可以再调低。任务优先级 / 栈深见 ICBSP_BMI088_TASK_PRIORITY / ICBSP_BMI088_TASK_STACK。
  *       姿态解算另加每帧一次 VQF 双精度更新（H7 有双精度 FPU）。
  * @warning 自动刷新的对象 init() 成功后必须存活到系统停止（内部任务持有它的指针），和 DjiMotor 一样。
  *
@@ -208,7 +208,7 @@ public:
    *       姿态只由自动刷新任务解算（见文件头“姿态”）。
    * @note 自动模式下由内部任务调用，用户一般不用调；手动调用也安全（总线锁 + 临界区），但那一帧不进姿态解算。
    */
-  Status update(uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status update(uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /**
    * @brief 拷贝一份同一帧的数据（临界区内拷贝，跨任务读用它）

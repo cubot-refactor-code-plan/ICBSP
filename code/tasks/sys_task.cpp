@@ -14,7 +14,7 @@
 // 维护周期：Online 计时、CAN 恢复、UART 巡检统一按这个节拍
 constexpr uint32_t SYS_TASK_PERIOD_MS = 10U;
 
-static_assert(CAN_BUSOFF_RETRY_MS >= SYS_TASK_PERIOD_MS, "hardware_config.h: CAN_BUSOFF_RETRY_MS 不能短于 sys_task 的 10 ms 节拍");
+static_assert(ICBSP_CAN_BUSOFF_RETRY_MS >= SYS_TASK_PERIOD_MS, "hardware_config.h: ICBSP_CAN_BUSOFF_RETRY_MS 不能短于 sys_task 的 10 ms 节拍");
 
 extern "C"
 {
@@ -35,7 +35,7 @@ extern "C" void system_set_report_hook(SystemReportHook hook, uint32_t period_ms
   report_hook           = hook;
 }
 
-#if SYS_TASK_ENABLE
+#if ICBSP_SYS_TASK_ENABLE
 
 
 extern "C" void sys_task(void *argument)
@@ -60,21 +60,21 @@ extern "C" void sys_task(void *argument)
     // DWT 绝对时间的回绕跟踪：两次调用要短于一圈（550 MHz 下 7.8 s），这里每 10 ms 推进一次（C11）
     (void)bsp_dwt.get_cycles();
 
-#  if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
+#  if defined(HAL_FDCAN_MODULE_ENABLED) && (ICBSP_CAN_RX_ENABLE || ICBSP_CAN_TX_ENABLE)
     // CAN：Bus-Off 自恢复 + 发送兜底（软件缓冲有帧、TX-FIFO-EMPTY 中断却关着时补发，N27）
 #    define X(name)                   \
       (void)name.service_recovery(); \
       (void)name.tx_recover();
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #    undef X
 #  endif
 
-#  if defined(HAL_UART_MODULE_ENABLED) && UART_PATROL_ENABLE
+#  if defined(HAL_UART_MODULE_ENABLED) && ICBSP_UART_PATROL_ENABLE
     // 串口补救：卡死的发送续发 + 停摆的接收重建
 #    define X(name)            \
       (void)name.tx_recover(); \
       (void)name.rx_recover();
-    BSP_UART_INSTANCES(X)
+    ICBSP_UART_INSTANCES(X)
 #    undef X
 #  endif
 
@@ -112,4 +112,4 @@ extern "C" void sys_task(void *argument)
   }
 }
 
-#endif // SYS_TASK_ENABLE
+#endif // ICBSP_SYS_TASK_ENABLE

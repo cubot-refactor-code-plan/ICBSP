@@ -58,7 +58,7 @@ extern "C" void app_default_task(void *argument)
 
 /**
  * @brief sys_task 的周期报告：每 5 s 把维护耗时打到调试串口（库本身不打印，见 system_set_report_hook()）
- * @note 跑在 sys_task 的栈上；printf 的 vsnprintf 要栈，库任务栈 SYS_TASK_STACK 已按这个留了余量。
+ * @note 跑在 sys_task 的栈上；printf 的 vsnprintf 要栈，库任务栈 ICBSP_SYS_TASK_STACK 已按这个留了余量。
  */
 static void sys_report(const SysTaskStats *stats)
 {

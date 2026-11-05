@@ -62,17 +62,17 @@ inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
 
 | 方法 | 说明 |
 | --- | --- |
-| `Status init()` / `void deinit()` | 停外设、清缓冲、按 CubeMX 配置重新启动（可重复调用，失败回滚）；实例不在 `BSP_CAN_INSTANCES` 里或句柄重复 → `BAD_ARG` |
+| `Status init()` / `void deinit()` | 停外设、清缓冲、按 CubeMX 配置重新启动（可重复调用，失败回滚）；实例不在 `ICBSP_CAN_INSTANCES` 里或句柄重复 → `BAD_ARG` |
 | `bool is_ready() const` | 构造时是否给了句柄 |
 | `Status send(uint32_t id, const uint8_t *data, uint8_t dlc = 8, uint32_t id_type = FDCAN_STANDARD_ID)` | 标准帧 / 扩展帧，DLC 0~8；非阻塞，**只能在任务里调用** |
-| `Status receive(CanRxMsg *msg, uint32_t timeout_ms)` | `CAN_RX_ENABLE = 1`：取没被节点认领的帧（回退缓冲，`CAN_RX_RETURN_FRAMES = 0` 时返回 `NOT_SUPPORTED`）；`= 0`：取所有收到的帧 |
+| `Status receive(CanRxMsg *msg, uint32_t timeout_ms)` | `ICBSP_CAN_RX_ENABLE = 1`：取没被节点认领的帧（回退缓冲，`ICBSP_CAN_RX_RETURN_FRAMES = 0` 时返回 `NOT_SUPPORTED`）；`= 0`：取所有收到的帧 |
 | `Status send_latest(...)` | 参数同 `send()`；同 ID 的上一帧还在驱动里时不入队、返回 `BUSY`（周期帧用，发送节点内部就用它） |
 | `Status read_raw(...)` / `bool return_frame(...)` | `can_rx_task` 专用 |
 | `Status service_recovery()` / `bool tx_recover()` | `sys_task` 每 10 ms 调用：Bus-Off 恢复 / 发送兜底 |
 
 - `CanRxMsg` = `FDCAN_RxHeaderTypeDef header` + `uint8_t data[8]`（DLC 之后的字节为 0）；`CanTxMsg` = `id` + `id_type` + `dlc` + `data[8]`。
 - 只有头文件；`bsp_can.cpp` 只放 HAL 回调。库占用 `HAL_FDCAN_RxFifo0Callback`、`HAL_FDCAN_TxFifoEmptyCallback`、`HAL_FDCAN_ErrorStatusCallback`，宿主不能再定义；
-  不在 `BSP_CAN_INSTANCES` 里的 FDCAN 的这三个回调转到弱函数 `icbsp_unhandled_fdcan_*()`，宿主定义同名函数即可接收（见下文“清单外外设的回调”）。
+  不在 `ICBSP_CAN_INSTANCES` 里的 FDCAN 的这三个回调转到弱函数 `icbsp_unhandled_fdcan_*()`，宿主定义同名函数即可接收（见下文“清单外外设的回调”）。
 - 远程帧由硬件拒收；DLC > 8 的帧丢弃并计入 `diagnostics.rx_len_drop`。
 - TX 队列模式（CubeMX `TxFifoQueueMode = Queue`）下，同一 ID 的帧保证按发送顺序上线（硬件里已有同 ID 的帧时，下一帧先在软件里等）。
 - **总线上有更高优先级的流量、可能被占满时用 Queue 模式**：FIFO 模式严格按入队顺序发，排在前面的低优先级帧发不出去时，后面更高优先级的帧也只能等；Queue 模式按 ID 优先级发，配合发送节点的 `send_latest()`（一个周期 ID 最多占一个硬件缓冲），高优先级帧总能先发（实测 C06c / C06d）。
@@ -103,7 +103,7 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 - `BspUartT` 只有头文件，`bsp_uart.cpp` 里只有 HAL 回调分发，任意 Transport / 缓冲尺寸都不用补显式实例化。
 - `uart_mode::dma` 的接收是**循环 DMA**：`init()` 把 `hdmarx` 改成 Circular + 直接模式（CubeMX 里配 Normal 也可以），
   IDLE / 半满 / 写满事件只报告 DMA 写到的位置，接收路径不调用阻塞版 `HAL_DMA_Abort()`。接收流缓冲区是 `2 × RX_SIZE`。
-- `init()` 核对实例在 `BSP_UART_INSTANCES` 清单里、且是清单里唯一绑该句柄的实例，否则返回 `BAD_ARG`；
+- `init()` 核对实例在 `ICBSP_UART_INSTANCES` 清单里、且是清单里唯一绑该句柄的实例，否则返回 `BAD_ARG`；
   DMA 模式下还要求配了用到的 RX / TX DMA、实例在 DMA 可达的内存里（`.dma_buffer`）。
 - RS485 只支持 UART 硬件 DE（CubeMX 里选 RS485 模式），库不提供软件 DE。
 - `receive()` **单读者**：同一个串口只能由一个任务读（FreeRTOS 流缓冲区的限制）；`send()` / `printf()` 多写者安全。
@@ -124,7 +124,7 @@ inline BspSpiDevice bmi088_acc_spi(bsp_spi2,
 
 - `BspSpi` 管总线：`lock()/unlock()` 互斥、`transfer_locked()` 传输；引脚 NSS 必须是**软件**模式
 - `BspSpi` 是 constexpr 构造、平凡析构，和 CAN / UART 一样写成 `board_cfg.hpp` 的 inline 实例；`init()` 可重复调用（先 `deinit()` 再重建，
-  前提是没有任务正在用这条总线），`deinit()` 中止进行中的传输并释放资源。`init()` 核对实例在 `BSP_SPI_INSTANCES` 里、且清单里只有它绑这个句柄，否则 `BAD_ARG`
+  前提是没有任务正在用这条总线），`deinit()` 中止进行中的传输并释放资源。`init()` 核对实例在 `ICBSP_SPI_INSTANCES` 里、且清单里只有它绑这个句柄，否则 `BAD_ARG`
 - `BspSpiDevice` 管片选与寄存器语义：`read_reg()` / `write_reg()` / `read_reg8()` / `write_reg8()`，
   内部做 `select → 发命令 → dummy → 读 → deselect`
 - `.read_flag`：读命令要或上的位（BMI088 是 `0x80`）；`.read_dummy`：读之前要先发的空字节数
@@ -192,12 +192,12 @@ CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个
 库没有运行时登记表，靠宿主 `board_instances.hpp` 在编译期展开：
 
 ```cpp
-#define BSP_CAN_INSTANCES(X) X(bsp_can1)          // 中断里按这份清单分发
-#define BSP_UART_INSTANCES(X) X(bsp_uart1)        // sys_task 串口巡检按此展开
-#define BSP_SPI_INSTANCES(X) /* 无 */
+#define ICBSP_CAN_INSTANCES(X) X(bsp_can1)          // 中断里按这份清单分发
+#define ICBSP_UART_INSTANCES(X) X(bsp_uart1)        // sys_task 串口巡检按此展开
+#define ICBSP_SPI_INSTANCES(X) /* 无 */
 ```
 
-`code/bsp/bsp_can.cpp` 里三段 `BSP_CAN_INSTANCES(X)` 分别展开成「中断分发」「发送节拍」「恢复」。
+`code/bsp/bsp_can.cpp` 里三段 `ICBSP_CAN_INSTANCES(X)` 分别展开成「中断分发」「发送节拍」「恢复」。
 
 **漏写不会报错**：编译通过、运行也正常，只是那个实例的中断不会被分发、`sys_task` 也不巡检它。
 表现为「数据收不到」。所以加实例时 `board_cfg.hpp` 与 `board_instances.hpp` 必须一起改。
@@ -209,8 +209,8 @@ CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个
 | 现象 | 原因 |
 | --- | --- |
 | 串口参数上电变随机值 | `.dma_buffer` 写成 `NOLOAD`，或漏了 `AT> FLASH` |
-| 串口 `init()` 返回 `BAD_ARG` | 实例没写进 `BSP_UART_INSTANCES` / 两个实例绑同一句柄 / DMA 模式没配 DMA / 实例不在 `.dma_buffer` |
-| CAN 收不到帧 | FDCAN 中断没开 / 过滤器没放行 / 实例没写进 `BSP_CAN_INSTANCES` |
+| 串口 `init()` 返回 `BAD_ARG` | 实例没写进 `ICBSP_UART_INSTANCES` / 两个实例绑同一句柄 / DMA 模式没配 DMA / 实例不在 `.dma_buffer` |
+| CAN 收不到帧 | FDCAN 中断没开 / 过滤器没放行 / 实例没写进 `ICBSP_CAN_INSTANCES` |
 | 多个 SPI 设备互相踩数据 | 没用 `lock()` 包住整笔事务 |
 | 浮点打印空或乱码 | 宿主 CMake 少了 `-u _printf_float`（nano.specs） |
 | `get_delta_s()` 返回值离谱 | 两个任务共用了同一个 `last` |

@@ -9,7 +9,7 @@
 | `freertos_user_code.c` | `Core/Src/freertos.c` 的 Includes / 4 / 5 / Init 段 | 栈溢出与分配失败钩子；`MX_FREERTOS_Init()` 调 `app_init()` |
 | `user/board/hardware_config.h` | `user/board/` | 必选：唯一配置源，所有宏、功能开关与范围检查都在这里 |
 | `user/board/board_cfg.*` | `user/board/` | `board_cfg.hpp` 放 inline 外设实例，`board_cfg.cpp` 放 `board_init()` |
-| `user/board/board_instances.hpp` | `user/board/` | `BSP_CAN_INSTANCES` / `BSP_UART_INSTANCES` / `BSP_SPI_INSTANCES` 实例名清单，库的 HAL 回调与任务按它展开 |
+| `user/board/board_instances.hpp` | `user/board/` | `ICBSP_CAN_INSTANCES` / `ICBSP_UART_INSTANCES` / `ICBSP_SPI_INSTANCES` 实例名清单，库的 HAL 回调与任务按它展开 |
 | `user/app/app_main.*` | `user/app/` | `app_init()` 与默认任务体 `app_default_task()`（`freertos.c` 的 `StartDefaultTask()` 在 USER CODE 段里转调） |
 | `user/app/app_task.hpp` | `user/app/` | 示例任务声明（heartbeat / monitor） |
 | `user/app/task/demo_task.cpp` | `user/app/task/` | 示例任务实现，不自动创建 |
@@ -26,15 +26,15 @@
 
 `board_cfg.*` 用的是 `hfdcan1` / `huart1` / `htim12`，换成实际外设；没开的外设连同 `#include` 一起删。新增实例时同时改 `board_instances.hpp`，否则 HAL 回调找不到它。
 
-`hardware_config.h` 是唯一配置源：所有宏都写成实际值，顶部包含 HAL / FreeRTOS，`HAL_FDCAN_MODULE_ENABLED` / `HAL_UART_MODULE_ENABLED` 未定义时会自动关闭 `CAN_RX_ENABLE` / `CAN_TX_ENABLE` / `UART_PATROL_ENABLE`。不再有默认值头文件。
+`hardware_config.h` 是唯一配置源：所有宏都写成实际值，顶部包含 HAL / FreeRTOS，`HAL_FDCAN_MODULE_ENABLED` / `HAL_UART_MODULE_ENABLED` 未定义时会自动关闭 `ICBSP_CAN_RX_ENABLE` / `ICBSP_CAN_TX_ENABLE` / `ICBSP_UART_PATROL_ENABLE`。不再有默认值头文件。
 SPI / BMI088 的写法在 `board_cfg.hpp` 注释里，开 SPI 后再取消注释；外设实例都是 `inline` 变量，`board_cfg.cpp` 只放 `board_init()`。
 
 宿主 CMake 只需要包含路径和 `user/**/*.cpp` 收集：
 
 ```cmake
-add_subdirectory(third_party/stm32-framework)
-target_include_directories(stm32_framework PRIVATE user/board)  # 库自身也要看到 hardware_config.h
-target_link_libraries(${CMAKE_PROJECT_NAME} stm32_framework)
+add_subdirectory(third_party/icbsp)
+target_include_directories(icbsp PRIVATE user/board)  # 库自身也要看到 hardware_config.h
+target_link_libraries(${CMAKE_PROJECT_NAME} icbsp)
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_20)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE user/board user/app user/module)
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)

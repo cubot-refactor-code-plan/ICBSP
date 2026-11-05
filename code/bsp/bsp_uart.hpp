@@ -9,7 +9,7 @@
  *
  * @details 通用模板 BspUartT<Transport, RX_SIZE, TX_SIZE>，**只有头文件**（任意缓冲尺寸都不用补显式实例化）。
  *          流缓冲区、发送状态机、诊断计数与恢复流程共用，底层 DMA / 中断由 Transport 选择；
- *          HAL 回调按 board_instances.hpp 的 BSP_UART_INSTANCES 分发（bsp_uart.cpp）。
+ *          HAL 回调按 board_instances.hpp 的 ICBSP_UART_INSTANCES 分发（bsp_uart.cpp）。
  *
  * @note 接收：
  *       - uart_mode::dma：RX DMA 工作在**循环模式**（init() 自动把 hdmarx 改成 Circular + 直接模式）。
@@ -26,7 +26,7 @@
  * @note RS485：只支持 UART 硬件 DE（CubeMX 里 UART 选 RS485 模式）。库不提供软件 DE。
  *
  * @warning 已知限制：TX DMA 开着 DMA FIFO（CubeMX 配置）时，DMA 预读进 FIFO 的字节已被剩余计数算作“发出”；
- *          init() 还会打开 UART 硬件 FIFO（UART_ENABLE_FIFO）。tx_recover() 中止卡死的发送后按剩余计数续发，
+ *          init() 还会打开 UART 硬件 FIFO（ICBSP_UART_ENABLE_FIFO）。tx_recover() 中止卡死的发送后按剩余计数续发，
  *          这两个 FIFO 里的字节会丢。只影响“卡死后恢复”这条路径，正常发送不受影响。
  */
 
@@ -44,7 +44,7 @@
 #include "task.h" // IWYU pragma: keep
 
 #include "bsp/bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
-#include "hardware_config.h"  // UART_ENABLE_FIFO
+#include "hardware_config.h"  // ICBSP_UART_ENABLE_FIFO
 #include "service/system/status_code.hpp"        // 统一状态码
 
 #include <stdarg.h>
@@ -500,7 +500,7 @@ private:
   {
     constexpr uint32_t BYTE_BITS = USART_CR1_RXNEIE_RXFNEIE | USART_CR1_IDLEIE;
     const bool         byte_irq  = (huart->Instance->CR1 & BYTE_BITS) == BYTE_BITS;
-#if BSP_UART_HAS_FIFO
+#if ICBSP_UART_HAS_FIFO
     if (huart->FifoMode == UART_FIFOMODE_ENABLE)
     {
       const bool fifo_irq = ((huart->Instance->CR3 & USART_CR3_RXFTIE) != 0U) && ((huart->Instance->CR1 & USART_CR1_IDLEIE) != 0U);
@@ -514,7 +514,7 @@ private:
 
 
 /**
- * @brief 实例是否在 board_instances.hpp 的 BSP_UART_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_uart.cpp）
+ * @brief 实例是否在 board_instances.hpp 的 ICBSP_UART_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_uart.cpp）
  * @note HAL 回调与 sys_task 巡检只认清单里的实例：不在清单里的实例 init() 成功也收不到回调（对比评估 N13），
  *       两个实例绑同一个句柄时回调只会交给前一个。init() 用它把这两种配置错误变成 BAD_ARG。
  */
@@ -523,7 +523,7 @@ bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart);
 /**
  * @brief 清单外串口的回调转调（弱函数，默认什么也不做；实现在 bsp_uart.cpp）
  * @note 库占用了 HAL_UARTEx_RxEventCallback / HAL_UART_TxCpltCallback / HAL_UART_ErrorCallback，宿主不能再定义它们。
- *       宿主自己用 HAL 管的串口（不在 BSP_UART_INSTANCES 里）的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
+ *       宿主自己用 HAL 管的串口（不在 ICBSP_UART_INSTANCES 里）的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
  */
 extern "C"
 {
@@ -562,7 +562,7 @@ enum class UartDir : uint8_t
  *
  *   inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
  *     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
- *   // board_instances.hpp 的 BSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 ICBSP_CHECK(bsp_uart1.init() == Status::OK);
+ *   // board_instances.hpp 的 ICBSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 ICBSP_CHECK(bsp_uart1.init() == Status::OK);
  *
  *   bsp_uart1.send(buf, 8);             // 写进发送流缓冲区，自动发出去
  *   bsp_uart1.printf("v=%d\r\n", 42);   // 格式化输出（10 ms 入队超时）
@@ -649,7 +649,7 @@ public:
    *
    * @return OK=成功；IO_ERROR=资源创建失败或接收没能启动；
    *         BAD_ARG=句柄为空；DMA 模式下需要的 RX / TX DMA 没配，或实例不在 DMA 可达的内存里（没放进 .dma_buffer）；
-   *         实例不在 BSP_UART_INSTANCES 清单里，或清单里有另一个实例绑了同一个句柄
+   *         实例不在 ICBSP_UART_INSTANCES 清单里，或清单里有另一个实例绑了同一个句柄
    */
   Status init();
 
@@ -929,8 +929,8 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::init()
   // 打开 UART 硬件 FIFO（16 字节）。CubeMX 默认关着，此时接收只有 RDR 一级缓冲：搬运稍晚一点下一个字节就 ORE。
   // 2026-10-17 实测：不开 FIFO 时连续流在 2 Mbps 以上几乎全丢，开了之后 4 Mbps 也基本无损。
   // 代价：tx_recover() 中止发送时会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）。
-  // F4 没有硬件 FIFO（BSP_UART_HAS_FIFO = 0），也没有 HAL_UARTEx_EnableFifoMode()，整段不编译。
-#if UART_ENABLE_FIFO && BSP_UART_HAS_FIFO
+  // F4 没有硬件 FIFO（ICBSP_UART_HAS_FIFO = 0），也没有 HAL_UARTEx_EnableFifoMode()，整段不编译。
+#if ICBSP_UART_ENABLE_FIFO && ICBSP_UART_HAS_FIFO
   (void)HAL_UARTEx_EnableFifoMode(_huart);
 #endif
 
@@ -1106,7 +1106,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
     // 只看计数不够：一段末尾计数已是 0、UART / DMA FIFO 里的字节还在发，相邻两次巡检都落在段尾会误判（实测）。
     // 真卡死时两条都不成立：DMAT 被清 → 计数不动、移位完后 TC 置位；完成中断丢失 → 计数 0 且 TC 已置位。
     const size_t remaining = Transport::tx_remaining(_huart);
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
     // F4：状态寄存器是 SR，TC 位宏是 USART_SR_TC
     const bool   shifting  = (_huart->Instance->SR & USART_SR_TC) == 0U;
 #else
@@ -1349,7 +1349,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::arm_reception()
   }
 
   // 先清掉残留的 UART 错误标志：否则 HAL 会因为“启动前已有挂起的 ORE / FE / NE”拒绝启动
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
   // F4 没有 ICR / UART_CLEAR_xxx：错误标志靠「先读 SR 再读 DR」清除
   __HAL_UART_CLEAR_PEFLAG(_huart);
   __HAL_UART_CLEAR_FEFLAG(_huart);

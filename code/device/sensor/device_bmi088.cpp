@@ -11,7 +11,7 @@
 #include "bsp/bsp_dwt.hpp" // 调度器启动前的忙等
 #include "hardware_config.h"
 
-static_assert(BMI088_TASK_PRIORITY > tskIDLE_PRIORITY && BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "BMI088_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
+static_assert(ICBSP_BMI088_TASK_PRIORITY > tskIDLE_PRIORITY && ICBSP_BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "ICBSP_BMI088_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
 #include "algorithm/quaternion.hpp"
 #include "algorithm/vqf.hpp"
 
@@ -252,7 +252,7 @@ Status DeviceBmi088::init_locked()
   if (_cfg.auto_update && _worker == nullptr)
   {
     TaskHandle_t worker = nullptr;
-    if (xTaskCreate(task_entry, "imu", BMI088_TASK_STACK, this, BMI088_TASK_PRIORITY, &worker) != pdPASS)
+    if (xTaskCreate(task_entry, "imu", ICBSP_BMI088_TASK_STACK, this, ICBSP_BMI088_TASK_PRIORITY, &worker) != pdPASS)
     {
       return Status::IO_ERROR;
     }
@@ -476,7 +476,7 @@ void DeviceBmi088::run()
         steps = ATTITUDE_MAX_GYRO_STEPS;
       }
     }
-    const Status st = refresh(SPI_TRANSFER_TIMEOUT_MS, steps);
+    const Status st = refresh(ICBSP_SPI_TRANSFER_TIMEOUT_MS, steps);
     (void)xSemaphoreGive(_run_lock);
     if (st == Status::OK)
     {

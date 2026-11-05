@@ -24,7 +24,7 @@ bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan)
   {                                             \
     same = same + 1U;                           \
   }
-  BSP_CAN_INSTANCES(X)
+  ICBSP_CAN_INSTANCES(X)
 #undef X
   return listed && same == 1U;
 }
@@ -32,7 +32,7 @@ bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan)
 
 /* ==================== HAL 回调分发（bxCAN） ==================== */
 
-// 按句柄和 BSP_CAN_INSTANCES 清单逐个比对，清单外的 bxCAN 直接忽略。
+// 按句柄和 ICBSP_CAN_INSTANCES 清单逐个比对，清单外的 bxCAN 直接忽略。
 extern "C"
 {
   /** @brief RX FIFO0 有新报文 */
@@ -47,7 +47,7 @@ extern "C"
   {                                     \
     name.process_fifo0_isr(0U, &woken); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -68,7 +68,7 @@ extern "C"
   {                                   \
     name.trigger_tx_from_isr(&woken); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -89,7 +89,7 @@ extern "C"
   {                                   \
     name.trigger_tx_from_isr(&woken); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -110,7 +110,7 @@ extern "C"
   {                                   \
     name.trigger_tx_from_isr(&woken); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -130,7 +130,7 @@ extern "C"
   {                                         \
     name.process_error_isr(hcan->ErrorCode); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {

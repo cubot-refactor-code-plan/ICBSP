@@ -51,7 +51,7 @@
  * @note 库假定 D-Cache 关闭，DMA 缓冲不做 Cache 维护。
  * @note 所有超时参数单位都是毫秒；传 portMAX_DELAY 表示一直等。
  * @note 总线锁不按先来后到：互斥量释放时不直接交给等待者，高优先级任务频繁访问同一总线时，
- *       低优先级任务可能等锁超过默认的 SPI_TRANSFER_TIMEOUT_MS（实测 4 个任务争用时最低优先级者等过 9.3 ms 后超时）。
+ *       低优先级任务可能等锁超过默认的 ICBSP_SPI_TRANSFER_TIMEOUT_MS（实测 4 个任务争用时最低优先级者等过 9.3 ms 后超时）。
  *       低优先级的使用者应自己传更长的 timeout_ms（例如 50 ms，或 portMAX_DELAY）；默认值按高优先级、周期性访问取值。
  */
 
@@ -76,7 +76,7 @@
 
 
 /**
- * @brief 实例是否在 board_instances.hpp 的 BSP_SPI_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_spi.cpp）
+ * @brief 实例是否在 board_instances.hpp 的 ICBSP_SPI_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_spi.cpp）
  * @note HAL 回调只认清单里的实例：init() 用它把“漏写清单 / 两个实例绑同一句柄”变成 BAD_ARG（对比评估 N13）。
  */
 bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi);
@@ -84,7 +84,7 @@ bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi);
 /**
  * @brief 清单外 SPI 的回调转调（弱函数，默认什么也不做；实现在 bsp_spi.cpp）
  * @note 库占用了 HAL_SPI_TxRxCpltCallback / HAL_SPI_ErrorCallback，宿主不能再定义它们；
- *       不在 BSP_SPI_INSTANCES 里的 SPI 的这两个回调转到下面两个函数。
+ *       不在 ICBSP_SPI_INSTANCES 里的 SPI 的这两个回调转到下面两个函数。
  */
 extern "C"
 {
@@ -97,7 +97,7 @@ extern "C"
 /**
  * @brief SPI 总线（一路 SPI 外设，主机模式）
  *
- * @note HAL 回调按 board_instances.hpp 里的 BSP_SPI_INSTANCES 清单逐个比对句柄，
+ * @note HAL 回调按 board_instances.hpp 里的 ICBSP_SPI_INSTANCES 清单逐个比对句柄，
  *       清单外的 SPI（宿主工程自己管的）直接忽略。
  */
 class BspSpi
@@ -148,7 +148,7 @@ public:
    *       运行中重新调用时不能有任务正在使用或等待本总线（旧的锁会被删掉）。
    *
    * @return OK=成功；IO_ERROR=资源创建失败；
-   *         BAD_ARG=句柄为空、实例不在 BSP_SPI_INSTANCES 里或清单里另有实例绑了同一句柄、
+   *         BAD_ARG=句柄为空、实例不在 ICBSP_SPI_INSTANCES 里或清单里另有实例绑了同一句柄、
    *                 use_dma 却没链接 RX / TX DMA、use_dma 却不在 DMA 可达的内存里（没放进 .dma_buffer）
    */
   Status init();
@@ -168,7 +168,7 @@ public:
    * @param timeout_ms 最多等多久；portMAX_DELAY 表示一直等
    * @return OK=拿到了（调度器启动前直接返回 OK）；TIMEOUT=超时（计入 lock_timeout_cnt）；NOT_INIT=未 init
    */
-  Status lock(uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status lock(uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /** @brief 放总线锁（调度器启动前为空操作） */
   void unlock();
@@ -186,9 +186,9 @@ public:
    * @note len < dma_threshold、或 use_dma = false、或调度器未启动 → 轮询；否则 DMA。
    * @note 两个方向各自决定：DMA 时缓冲在 DMA 可达内存里就直接用（零拷贝），在 DTCM（例如任务栈、默认 .bss）
    *       就经实例里的弹跳缓冲中转；tx / rx 为空时也用弹跳缓冲（填 0xFF / 收了丢掉）。任一方向用到弹跳缓冲时
-   *       按 SPI_DMA_BUFFER_SIZE 分段，片选全程保持，对器件来说是一整帧。
+   *       按 ICBSP_SPI_DMA_BUFFER_SIZE 分段，片选全程保持，对器件来说是一整帧。
    */
-  Status transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /* ==================== */
   /* ==================== ISR 入口（HAL 回调按句柄查表后调用） ==================== */
@@ -242,8 +242,8 @@ private:
   volatile uint32_t _error_cnt        = 0; ///< 错误次数
   volatile uint32_t _lock_timeout_cnt = 0; ///< 等锁超时次数
 
-  uint8_t _tx_bounce[SPI_DMA_BUFFER_SIZE] = {}; ///< DMA 发送弹跳缓冲（也用来放 0xFF 填充）
-  uint8_t _rx_bounce[SPI_DMA_BUFFER_SIZE] = {}; ///< DMA 接收弹跳缓冲（也用来丢弃收到的字节）
+  uint8_t _tx_bounce[ICBSP_SPI_DMA_BUFFER_SIZE] = {}; ///< DMA 发送弹跳缓冲（也用来放 0xFF 填充）
+  uint8_t _rx_bounce[ICBSP_SPI_DMA_BUFFER_SIZE] = {}; ///< DMA 接收弹跳缓冲（也用来丢弃收到的字节）
 
   /* ==================== */
 };
@@ -306,7 +306,7 @@ public:
    * @param timeout_ms 等锁、以及每段等完成的上限
    * @return OK；BAD_ARG=len 为 0；NOT_INIT=设备未 init；TIMEOUT=等锁或传输超时；IO_ERROR=HAL 错误
    */
-  Status transfer(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status transfer(const uint8_t *tx, uint8_t *rx, size_t len, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /**
    * @brief 一次片选内先发 tx_len 字节、再收 rx_len 字节（收的时候发 0xFF）
@@ -318,25 +318,25 @@ public:
    * @param timeout_ms 同 transfer()
    * @return 同 transfer()；tx / rx 为空或长度为 0 返回 BAD_ARG
    */
-  Status write_then_read(const uint8_t *tx, size_t tx_len, uint8_t *rx, size_t rx_len, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status write_then_read(const uint8_t *tx, size_t tx_len, uint8_t *rx, size_t rx_len, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /**
    * @brief 从 reg 起连读 len 字节（地址置 read_flag，自动跳过 read_dummy 个无效字节）
    * @return 同 transfer()；data 为空或 len 为 0 返回 BAD_ARG
    */
-  Status read_reg(uint8_t reg, uint8_t *data, size_t len, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status read_reg(uint8_t reg, uint8_t *data, size_t len, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /**
    * @brief 从 reg 起连写 len 字节（地址清 read_flag）
    * @return 同 transfer()；data 为空或 len 为 0 返回 BAD_ARG
    */
-  Status write_reg(uint8_t reg, const uint8_t *data, size_t len, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status write_reg(uint8_t reg, const uint8_t *data, size_t len, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /** @brief 读 1 个寄存器 */
-  Status read_reg8(uint8_t reg, uint8_t &value, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status read_reg8(uint8_t reg, uint8_t &value, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /** @brief 写 1 个寄存器 */
-  Status write_reg8(uint8_t reg, uint8_t value, uint32_t timeout_ms = SPI_TRANSFER_TIMEOUT_MS);
+  Status write_reg8(uint8_t reg, uint8_t value, uint32_t timeout_ms = ICBSP_SPI_TRANSFER_TIMEOUT_MS);
 
   /* ==================== */
   /* ==================== 手动事务用 ==================== */
