@@ -577,6 +577,9 @@ class BspUartT
 public:
   /* ==================== 公有接口 ==================== */
 
+  static constexpr size_t TX_CAPACITY = TX_SIZE; ///< 单次 send() 的上限（发送暂存区大小），设备层按它定自己的帧缓冲
+  static constexpr size_t RX_CAPACITY = RX_SIZE; ///< 接收 DMA 缓冲大小
+
   /**
    * @brief 串口配置
    * @note 聚合体：可用指定初始化器 `{.huart = &huartX, .mode = ..., .baudrate = ...}`（按声明顺序）。

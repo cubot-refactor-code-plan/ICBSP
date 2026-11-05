@@ -148,11 +148,15 @@
   - I5：`ImuData::gyro` 改 `x / y / z`（本体系）；欧拉角度 / 弧度两份**保留**（度给人看、调参，弧度给控制，删一份反而要调用方自己换算）；字段仍是 double（VQF 是 double）
   - I6：`PI` 宏（两处，float 精度）删除，换成 `ICBSP_PI` / `ICBSP_PI_F`（`algorithm/math_constants.hpp`，原 `PI_D` 并入）；`MotorType` 改 `enum class DjiMotorType { M3508, GM6020, M2006 }`；PID 的 `_input` / `_output` 改私有；`DataUnpack` / `FillData` / `lvboData` / `statu` / `isOnline` 都已改。**没做**：`Vector3` / `Quaternion` 等全局名字没放进命名空间（影响面太大，留到需要时再议）；`BspCanT` 的 `trigger_tx_from_isr()` / `process_fifo0_isr()` 仍是 public（HAL 回调要调，改成私有要加 friend）
   - I7：发送槽位冲突从 `FULL` 改报 `BUSY`（分配失败本来就是 `FULL`，fork 已改）；PID 的 virtual / `print()` fork 已删；`BspPwm::set_freq()` 已返回 `Status`（1.4 F10）。**没做**：DjiMotor 接收节点注册失败仍报 `IO_ERROR`（注册器已在 sys_state 上记了具体原因，DjiMotor 拿不到）；`BspPwm::set_duty()` / `DeviceBuzzer` 仍返回 void（只是写寄存器，没有失败路径）
-- [ ] 编码器进核心库 `bsp/bsp_encoder`（Q11 更正），补 `HAL_TIM_MODULE_ENABLED` 保护
-- [ ] 设备并入核心（Q12 / Q17）：DeviceMotor（`device/motor/`）、DeviceServo、DeviceR9dsT（加 `snapshot()`；诊断计数改 `uint32_t`，N34）、DeviceEmmv5GroupT（去掉写死的 128 字节串口缓冲尺寸；N33：`get_position/get_status` 改名 `take_`、超时统一 `ms_to_ticks()`、校验方式可配）
+- [x] 编码器进核心库 `bsp/bsp_encoder`（Q11 更正），补 `HAL_TIM_MODULE_ENABLED` 保护
+  - 已在核心库（`code/bsp/bsp_encoder`），`HAL_TIM_MODULE_ENABLED` 保护 1.3（N24）已补；2.7 改名 `get_position()` / `is_initialized()`
+- [x] 设备并入核心（Q12 / Q17）：DeviceMotor（`device/motor/`）、DeviceServo、DeviceR9dsT（加 `snapshot()`；诊断计数改 `uint32_t`，N34）、DeviceEmmv5GroupT（去掉写死的 128 字节串口缓冲尺寸；N33：`get_position/get_status` 改名 `take_`、超时统一 `ms_to_ticks()`、校验方式可配）
+  - 2026-11-06：DeviceMotor / DeviceEmmv5GroupT 在 `device/motor/`、DeviceServo 在 `device/actuator/`、DeviceR9dsT 在 `device/remote/`（2.1）；HAL 保护 1.3 已补；R9DS 的 `snapshot()` 与 N34 在 1.4 已做
+  - Emm_V5：帧缓冲跟随 `Uart::TX_CAPACITY`（`BspUartT` 新增公开常量 `TX_CAPACITY` / `RX_CAPACITY`），缓冲太小 `static_assert`；N33 ① `take_position()` / `take_status()` / `take_in_position()`，`in_position()` → `is_in_position()`，`last_multi_frame()` → `get_last_multi_frame()`；② 三处 `send()` 不再把 tick 当毫秒传；③ `lock_bus()` 用 `uart_detail::ms_to_ticks()`；④ `Config::checksum`（`emmv5::Checksum::FIXED_6B` / `XOR`，命令按配置封口，XOR 模式下回复帧 0x6B 和 XOR 都接受）。**XOR 未实测；CRC-8 没做**（说明书 Rev1.3 只说“前面全部字节进行 CRC-8 计算”，没有多项式 / 初值 / 示例帧，见待排期）
+  - 默认树第三层（Q6）：Emm_V5 组、R9DS、BMI088 也各有节点（`get_state()`），挂在所用总线下；DeviceMotor / Servo / Buzzer 不在总线上，没有节点
+  - 宿主编译探针 `compile_probe.cpp` 用库的 `-Wextra -Wshadow` 编译，覆盖 Emm_V5 组 / R9DS 的全部成员
 - [ ] **dm_motor（达妙）新写**：MIT / 位置速度 / 速度模式；使能、失能、清错误、设零点；反馈解包（ID、错误码、位置、速度、扭矩、温度）；`P_MAX` / `V_MAX` / `T_MAX` 可配；Online、`snapshot()`；接口风格对齐 DjiMotor
-- [ ] DR16 接收机（DT7 遥控器，DBUS）
-- [ ] ET08 接收机
+- DR16 / ET08 接收机：按 Q12 的回答不进 v1.0.0，2026-11-06 移到文末“待排期”
 - [ ] 保留 fork 已有的：UART 七项（Q8）、CAN 三项（Q9）、Online ms + `is_online`（Q7）、DWT（Q11）、`can_tx_task` 按需创建（C10）、QuaternionPID 拆文件、PID `get()`；Matrix `_data` 改回 private + `friend`
 - [ ] 每加一项都补 HAL 模块保护（N24），对照附录 B 核对 N1~N37
 
@@ -204,3 +208,8 @@
 - [ ] 打 tag `v1.0.0` + release notes（发布方 INVC & CUBOT；支持型号、已实测模块、已知限制）
 - [ ] 宿主更新 submodule 指针并提交；`STM32_BSP` 在 GitHub 上归档（Q19）
 
+## 待排期（不进 v1.0.0）
+
+- [ ] DR16 接收机（DT7 遥控器，DBUS）设备驱动（Q12：放进待排期，不进 v1.0.0）
+- [ ] ET08 接收机设备驱动（同上）
+- [ ] Emm_V5 的 CRC-8 校验：需要厂家给出多项式 / 初值 / 示例帧（或用上位机抓一帧反推）后再实现；XOR 模式上板实测
