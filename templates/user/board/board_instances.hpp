@@ -57,8 +57,13 @@
  * 注意：**这里列了几个，就要求每个都已 init()**——sys_task 的 Bus-Off 恢复和
  * can_rx_task 的分发都会直接访问它们。
  */
-#define BSP_CAN_INSTANCES(X) \
-  X(bsp_can1)
+#if BSP_CAN_MODULE_ENABLED
+#  define BSP_CAN_INSTANCES(X) \
+    X(bsp_can1)
+#else
+/* 没在 CubeMX 里开 CAN（H7 的 FDCAN / F4 的 bxCAN）：没有实例，展开为空 */
+#  define BSP_CAN_INSTANCES(X) /* 无 */
+#endif
 
 /**
  * @brief UART 实例列表

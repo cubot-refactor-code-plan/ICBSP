@@ -12,7 +12,7 @@
 #ifndef __DJI_MOTOR_HPP__
 #define __DJI_MOTOR_HPP__
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关来自 stm32h7xx_hal_conf.h）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"     // taskENTER_CRITICAL（snapshot / DataUnpack 写回）
 #include "hardware_config.h"

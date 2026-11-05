@@ -1,4 +1,4 @@
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
@@ -38,28 +38,48 @@ Status BspEncoder::init()
   return Status::OK;
 }
 
-/** @brief 读计数器原始值：16 位无符号寄存器按补码转成有符号，再按 invert 取反 */
-int16_t BspEncoder::read_raw() const
+/**
+ * @brief 读计数器原始值：按计数器位宽转成有符号（16 位改补码 / 32 位直接用），再按 invert 取反
+ *
+ * @note 16 位与 32 位必须分开算：F4 的 TIM2 / TIM5 是 32 位计数器，
+ *       一律按 int16 截断会把多圈计数的值算错（H7 的 TIM2 / TIM5 同样是 32 位）。
+ */
+int32_t BspEncoder::read_raw() const
 {
   if (_config.htim == nullptr)
     return 0;
 
-  const int16_t raw = static_cast<int16_t>(static_cast<uint16_t>(__HAL_TIM_GET_COUNTER(_config.htim)));
+  const uint32_t cnt = static_cast<uint32_t>(__HAL_TIM_GET_COUNTER(_config.htim));
 
-  // 用 0 - raw 而不是 -raw：0x8000 取负在有符号里是溢出
-  return _config.invert ? static_cast<int16_t>(0 - raw) : raw;
+  if (IS_TIM_32B_COUNTER_INSTANCE(_config.htim->Instance) != 0U)
+  {
+    // 32 位：原值即补码；取反用无符号减法，避开 INT32_MIN 取负的溢出
+    return _config.invert ? static_cast<int32_t>(0U - cnt) : static_cast<int32_t>(cnt);
+  }
+
+  // 16 位：先截到 uint16 再转 int16 得补码值；用 0 - raw 而不是 -raw（0x8000 取负会溢出）
+  const int16_t raw = static_cast<int16_t>(static_cast<uint16_t>(cnt));
+  return _config.invert ? static_cast<int32_t>(static_cast<int16_t>(0 - raw)) : static_cast<int32_t>(raw);
 }
 
-/** @brief 本周期增量：16 位减法后按补码解释，0/65535 回绕自动正确 */
+/** @brief 本周期增量：按计数器位宽做无符号减法后解释成有符号，跨 0 / 满量程回绕自动正确 */
 int32_t BspEncoder::read_delta()
 {
   if (!_initialized)
     return 0;
 
-  const int16_t now = read_raw();
+  const int32_t now = read_raw();
 
-  // 先按 16 位无符号相减，再转 int16：跨过 0 或 65535 时结果依然是正确的小增量
-  const int32_t delta = static_cast<int16_t>(static_cast<uint16_t>(now) - static_cast<uint16_t>(_last));
+  // 先按位宽做无符号相减，再按同宽有符号解释：跨过 0 或满量程时结果依然是正确的小增量
+  int32_t delta = 0;
+  if (IS_TIM_32B_COUNTER_INSTANCE(_config.htim->Instance) != 0U)
+  {
+    delta = static_cast<int32_t>(static_cast<uint32_t>(now) - static_cast<uint32_t>(_last));
+  }
+  else
+  {
+    delta = static_cast<int16_t>(static_cast<uint16_t>(now) - static_cast<uint16_t>(_last));
+  }
 
   _last = now;
   _position += delta;

@@ -1,5 +1,5 @@
 #include "hardware_config.h"
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_TX_ENABLE=0 时，本文件不参与编译
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_TX_ENABLE

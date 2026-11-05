@@ -15,7 +15,7 @@
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（__get_IPSR）
+#include "bsp_series.hpp" // IWYU pragma: keep（__get_IPSR）
 
 struct _reent;
 

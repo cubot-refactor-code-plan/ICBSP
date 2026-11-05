@@ -200,6 +200,15 @@ def eval_int(expr):
 # ==================== 1. 前提检查 ====================
 
 
+def detect_series(host):
+    """探测宿主工程属于哪个系列：返回 "h7" / "f4" / None"""
+    if (host / "Core/Inc/stm32h7xx_hal_conf.h").is_file():
+        return "h7"
+    if (host / "Core/Inc/stm32f4xx_hal_conf.h").is_file():
+        return "f4"
+    return None
+
+
 def check_prerequisites(host, rep):
     step = "前提"
     ok = True
@@ -212,8 +221,9 @@ def check_prerequisites(host, rep):
     ):
         rep.error(step, "根 CMakeLists.txt 里没有 add_subdirectory(cmake/stm32cubemx)")
         ok = False
-    if not (host / "Core/Inc/stm32h7xx_hal_conf.h").is_file():
-        rep.error(step, "没有 Core/Inc/stm32h7xx_hal_conf.h：本库只支持 STM32H7")
+    series = detect_series(host)
+    if series is None:
+        rep.error(step, "没有 Core/Inc/stm32h7xx_hal_conf.h 或 stm32f4xx_hal_conf.h：本库只支持 STM32H7 / STM32F4")
         ok = False
 
     cfg = host / "Core/Inc/FreeRTOSConfig.h"
@@ -237,14 +247,18 @@ def check_prerequisites(host, rep):
     if define("configUSE_MALLOC_FAILED_HOOK") != "1":
         rep.error(step, "configUSE_MALLOC_FAILED_HOOK 不是 1：CubeMX FreeRTOS → USE_MALLOC_FAILED_HOOK = Enabled")
         ok = False
-    if '#include "cmsis_os2.h"' not in rtos.read_text(encoding="utf-8"):
-        rep.error(step, "freertos.c 没有包含 cmsis_os2.h：FreeRTOS 接口要选 CMSIS_V2")
+    # CubeMX 即使选了 CMSIS_V2，F4 上的 freertos.c 里也可能仍写着 #include "cmsis_os.h"：
+    # 那是 V1 的兼容头，它内部（cmsis_os.h:155）会再 include cmsis_os2.h。
+    # 所以两个名字都算通过，不能用“有没有 cmsis_os2.h”判断接口版本。
+    rtos_text = rtos.read_text(encoding="utf-8")
+    if "cmsis_os2.h" not in rtos_text and "cmsis_os.h" not in rtos_text:
+        rep.error(step, "freertos.c 既没有引用 cmsis_os2.h 也没有 cmsis_os.h：FreeRTOS 接口要选 CMSIS_V2")
         ok = False
 
-    if not (host / "Core/Src/stm32h7xx_hal_timebase_tim.c").is_file():
-        rep.warn(step, "没找到 stm32h7xx_hal_timebase_tim.c：HAL 时基应选一个空闲定时器（SysTick 留给 FreeRTOS）")
+    if series is not None and not (host / f"Core/Src/stm32{series}xx_hal_timebase_tim.c").is_file():
+        rep.warn(step, f"没找到 stm32{series}xx_hal_timebase_tim.c：HAL 时基应选一个空闲定时器（SysTick 留给 FreeRTOS）")
     main_c = host / "Core/Src/main.c"
-    if main_c.is_file() and "SCB_EnableDCache" in main_c.read_text(encoding="utf-8"):
+    if series == "h7" and main_c.is_file() and "SCB_EnableDCache" in main_c.read_text(encoding="utf-8"):
         rep.warn(step, "D-Cache 已开启：库假定 D-Cache 关闭，否则 .dma_buffer 要用 MPU 设成非缓存区")
     if ok:
         rep.ok(step, "CubeMX 配置满足 docs/接入指南.md 第 1 节的要求")
@@ -253,8 +267,25 @@ def check_prerequisites(host, rep):
 
 # ==================== 2. 链接脚本 ====================
 
-AXI_SRAM_ORIGIN = 0x24000000                                     # 所有 STM32H7 的 AXI SRAM（D1 域）起始地址
-DMA_UNREACHABLE = ((0x00000000, 0x00040000), (0x20000000, 0x20020000))  # ITCM（最大 256K）/ DTCM：DMA1 / DMA2 访问不到
+# 每个系列的 DMA 可达 RAM：
+#   ram_origin      在链接脚本 MEMORY 里按「起始地址」认区，不按名字（各型号叫法不同）
+#   unreachable      DMA 访问不到、不能放收发缓冲的地址段
+#   regions         区名候选（拿不到 ram_origin 时兼用）
+#   need_dma_buffer H7 要 .dma_buffer 专段；F4 主 SRAM 本身可 DMA，不需要
+SERIES_LINKER = {
+    "h7": {
+        "ram_origin": 0x24000000,
+        "unreachable": ((0x00000000, 0x00040000), (0x20000000, 0x20020000)),  # ITCM / DTCM
+        "regions": ("RAM_D1", "AXI_SRAM"),
+        "need_dma_buffer": True,
+    },
+    "f4": {
+        "ram_origin": 0x20000000,
+        "unreachable": ((0x10000000, 0x10010000),),  # CCM RAM（64K，只连 CPU）
+        "regions": ("RAM",),
+        "need_dma_buffer": False,
+    },
+}
 
 
 def find_linker_script(host, rep, explicit):
@@ -284,8 +315,13 @@ def plan_linker(host, plan, rep, explicit, region):
         return
     tf = TextFile(path)
     rel = path.relative_to(host).as_posix()
-    missing = [s for s in ("dma_buffer", "noinit") if not re.search(rf"\.{s}\s*(\(NOLOAD\))?\s*:", tf.text)]
-    if "dma_buffer" not in missing:
+    series = detect_series(host) or "h7"
+    cfg = SERIES_LINKER[series]
+    need_dma = cfg["need_dma_buffer"]
+    # H7 要两段；F4 主 SRAM 本身可 DMA，只需要 .noinit
+    wanted = ("dma_buffer", "noinit") if need_dma else ("noinit",)
+    missing = [s for s in wanted if not re.search(rf"\.{s}\s*(\(NOLOAD\))?\s*:", tf.text)]
+    if need_dma and "dma_buffer" not in missing:
         # .dma_buffer 必须是可加载段：constexpr 实例的初值要从 Flash 拷进 RAM_D1
         dma_block = re.search(r"^[ \t]*\.dma_buffer[^\n]*:\s*\{.*?\}\s*>[^\n]*", tf.text, re.M | re.S)
         block_text = dma_block.group(0) if dma_block else ""
@@ -296,7 +332,10 @@ def plan_linker(host, plan, rep, explicit, region):
             rep.error(step, f"{rel} 的 .dma_buffer 缺少 AT> FLASH 加载区；按 templates/linker_sections.ld 手动补上")
             return
     if not missing:
-        rep.skip(step, f"{rel} 已有可加载的 .dma_buffer 与 .noinit")
+        if need_dma:
+            rep.skip(step, f"{rel} 已有可加载的 .dma_buffer 与 .noinit")
+        else:
+            rep.skip(step, f"{rel} 已有 .noinit（F4 不需要 .dma_buffer）")
         return
 
     regions = {
@@ -305,20 +344,20 @@ def plan_linker(host, plan, rep, explicit, region):
     }
     names = ", ".join(f"{n}@0x{o:08X}" for n, o in regions.items())
     if region is None:
-        # 按地址认 AXI SRAM，不按名字：各型号 CubeMX 链接脚本的叫法不同（H723 RAM_D1，H743 / H750 RAM）
-        region = next((n for n, o in regions.items() if o == AXI_SRAM_ORIGIN), None)
-        region = region or next((r for r in ("RAM_D1", "AXI_SRAM") if r in regions), None)
+        # 按地址认 RAM，不按名字：各型号 CubeMX 链接脚本的叫法不同（H723 RAM_D1，H743 / H750 / F4 RAM）
+        region = next((n for n, o in regions.items() if o == cfg["ram_origin"]), None)
+        region = region or next((r for r in cfg["regions"] if r in regions), None)
         if region is None:
-            rep.error(step, f"MEMORY 里没有起始于 0x{AXI_SRAM_ORIGIN:08X} 的 AXI SRAM（有 {names}），用 --ram-region 指定 DMA 可达的区")
+            rep.error(step, f"MEMORY 里没有起始于 0x{cfg['ram_origin']:08X} 的 RAM（有 {names}），用 --ram-region 指定 DMA 可达的区")
             return
     elif region not in regions:
         rep.error(step, f"MEMORY 里没有 {region}（有 {names}）")
         return
-    if any(lo <= regions[region] < hi for lo, hi in DMA_UNREACHABLE):
-        rep.error(step, f"{region}@0x{regions[region]:08X} 是 ITCM / DTCM，DMA1 / DMA2 访问不到，换一个区（有 {names}）")
+    if any(lo <= regions[region] < hi for lo, hi in cfg["unreachable"]):
+        rep.error(step, f"{region}@0x{regions[region]:08X} 这段 DMA 访问不到（ITCM / DTCM / CCM），换一个区（有 {names}）")
         return
 
-    if "dma_buffer" not in missing and "__dma_buffer_start" not in tf.text:
+    if need_dma and "dma_buffer" not in missing and "__dma_buffer_start" not in tf.text:
         rep.error(
             step,
             f"{rel} 有 .dma_buffer 段，但缺 __dma_buffer_start / __dma_buffer_end / __dma_buffer_load 符号："
@@ -331,6 +370,8 @@ def plan_linker(host, plan, rep, explicit, region):
     blocks = {}
     # 连同 AT> FLASH 与 __dma_buffer_load = LOADADDR(...) 一起取，不能只截到第一个 >region
     for m in re.finditer(r"^[ \t]*\.(\w+)[^\n]*:\s*\{.*?\}\s*>[^\n]*(?:\n[ \t]*__\w+_load\s*=[^\n]*)?", template, re.M | re.S):
+        if m.group(1) not in wanted:
+            continue
         blocks[m.group(1)] = re.sub(r"\}\s*>\s*\w+", f"}} >{region}", m.group(0), count=1)
 
     lines = tf.text.split("\n")
@@ -347,7 +388,8 @@ def plan_linker(host, plan, rep, explicit, region):
         rep.error(step, f"{rel} 里 .data 之前找不到输出段结尾的 \"}}\"，请按 templates/linker_sections.ld 手动添加")
         return
 
-    insert = ["", "  /* stm32_framework：见 templates/linker_sections.ld（.dma_buffer 可加载，放 BspUart / BspSpi 实例；.noinit 放 fault_record） */"]
+    note = ".dma_buffer 可加载，放 BspUart / BspSpi 实例；.noinit 放 fault_record" if need_dma else ".noinit 放 fault_record"
+    insert = ["", f"  /* stm32_framework：见 templates/linker_sections.ld（{note}） */"]
     for i, name in enumerate(missing):
         if i:
             insert.append("")
@@ -985,12 +1027,13 @@ def pick_svd(paths, prefixes):
 def detect_project(host, rep, preset):
     """从 CMakeLists.txt / .ioc / CMakePresets.json 推出模板要用的占位符"""
     step = "工程信息"
+    series = detect_series(host) or "h7"
     info = {
         "PRESET": preset,
         "PROJECT": host.name,
         "MCU": "",
-        "DEVICE": "STM32H7xx",
-        "OPENOCD_TARGET": "stm32h7x.cfg",
+        "DEVICE": "STM32H7xx" if series == "h7" else "STM32F4xx",
+        "OPENOCD_TARGET": "stm32h7x.cfg" if series == "h7" else "stm32f4x.cfg",
         "SVD": "",
         "COMPILE_COMMANDS_DIR": preset_binary_dir(host, preset).replace("${workspaceFolder}/", ""),
         "QUERY_DRIVER": "**/arm-none-eabi-*",
@@ -1031,11 +1074,14 @@ def detect_project(host, rep, preset):
         group = name[5:9]
         if group in H7_DUAL_CORE:
             rep.warn(step, f"{family} 是双核：OpenOCD 还要在 launch.json 的 openOCDLaunchCommands 里加 set DUAL_CORE 1；J-Link 用 device 即可")
-        if not group.startswith("H7"):
-            rep.warn(step, f"{family} 不是 STM32H7：本库只支持 H7，OpenOCD target 用 stm32h7x.cfg 兜底，需手动改")
-        # 2 MB 的 H7（Flash 代号 I）是双 bank，OpenOCD 要换 target
-        if name[10:11] == "I":
-            info["OPENOCD_TARGET"] = "stm32h7x_dual_bank.cfg"
+        if group.startswith("H7"):
+            # 2 MB 的 H7（Flash 代号 I）是双 bank，OpenOCD 要换 target
+            if name[10:11] == "I":
+                info["OPENOCD_TARGET"] = "stm32h7x_dual_bank.cfg"
+        elif group.startswith("F4"):
+            info["OPENOCD_TARGET"] = "stm32f4x.cfg"
+        else:
+            rep.warn(step, f"{family} 不是 STM32H7 / STM32F4：本库只支持这两个系列，OpenOCD target 需手动改")
     else:
         rep.warn(step, "没找到 .ioc 的 Mcu.Name：launch.json 的 device 留成 STM32H7xx，需要手动改成实际型号")
 
