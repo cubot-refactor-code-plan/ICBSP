@@ -32,6 +32,7 @@ private:
   TickType_t _last_refresh_tick; ///< 上次有效刷新的 tick
   uint16_t   _timeout_gap;       ///< 离线判定阈值，单位：毫秒
   Status     _statu;             ///< Status::OK 表示在线，Status::TIMEOUT 表示离线
+  EventState *_state = nullptr;  ///< 设备的 EventState 节点（可选）：由在线变离线时在它上面记 TIMEOUT
 
   Online        *_next; ///< 内部单向链表的后继节点
   static Online *_head; ///< 在线检查链表头
@@ -71,10 +72,20 @@ public:
   Status is_online(void) const;
 
   /**
+   * @brief 关联设备的 EventState 节点（默认树的第三层，Q6）
+   * @param state 设备节点；nullptr = 取消关联
+   * @note 之后每次由在线变成离线，update() 在该节点上记一次 Status::TIMEOUT（向上传到总线节点与 sys_state，不动运行位）。
+   *       构造后从没收到过数据的“离线”不算掉线，不记。节点必须比本对象活得久。
+   * @note 只在初始化期调用（不与 update() 并发）。
+   */
+  void set_state(EventState *state);
+
+  /**
    * @brief 推进全部在线检查节点的离线计时
    * @return Status::OK 遍历完成
    * @note 只能在单个周期任务中调用（当前为 sys_task，10 ms 一次），不能在 ISR 中调用。
    * @note 遍历期间挂起调度器，每个节点单独进出一次临界区：关中断时间与节点数无关。
+   * @note 掉线（由在线变离线）的节点若关联了 EventState，出临界区后在它上面记 TIMEOUT。
    */
   static Status update(void);
 

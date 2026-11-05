@@ -11,16 +11,18 @@
 
 | 文件 | 职责 | 关键符号 |
 | --- | --- | --- |
-| `system.hpp/.cpp` | 库入口 + 三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`sys_state` |
-| `status_code.hpp` | 状态码（纯定义，不依赖 RTOS，评审 A6） | `Status`、`status_bit()` |
-| `status.hpp/.cpp` | 事件状态树（包含 `status_code.hpp`） | `EventState` |
-| `online_check.hpp/.cpp` | 设备在线判定（内部单向链表） | `Online` |
-| `can_rx_node.hpp/.cpp` | 按 ID 分发 CAN 帧 | `CanRxNodeT<CanT>::regist/dispatch` |
-| `can_tx_node.hpp/.cpp` | 发送槽位聚合 + 保底心跳 | `CanTxNodeT<CanT>` |
-| `fault_record.hpp/.cpp` | 停机现场（assert / 栈溢出 / 分配失败 / 故障异常） | `FaultKind`、`FaultRecord`、`fault_on_*()`、`ICBSP_CHECK()` |
-| `newlib_lock.cpp` | newlib 堆的线程锁（弱符号，评审 A9） | `__malloc_lock` / `__malloc_unlock` |
-| `motor_definition.hpp` | 电机通用数据结构 | 供 device / app 共用 |
-| `imu_definition.hpp` | IMU 数据结构（`ImuData` 等） | 供 device / app 共用 |
+| `system/system.hpp/.cpp` | 库入口 + 三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`sys_state` |
+| `system/config_check.hpp` | 库读宿主配置的唯一入口：缺宏 / 范围 / 依赖检查 | 包含 `hardware_config.h` |
+| `system/status_code.hpp` | 状态码（纯定义，不依赖 RTOS，评审 A6） | `Status`、`status_bit()` |
+| `system/status.hpp/.cpp` | 事件状态（包含 `status_code.hpp`） | `EventState` |
+| `system/state_tree.hpp/.cpp` | 默认树的总线层：每个清单实例一个节点，按诊断计数记错 | `bus_state()`、`state_tree_poll()` |
+| `system/fault_record.hpp/.cpp` | 停机现场（assert / 栈溢出 / 分配失败 / 故障异常） | `FaultKind`、`FaultRecord`、`fault_on_*()`、`ICBSP_CHECK()` |
+| `system/newlib_lock.cpp` | newlib 堆的线程锁（弱符号，评审 A9） | `__malloc_lock` / `__malloc_unlock` |
+| `monitor/online_check.hpp/.cpp` | 设备在线判定（内部单向链表；可关联设备的 EventState 节点） | `Online` |
+| `comm/can_rx_node.hpp` | 按 ID 分发 CAN 帧 | `CanRxNodeT<CanT>::regist/dispatch` |
+| `comm/can_tx_node.hpp` | 发送槽位聚合 + 保底心跳 | `CanTxNodeT<CanT>` |
+| `definition/motor_definition.hpp` | 电机通用数据结构 | 供 device / app 共用 |
+| `definition/imu_definition.hpp` | IMU 数据结构（`ImuData` 等） | 供 device / app 共用 |
 
 ---
 
@@ -65,6 +67,27 @@ enum class Status : uint8_t { OK, BUSY, TIMEOUT, FULL, IO_ERROR, BAD_ARG, NOT_IN
 
 错误的生命周期：`error()` / `init_error()` 记下的码一直保留（粘滞），直到维护者调 `clear_error()`；
 清子节点不会清父节点（父节点上的同一个码可能还来自别的子节点）。初始化失败位永不清除。
+
+### 默认树（Q6）
+
+库默认建好三层，宿主不用写代码（`service/system/state_tree.hpp`）：
+
+```
+sys_state                     根（system_init() 建）
+├─ bus_state(&bsp_can1)       每个 ICBSP_CAN/UART/SPI_INSTANCES 实例一个（system_init() 建，system_start() 进入运行态）
+│   └─ DjiMotor::get_state()  设备在自己的 init() 里挂到所用总线下
+├─ bus_state(&bsp_uart1)
+└─ bus_state(&bsp_spi2)
+```
+
+| 谁记错 | 什么时候 | 记什么 |
+| --- | --- | --- |
+| sys_task（`state_tree_poll()`，10 ms） | 总线实例的诊断计数涨了 | CAN：Bus-Off → `IO_ERROR`，丢帧 / 缓冲满 → `FULL`，发送补救 → `TIMEOUT`；UART：线路 / 重建错误 → `IO_ERROR`，丢字节 → `FULL`，发送卡死恢复 → `TIMEOUT`；SPI：`IO_ERROR` / `TIMEOUT` / 等锁超时 `BUSY` |
+| `Online::update()` | 关联了设备节点的 Online 由在线变离线（构造后从没上线过的不算） | 设备节点 `TIMEOUT` |
+| 设备 `init()` | 初始化失败 | 设备节点 `init_error()`，一路传到根，`system_start()` 停机 |
+
+子节点出错只置父节点的错误位，**不清运行位**。查整机有没有出过错看 `sys_state.error_bits()`，查是哪条总线看
+`bus_state(&bsp_can1)->error_bits()`，查是哪个设备看设备的 `get_state()`。`ICBSP_SYS_TASK_ENABLE = 0` 时总线层不记运行期错误。
 
 业务任务的标准开头：
 

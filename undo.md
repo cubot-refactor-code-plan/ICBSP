@@ -141,7 +141,8 @@
   - 2026-11-06：模板里四个开关逐个写明关掉之后失去什么；依赖：`ICBSP_UART_PATROL_ENABLE` 需要 `ICBSP_SYS_TASK_ENABLE`（static_assert），DjiMotor 需要 CAN 收发都开（开了 CAN 外设却关了任一路径时 `#error`，没开 CAN 外设仍是空头文件）
 - [x] sys_task（Q5）：10 ms；去掉开机 1 s 等待；`sys_task_stats`（DWT 计时）+ 可选回调；`CAN_BUSOFF_RETRY_MS` 等按 10 ms 粒度检查
   - 10 ms、`sys_task_stats` + `system_set_report_hook()`、`ICBSP_CAN_BUSOFF_RETRY_MS ≥ 10` 在 1.3 / 1.4 已做；2026-11-06 去掉开机 1 s 等待；串口发送卡死阈值（一包耗时 × 2）加下限 10 ms（= 巡检周期；高波特率下阈值只有 1 tick 时，刚开始的传输可能被误判卡死并中止）。Online 的离线判定本来就按 ms，巡检周期只决定判定延迟，不用改
-- [ ] EventState 默认树（Q6）：`sys_state` → BSP 实例 → 设备；子节点错误只置父错误位、不清 RUNNING；照搬 fork 81 条判据并补建树用例
+- [x] EventState 默认树（Q6）：`sys_state` → BSP 实例 → 设备；子节点错误只置父错误位、不清 RUNNING；照搬 fork 81 条判据并补建树用例
+  - 2026-11-06：`service/system/state_tree.{hpp,cpp}`：`system_init()` 按三张实例清单给每个总线实例建节点挂到 `sys_state`，`system_start()` 进入运行态并记诊断计数基线；sys_task 每 10 ms `state_tree_poll()`，计数涨了就在总线节点记错（CAN / UART / SPI 的映射见头文件）。设备层：`Online::set_state()`，由在线变离线时在设备节点记 `TIMEOUT`；DjiMotor 有自己的节点（`get_state()`），init 失败改记在本节点（一路传到根）。其余设备（R9DS / Emm_V5 / BMI088）在 2.8 挂上来。宿主新增测试组 `test_state.cpp`：E01~E14 / O01~O11 按 fork 判据重建（E06 / E09 按 N16 之后的语义改了判据），T01~T04 测默认树；只验证编译，阶段 3 上板
 - [ ] 命名统一（Q10）：GPIO / Key / PWM 改名；编码规范写入“查询 `get_`、布尔 `is_` / `has_`”并扫一遍全部接口（GPIO 改回 `get_port/get_pin`）
 - [ ] 编码器进核心库 `bsp/bsp_encoder`（Q11 更正），补 `HAL_TIM_MODULE_ENABLED` 保护
 - [ ] 设备并入核心（Q12 / Q17）：DeviceMotor（`device/motor/`）、DeviceServo、DeviceR9dsT（加 `snapshot()`；诊断计数改 `uint32_t`，N34）、DeviceEmmv5GroupT（去掉写死的 128 字节串口缓冲尺寸；N33：`get_position/get_status` 改名 `take_`、超时统一 `ms_to_ticks()`、校验方式可配）

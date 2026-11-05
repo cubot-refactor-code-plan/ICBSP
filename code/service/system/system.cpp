@@ -5,6 +5,7 @@
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "bsp/bsp_dwt.hpp" // 计时基准（库内实例，本文件负责 init）
+#include "service/system/state_tree.hpp" // EventState 默认树的总线层
 #include "service/system/status.hpp"
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "task.h"
@@ -90,6 +91,10 @@ extern "C" void system_init(void)
   // 系统状态最先建：CAN 节点注册、任务入口的 wait_running() 都依赖它
   ICBSP_CHECK(sys_state.init() == Status::OK);
 
+  // 默认树的总线层（Q6）：每个清单里的 CAN / UART / SPI 实例一个节点，挂在 sys_state 下；
+  // 设备在 board_init() 里 init() 时挂到所用总线的节点下
+  ICBSP_CHECK(state_tree_init() == Status::OK);
+
   // 调度器启动前任务不会运行（CAN 收发任务还会先等运行态），所以可以早于用户的外设 init()；
   // 任务名受 configMAX_TASK_NAME_LEN（16）限制
 #if ICBSP_SYS_TASK_ENABLE
@@ -115,6 +120,10 @@ extern "C" void system_start(void)
 
 #endif
 
-  // 有初始化失败记录（各注册函数调过 sys_state.init_error）就在这里停机，fault_record 记下本行
+  // 总线节点先进入运行态，并记下诊断计数的基线（之后计数再涨才算运行期错误）
+  state_tree_start();
+
+  // 有初始化失败记录（设备 / 注册函数的 init_error 一路传上来）就在这里停机，fault_record 记下本行；
+  // 具体是哪条总线下的设备，查 bus_state(&实例)->error_code()
   ICBSP_CHECK(sys_state.complete_init() == Status::OK);
 }

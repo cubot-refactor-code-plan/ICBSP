@@ -2,6 +2,7 @@
 #include "bsp/bsp_dwt.hpp"
 #include "bsp/bsp_uart.hpp" // 未开 UART 时为空
 #include "service/monitor/online_check.hpp"
+#include "service/system/state_tree.hpp" // state_tree_poll()
 #include "service/system/system.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
@@ -78,8 +79,11 @@ extern "C" void sys_task(void *argument)
 #    undef X
 #  endif
 
-    // 在线情况更新
+    // 在线情况更新（设备由在线变离线时，Online 在设备节点上记 TIMEOUT）
     (void)Online::update();
+
+    // 默认树：总线实例的诊断计数涨了就在对应总线节点上记错误（Q6）
+    state_tree_poll();
 
     // 耗时统计（不含报告回调本身）
     const uint32_t cost_us  = static_cast<uint32_t>(bsp_dwt.get_delta_s(&mark) * 1000000.0);
