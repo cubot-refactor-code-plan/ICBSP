@@ -1,4 +1,4 @@
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 FDCAN 或 ICBSP_CAN_TX_ENABLE=0 时，本文件不参与编译

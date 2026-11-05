@@ -6,7 +6,7 @@
  *
  * 【它是什么】
  *   icbsp 里**没有**任何“默认值头文件”。库的每一个可调参数都是本文件里的 `#define`，
- *   库源码通过 CMake 加的包含路径直接 `#include "hardware_config.h"`。
+ *   库源码经 `service/system/config_check.hpp` 包含它（宿主自己的代码可以直接包含本文件）。
  *   CMake 配置阶段会打印实际用的是哪一份：
  *
  *       -- icbsp: 使用配置 /…/user/board/hardware_config.h
@@ -17,7 +17,10 @@
  *   ① 功能开关：决定“这段代码编不编译、这些任务建不建”——关掉省 Flash/RAM，但功能就没了
  *   ② 库任务：优先级与栈深——决定实时性和会不会栈溢出
  *   ③ 外设参数：队列深度、超时、缓冲区大小——决定吞吐、丢帧与阻塞时长
- *   ④ 取值检查：只做编译期断言，不改任何行为
+ *
+ * 【检查在库里】
+ *   缺宏、取值范围、开关之间的依赖都由库的 `code/service/system/config_check.hpp` 检查（编译期，不改行为），
+ *   CubeMX 没开对应 HAL 模块时库也会把开关强制置 0——本文件只需要写 `#define`。
  *
  * 【不在这里的两项】
  *   1. 调试打印开关 `ICBSP_UART_PRINT_ENABLE` 与 `print_uart(...)` 定义在 `board_cfg.hpp`：
@@ -29,33 +32,29 @@
 #ifndef HARDWARE_CONFIG_H
 #define HARDWARE_CONFIG_H
 
-#include "FreeRTOS.h"      // IWYU pragma: keep（configMAX_PRIORITIES）
-#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
-#include "task.h"         // IWYU pragma: keep（configMAX_PRIORITIES）
+#include "FreeRTOS.h" // IWYU pragma: keep（configMAX_PRIORITIES）
+#include "task.h"     // IWYU pragma: keep（configMAX_PRIORITIES）
 
 /* ==================== ① 功能开关：关掉就不编译对应代码、也不创建对应任务 ==================== */
+/*
+ * 取 0 或 1。CubeMX 没开对应外设（CAN / UART）时，库会把相关开关强制置 0，这里不用改。
+ * 依赖：ICBSP_UART_PATROL_ENABLE 需要 ICBSP_SYS_TASK_ENABLE；DjiMotor（以及以后的 dm_motor）需要 CAN 收发都开。
+ */
 
-/** @brief 系统维护任务 sys_task：CAN Bus-Off 恢复、串口补救、Online 计时 */
+/** @brief 系统维护任务 sys_task（10 ms）
+ *  @note 关掉（0）会失去：CAN Bus-Off 自动恢复与发送卡死恢复、串口巡检、Online 掉线计时（is_online() 不再变化）、
+ *        `sys_task_stats` 与 `system_set_report_hook()` 报告、DWT 绝对时间的回绕跟踪
+ *        （此时宿主要每隔不到一圈（550 MHz 下 7.8 s）调一次 `bsp_dwt.get_cycles()`，见 bsp_dwt.hpp）。 */
 #define ICBSP_SYS_TASK_ENABLE 1
-/** @brief CAN 接收路径：can_rx_task + CanRxNode */
+/** @brief CAN 接收路径：can_rx_task（1 ms）+ CanRxNodeT
+ *  @note 关掉会失去：按 ID 分发到接收节点（DjiMotor 等设备收不到反馈）；`BspCanT::receive()` 改为直接读原始接收缓冲。 */
 #define ICBSP_CAN_RX_ENABLE 1
-/** @brief CAN 发送路径：can_tx_task + CanTxNode */
+/** @brief CAN 发送路径：can_tx_task + CanTxNodeT
+ *  @note 关掉会失去：共帧发送节点（多个设备拼一帧、心跳、指令过期清零）；只剩 `BspCanT::send()` 直接发。 */
 #define ICBSP_CAN_TX_ENABLE 1
-/** @brief sys_task 里的串口补救巡检 */
+/** @brief sys_task 里的串口巡检
+ *  @note 关掉会失去：串口接收 / 发送卡死后的自动恢复（DMA 出错、HAL 状态卡住时不再重建收发）。 */
 #define ICBSP_UART_PATROL_ENABLE 1
-
-/* 宿主没开 CAN（H7 的 FDCAN / F4 的 bxCAN）时强制关闭，避免任务引用不存在的类型 */
-#if !ICBSP_CAN_MODULE_ENABLED
-#  undef ICBSP_CAN_RX_ENABLE
-#  undef ICBSP_CAN_TX_ENABLE
-#  define ICBSP_CAN_RX_ENABLE 0
-#  define ICBSP_CAN_TX_ENABLE 0
-#endif
-
-#ifndef HAL_UART_MODULE_ENABLED
-#  undef ICBSP_UART_PATROL_ENABLE
-#  define ICBSP_UART_PATROL_ENABLE 0
-#endif
 
 /* ==================== */
 /* ==================== 库任务（system_init() 创建） ==================== */
@@ -101,7 +100,7 @@
 
 /** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置
  *  @note 默认关：开了以后 tx_recover() 中止发送会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）。
- *        要用就自己改成 1；F4 没有硬件 FIFO，本宏在 F4 上恒为 0（有 static_assert 拦）。 */
+ *        要用就自己改成 1；F4 没有硬件 FIFO，本宏在 F4 上必须为 0（库里有 static_assert 拦）。 */
 #define ICBSP_UART_ENABLE_FIFO 0
 
 /* 注意：`BspUart::printf()` 的等待上限目前是**库内固定值**（取锁 10 ms / 入队 10 ms，
@@ -123,33 +122,6 @@
 #define ICBSP_BMI088_TASK_PRIORITY (configMAX_PRIORITIES - 3)
 /** @brief DeviceBmi088 自动刷新任务栈深（字）：含 VQF 姿态解算 */
 #define ICBSP_BMI088_TASK_STACK 512
-
-/* ==================== */
-/* ==================== 取值检查 ==================== */
-
-#ifdef __cplusplus
-static_assert(ICBSP_SYS_TASK_ENABLE == 0 || ICBSP_SYS_TASK_ENABLE == 1, "hardware_config.h: ICBSP_SYS_TASK_ENABLE 取 0 或 1");
-static_assert(ICBSP_CAN_RX_ENABLE == 0 || ICBSP_CAN_RX_ENABLE == 1, "hardware_config.h: ICBSP_CAN_RX_ENABLE 取 0 或 1");
-static_assert(ICBSP_CAN_TX_ENABLE == 0 || ICBSP_CAN_TX_ENABLE == 1, "hardware_config.h: ICBSP_CAN_TX_ENABLE 取 0 或 1");
-static_assert(ICBSP_UART_PATROL_ENABLE == 0 || ICBSP_UART_PATROL_ENABLE == 1, "hardware_config.h: ICBSP_UART_PATROL_ENABLE 取 0 或 1");
-static_assert(ICBSP_SYS_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: ICBSP_SYS_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
-static_assert(ICBSP_CAN_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: ICBSP_CAN_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
-static_assert(ICBSP_BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "hardware_config.h: ICBSP_BMI088_TASK_PRIORITY 必须小于 configMAX_PRIORITIES");
-static_assert(ICBSP_SYS_TASK_STACK >= 128 && ICBSP_CAN_TASK_STACK >= 128, "hardware_config.h: 库任务栈深至少 128 字");
-static_assert(ICBSP_CAN_RX_RETURN_FRAMES >= 0, "hardware_config.h: ICBSP_CAN_RX_RETURN_FRAMES 不能为负（0 = 不建回退缓冲）");
-static_assert(ICBSP_CAN_RX_DISPATCH_PER_TICK >= 1 && ICBSP_CAN_RX_DISPATCH_PER_TICK <= 64, "hardware_config.h: ICBSP_CAN_RX_DISPATCH_PER_TICK 取 1~64");
-static_assert(ICBSP_CAN_RX_NODE_MAX >= 1 && ICBSP_CAN_RX_NODE_MAX <= 255, "hardware_config.h: ICBSP_CAN_RX_NODE_MAX 取 1~255（计数为 uint8_t）");
-static_assert(ICBSP_CAN_TX_NODE_MAX >= 1 && ICBSP_CAN_TX_NODE_MAX <= 255, "hardware_config.h: ICBSP_CAN_TX_NODE_MAX 取 1~255（计数为 uint8_t）");
-static_assert(ICBSP_CAN_TX_HEARTBEAT_MS >= 1, "hardware_config.h: ICBSP_CAN_TX_HEARTBEAT_MS 至少 1 ms");
-static_assert(ICBSP_CAN_CMD_EXPIRE_MS > ICBSP_CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指令有效期必须长于保底心跳");
-static_assert(ICBSP_CAN_TX_GATHER_MS >= 1 && ICBSP_CAN_TX_GATHER_MS < ICBSP_CAN_TX_HEARTBEAT_MS, "hardware_config.h: ICBSP_CAN_TX_GATHER_MS 取 1 ~ 心跳周期 - 1");
-static_assert(ICBSP_CAN_BUSOFF_RETRY_MS >= 10, "hardware_config.h: ICBSP_CAN_BUSOFF_RETRY_MS 至少 10 ms（sys_task 每 10 ms 检查一次）");
-static_assert(ICBSP_UART_ENABLE_FIFO == 0 || ICBSP_UART_ENABLE_FIFO == 1, "hardware_config.h: ICBSP_UART_ENABLE_FIFO 取 0 或 1");
-static_assert(ICBSP_UART_HAS_FIFO != 0 || ICBSP_UART_ENABLE_FIFO == 0, "hardware_config.h: 本系列（F4）没有 UART 硬件 FIFO，ICBSP_UART_ENABLE_FIFO 必须为 0");
-static_assert(ICBSP_SPI_DMA_BUFFER_SIZE >= 16 && ICBSP_SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: ICBSP_SPI_DMA_BUFFER_SIZE 取 16~65535");
-static_assert(ICBSP_SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: ICBSP_SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
-static_assert(ICBSP_BMI088_TASK_STACK >= 128, "hardware_config.h: ICBSP_BMI088_TASK_STACK 至少 128 字");
-#endif
 
 /* ==================== */
 

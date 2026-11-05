@@ -2,7 +2,7 @@
 #define CAN_RX_NODE_HPP
 
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 // 宿主工程没在 CubeMX 里开 FDCAN 或 ICBSP_CAN_RX_ENABLE=0 时，本模块整体不参与编译
 #if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_RX_ENABLE

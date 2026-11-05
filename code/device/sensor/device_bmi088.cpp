@@ -9,9 +9,8 @@
 #include <new>
 
 #include "bsp/bsp_dwt.hpp" // 调度器启动前的忙等
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
-static_assert(ICBSP_BMI088_TASK_PRIORITY > tskIDLE_PRIORITY && ICBSP_BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "ICBSP_BMI088_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
 #include "algorithm/quaternion.hpp"
 #include "algorithm/vqf.hpp"
 

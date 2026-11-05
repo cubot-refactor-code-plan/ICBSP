@@ -2,7 +2,7 @@
 #define CAN_TX_NODE_HPP
 
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 // 宿主工程没在 CubeMX 里开 FDCAN 或 ICBSP_CAN_TX_ENABLE=0 时，本模块整体不参与编译
 #if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_TX_ENABLE
@@ -18,9 +18,6 @@
 #include <new>
 #include <string.h>
 
-#ifndef ICBSP_CAN_TX_GATHER_MS
-#  error "hardware_config.h 缺少 ICBSP_CAN_TX_GATHER_MS（共帧槽位凑不齐时最多等多久就发），见 templates/user/board/hardware_config.h"
-#endif
 
 /**
  * @brief CAN 发送节点：一帧 8 字节分成若干槽位，由不同设备分别填写，聚合成一帧发送（例如 4 个 M3508 共用 0x200）

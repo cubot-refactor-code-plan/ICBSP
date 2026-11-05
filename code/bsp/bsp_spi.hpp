@@ -71,7 +71,7 @@
 
 #include "bsp/bsp_gpio.hpp"       // 片选引脚
 #include "bsp/bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
-#include "hardware_config.h" // 唯一配置源（功能开关、队列深度等）
+#include "service/system/config_check.hpp" // 唯一配置源（功能开关、队列深度等）
 #include "service/system/status_code.hpp"         // 统一状态码
 
 

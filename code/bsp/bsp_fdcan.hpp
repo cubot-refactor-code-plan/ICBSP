@@ -36,19 +36,13 @@
 #include "message_buffer.h"
 #include "task.h" // IWYU pragma: keep
 
-#include "hardware_config.h" // ICBSP_CAN_RX_ENABLE、ICBSP_CAN_RX_RETURN_FRAMES、ICBSP_CAN_BUSOFF_RETRY_MS
+#include "service/system/config_check.hpp" // ICBSP_CAN_RX_ENABLE、ICBSP_CAN_RX_RETURN_FRAMES、ICBSP_CAN_BUSOFF_RETRY_MS
 #include "service/system/status_code.hpp"
 
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-#ifndef ICBSP_CAN_RX_RETURN_FRAMES
-#  error "hardware_config.h 缺少 ICBSP_CAN_RX_RETURN_FRAMES（回退缓冲深度，0 = 不建回退缓冲），见 templates/user/board/hardware_config.h"
-#endif
-#ifndef ICBSP_CAN_BUSOFF_RETRY_MS
-#  error "hardware_config.h 缺少 ICBSP_CAN_BUSOFF_RETRY_MS，见 templates/user/board/hardware_config.h"
-#endif
 
 
 /* ==================== 帧结构 ==================== */
