@@ -244,7 +244,7 @@ public:
    * @param target 目标值
    * @param feedback 反馈值
    * @return float 输出
-   * @note 输入不是有限值（NaN / Inf）时丢弃这一拍：状态不变、返回上一拍的输出，计入 nonfinite_count()（F1）。
+   * @note 输入不是有限值（NaN / Inf）时丢弃这一拍：状态不变、返回上一拍的输出，计入 get_nonfinite_count()（F1）。
    */
   float calc(float target, float feedback);
 
@@ -279,13 +279,7 @@ public:
   Data get() const { return {_input.target, _input.feedback, _output}; }
 
   /** @brief 因输入不是有限值（NaN / Inf）而丢弃的 calc() / feed_forward() 次数 */
-  uint32_t nonfinite_count() const { return _nonfinite_count; }
-
-  /* ==================== */
-  /* ==================== 数据接口 ==================== */
-
-  PidInput _input;         ///< 输入缓存
-  float    _output = 0.0f; ///< 输出
+  uint32_t get_nonfinite_count() const { return _nonfinite_count; }
 
 protected:
   /**
@@ -311,6 +305,8 @@ private:
   /* ==================== */
   /* ==================== 私有成员变量 ==================== */
 
+  PidInput _input;         ///< 输入缓存（读用 get()；评审 I6：原来是公有成员）
+  float    _output = 0.0f; ///< 输出
   Config _config;                                 ///< PID 配置
   PidTerm   _term;                              ///< 各项计算值
   DiffMode  _diff_mode = DiffMode::DIFF_FEEDBACK; ///< 微分计算模式

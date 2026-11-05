@@ -46,7 +46,7 @@ extern "C" void can_rx_task(void *argument)
   TickType_t wake_time = xTaskGetTickCount();
   for (;;)
   {
-    if (sys_state.running())
+    if (sys_state.is_running())
     {
 #  define X(name) can_rx_service(name);
       ICBSP_CAN_INSTANCES(X)

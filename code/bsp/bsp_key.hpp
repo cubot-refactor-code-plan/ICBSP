@@ -129,7 +129,7 @@ public:
    * @note 专给「按住时要一直亮、松手就灭」这类显示用：事件只在跳变那一刻给一次，
    *       而本函数每拍都能问到当前状态。未 init() 时返回 false。
    */
-  bool pressed() const { return _last_stable; }
+  bool is_pressed() const { return _last_stable; }
 
   /* ==================== */
 private:

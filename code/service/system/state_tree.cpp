@@ -60,7 +60,7 @@ template <class Uart> ErrCounts uart_counts(const Uart &uart)
 
 template <class Spi> ErrCounts spi_counts(const Spi &spi)
 {
-  const auto d = spi.diag();
+  const auto d = spi.get_diag();
   return {d.error_cnt, 0U, d.timeout_cnt, d.lock_timeout_cnt};
 }
 

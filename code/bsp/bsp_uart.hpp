@@ -714,7 +714,7 @@ public:
   bool rx_recover();
 
   /** @brief 底层 UART 句柄（供 HAL 回调分发） */
-  UART_HandleTypeDef *handle() const
+  UART_HandleTypeDef *get_handle() const
   {
     return _huart;
   }

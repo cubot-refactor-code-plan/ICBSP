@@ -10,8 +10,8 @@
  * @details BMI088 是两颗独立的芯片：加速度计与陀螺仪各有片选、各有寄存器表，挂在同一条 SPI 总线上。
  *          本类绑定两个 BspSpiDevice（不拥有），负责上电配置、读数换算、姿态解算与数据就绪中断计数。
  *          与 DjiMotor 一样，读数存在对象内部并由库自动刷新：Config::auto_update = true（默认）时，init() 建一个内部任务，
- *          每次陀螺仪数据就绪就刷新一帧；用户直接读 snapshot() / data()（IMU 通用数据 ImuData，imu_definition.hpp）、
- *          raw_data()（寄存器原始值）、temperature()（芯片温度）。
+ *          每次陀螺仪数据就绪就刷新一帧；用户直接读 snapshot() / get_data()（IMU 通用数据 ImuData，imu_definition.hpp）、
+ *          get_raw_data()（寄存器原始值）、get_temperature()（芯片温度）。
  *          Config::attitude = true（默认）时，内部任务每帧再用 VQF（algorithm/vqf.hpp，六轴：陀螺仪 + 加速度计，带陀螺仪零偏估计）
  *          解算姿态，和 gyro / acc 一起写进 ImuData 的 quaternion / euler_angle / euler_radian。
  *          安装方向旋转、温控不在这里（属于上层）。
@@ -40,8 +40,8 @@
  *
  *   // 5) 取数据（任意任务）：snapshot() 拷一份同一帧的数据
  *   ImuData d;
- *   imu_bmi088.snapshot(d);  // d.gyro.yaw / pitch / roll rad/s，d.acc.x / y / z m/s²，d.euler_angle 度，d.quaternion w/x/y/z
- *   float t = imu_bmi088.temperature(); // °C
+ *   imu_bmi088.snapshot(d);  // d.gyro.x / y / z rad/s（本体系），d.acc.x / y / z m/s²，d.euler_angle 度，d.quaternion w/x/y/z
+ *   float t = imu_bmi088.get_temperature(); // °C
  *
  *   // 6) 想跟着数据节奏走（例如姿态解算）：attach_task() 后，每刷新一次就收到 UPDATED_BIT
  *   imu_bmi088.attach_task(xTaskGetCurrentTaskHandle());
@@ -56,15 +56,15 @@
  *
  * @note 姿态（Config::attitude）：
  *       - 坐标系：VQF 的六轴姿态，参考系 z 轴竖直向上、航向（yaw 零点）为上电时任意值；没有磁力计，yaw 会随零偏估计残差慢慢漂。
- *         quaternion 为“芯片本体 → 参考系”的旋转（w / x / y / z），欧拉角按 Z-Y-X（yaw → pitch → roll）分解，与 gyro.yaw / pitch / roll 同轴。
+ *         quaternion 为“芯片本体 → 参考系”的旋转（w / x / y / z），欧拉角按 Z-Y-X（yaw → pitch → roll）分解，与 gyro.z / y / x 同轴。
  *         注意 pitch 是绕芯片 Y 轴的右手转角：芯片 X 轴朝上抬时为负。pitch = ±90° 处 yaw / roll 万向节锁，控制请用四元数（algorithm/quaternion.hpp）。
  *       - 节奏：VQF 按陀螺仪 ODR 的周期积分，所以只在陀螺仪数据就绪中断唤醒的那一帧解算；没有中断（没开 drdy_int、宿主没转调 EXTI）
- *         时内部任务每 10 ms 超时刷新一次读数，但姿态不更新。两次刷新之间漏掉的数据就绪按最新一帧补积分，漏帧数见 attitude_skip_count()。
+ *         时内部任务每 10 ms 超时刷新一次读数，但姿态不更新。两次刷新之间漏掉的数据就绪按最新一帧补积分，漏帧数见 get_attitude_skip_count()。
  *       - 收敛：上电后倾角约在 tauAcc（3 s）量级内收敛；陀螺仪零偏在静止约 1.5 s 后开始快速估计，静止上电最稳。
- *       - data().gyro 仍是未去零偏的原始换算值；姿态内部用的是去零偏后的角速度。
+ *       - get_data().gyro 仍是未去零偏的原始换算值；姿态内部用的是去零偏后的角速度。
  *
  * @note 坐标轴为芯片本体坐标（数据手册 X / Y / Z），安装方向的旋转由上层处理：
- *       acc.x / y / z = 芯片 X / Y / Z；gyro.roll / pitch / yaw = 绕芯片 X / Y / Z 的角速度。
+ *       acc.x / y / z = 芯片 X / Y / Z；gyro.x / y / z = 绕芯片 X / Y / Z 的角速度。
  * @note init() 需要等待芯片复位 / 上电（共约 100 ms）：调度器启动前用 DWT 忙等（bsp_dwt，不依赖 HAL 时基中断的优先级，评审 A3），之后用 vTaskDelay()。
  * @warning 读写接口内部要取 SPI 总线锁、阻塞等传输完成，只能在任务上下文调用（init() 也可在调度器启动前调用）。
  */
@@ -224,7 +224,7 @@ public:
    * @return 内部 ImuData 的常量引用。
    * @warning 返回实时引用而非快照：自动刷新时多个字段可能来自相邻两帧；需要同一帧的数据用 snapshot()。
    */
-  const ImuData &data() const
+  const ImuData &get_data() const
   {
     return _data;
   }
@@ -232,15 +232,15 @@ public:
   /**
    * @brief 获取 BMI088 寄存器原始值
    * @return 内部 Bmi088RawData 的常量引用。
-   * @warning 同 data()。
+   * @warning 同 get_data()。
    */
-  const Bmi088RawData &raw_data() const
+  const Bmi088RawData &get_raw_data() const
   {
     return _raw_data;
   }
 
   /** @brief 芯片温度，单位：°C（芯片约每 1.28 s 更新一次；update() 成功过之前为 0） */
-  float temperature() const
+  float get_temperature() const
   {
     return _temperature;
   }
@@ -249,31 +249,31 @@ public:
    * @brief 加速度计饱和帧数：update() 读到任一轴为 32767 / -32768 的累计次数（只增不减）
    * @note 剧烈冲击下持续增加说明量程不够（默认 ±24 g 已是最大档）。
    */
-  uint32_t acc_saturation_count() const
+  uint32_t get_acc_saturation_count() const
   {
     return _acc_sat_cnt;
   }
 
   /** @brief 陀螺仪饱和帧数（同上；±2000 °/s 是最大档） */
-  uint32_t gyro_saturation_count() const
+  uint32_t get_gyro_saturation_count() const
   {
     return _gyro_sat_cnt;
   }
 
   /** @brief update() 成功次数（自动 + 手动，只增不减）；自动模式下约等于陀螺仪数据就绪次数 */
-  uint32_t update_count() const
+  uint32_t get_update_count() const
   {
     return _update_cnt;
   }
 
   /** @brief update() 失败次数（只增不减；重新 init 期间的 NOT_INIT 也算） */
-  uint32_t update_fail_count() const
+  uint32_t get_update_fail_count() const
   {
     return _update_fail_cnt;
   }
 
   /** @brief 最近一次 update() 的返回值 */
-  Status last_status() const
+  Status get_last_status() const
   {
     return _last_status;
   }
@@ -282,7 +282,7 @@ public:
    * @brief 姿态漏帧数：自动刷新时两次刷新之间陀螺仪数据就绪多于 1 次的累计多出次数（只增不减）
    * @note 漏掉的样本按最新一帧补积分，偶尔几次无妨；持续增加说明内部任务跟不上 ODR（优先级太低或 ODR 太高）。
    */
-  uint32_t attitude_skip_count() const
+  uint32_t get_attitude_skip_count() const
   {
     return _attitude_skip_cnt;
   }
@@ -292,7 +292,7 @@ public:
    * @note 没解算过时 ImuData 的四元数是单位四元数、欧拉角是 0，不代表实际姿态；姿态控制要先等它为 true（F1）。
    *       手动模式、Config::attitude = false 或没有陀螺仪数据就绪中断时恒为 false。
    */
-  bool attitude_ready() const
+  bool is_attitude_ready() const
   {
     return _attitude_ready;
   }
@@ -309,7 +309,7 @@ public:
 
   /**
    * @brief 加速度计数据就绪（INT1 上升沿，宿主 EXTI 回调里转调）：计数；手动模式下通知绑定的任务
-   * @note 自动模式只按陀螺仪节奏刷新，这个中断只计数（acc_drdy_count()）：不需要计数时宿主可以不转调，
+   * @note 自动模式只按陀螺仪节奏刷新，这个中断只计数（get_acc_drdy_count()）：不需要计数时宿主可以不转调，
    *       或者在 CubeMX 里不开 INT1 对应的 EXTI，省掉每秒约 1600 次中断（F8）。
    */
   void on_acc_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken);
@@ -318,13 +318,13 @@ public:
   void on_gyro_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken);
 
   /** @brief 加速度计数据就绪中断累计次数 */
-  uint32_t acc_drdy_count() const
+  uint32_t get_acc_drdy_count() const
   {
     return _acc_drdy_cnt;
   }
 
   /** @brief 陀螺仪数据就绪中断累计次数 */
-  uint32_t gyro_drdy_count() const
+  uint32_t get_gyro_drdy_count() const
   {
     return _gyro_drdy_cnt;
   }

@@ -19,7 +19,7 @@
  *       未 init 时除 init() 外全部接口安全返回。
  *
  * @note 分层：子节点用 set_parent() 挂到父节点。错误只向上传播，父节点不聚合 running；
- *       要判断具体哪个子系统失败，查对应子节点的 error_code()。父节点必须比子节点活得久。
+ *       要判断具体哪个子系统失败，查对应子节点的 get_error_code()。父节点必须比子节点活得久。
  *
  * @note 默认树（Q6，见 state_tree.hpp）：sys_state → 每个总线实例 → 挂在总线上的设备。设备的接口失败照常
  *       return Status；EventState 只记初始化失败和运行期的“出过什么错”（例如掉线），给整机诊断用。
@@ -132,18 +132,18 @@ public:
   bool is_ready(void) const;
 
   /** @brief 本实例当前是否处于运行态 */
-  bool running(void) const;
+  bool is_running(void) const;
 
   /**
    * @brief 已记录的错误码里枚举值最小的那个（不是最近一次的错误）
    * @return 错误状态码；没有未清的错误时返回 Status::OK；未 init 时返回 Status::NOT_INIT
    * @note 错误的生命周期：error() / init_error() 记下的码一直保留（粘滞），直到 clear_error() / clear_errors()；
-   *       多个错误并存时按枚举值从小到大取第一个。要知道具体有哪些错误，用 error_bits()。
+   *       多个错误并存时按枚举值从小到大取第一个。要知道具体有哪些错误，用 get_error_bits()。
    */
-  Status error_code(void) const;
+  Status get_error_code(void) const;
 
   /** @brief 已记录的错误码位图（bit n = 状态码 n，掩码用 status_bit()）；未 init 时返回 0 */
-  uint32_t error_bits(void) const;
+  uint32_t get_error_bits(void) const;
 
   /**
    * @brief 阻塞等待本实例进入运行态

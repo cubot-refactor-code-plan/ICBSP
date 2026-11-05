@@ -61,7 +61,7 @@ namespace emmv5
 emmv5::Frame f;
 f.append_u8(static_cast<uint8_t>(emmv5::SystemParam::Enable));
 f.append_u8(1);        // 使能
-f.seal();              // 长度为 0 时不要发，seal() 之后用 valid() 检查
+f.seal();              // 长度为 0 时不要发，seal() 之后用 is_valid() 检查
 
 uart.send(f.data(), f.size());
 ```

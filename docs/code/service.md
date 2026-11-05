@@ -58,9 +58,9 @@ enum class Status : uint8_t { OK, BUSY, TIMEOUT, FULL, IO_ERROR, BAD_ARG, NOT_IN
 | `Status error(Status)` | 运行期错误：只记码，不动运行位，**向上传播**到父节点 |
 | `Status init_error(Status)` | 初始化失败：记码 + 置粘滞失败位 + 清运行位，向上传播。**只在初始化期有效**：本实例已在运行时降级成 `error()`，返回 `NOT_SUPPORTED`（运行期的错误不能让系统停摆） |
 | `Status clear_error(Status)` / `Status clear_errors()` | 清一个 / 全部错误码；只清本实例、**不传播**，不动失败位与运行位 |
-| `bool is_ready()` / `bool running()` | 阶段查询 |
-| `Status error_code()` | 未清的错误码里**枚举值最小**的那个（不是最近一次）；没有错误返回 `OK` |
-| `uint32_t error_bits()` | 未清的错误码位图（`status_bit()` 掩码） |
+| `bool is_ready()` / `bool is_running()` | 阶段查询 |
+| `Status get_error_code()` | 未清的错误码里**枚举值最小**的那个（不是最近一次）；没有错误返回 `OK` |
+| `uint32_t get_error_bits()` | 未清的错误码位图（`status_bit()` 掩码） |
 | `void wait_running()` | 阻塞到运行位；**初始化失败时删除当前任务** |
 
 父子关系只用于「错误向上传播」，**不聚合 running**：子系统 running 不代表父级 running。
@@ -86,8 +86,8 @@ sys_state                     根（system_init() 建）
 | `Online::update()` | 关联了设备节点的 Online 由在线变离线（构造后从没上线过的不算） | 设备节点 `TIMEOUT` |
 | 设备 `init()` | 初始化失败 | 设备节点 `init_error()`，一路传到根，`system_start()` 停机 |
 
-子节点出错只置父节点的错误位，**不清运行位**。查整机有没有出过错看 `sys_state.error_bits()`，查是哪条总线看
-`bus_state(&bsp_can1)->error_bits()`，查是哪个设备看设备的 `get_state()`。`ICBSP_SYS_TASK_ENABLE = 0` 时总线层不记运行期错误。
+子节点出错只置父节点的错误位，**不清运行位**。查整机有没有出过错看 `sys_state.get_error_bits()`，查是哪条总线看
+`bus_state(&bsp_can1)->get_error_bits()`，查是哪个设备看设备的 `get_state()`。`ICBSP_SYS_TASK_ENABLE = 0` 时总线层不记运行期错误。
 
 业务任务的标准开头：
 
@@ -112,7 +112,7 @@ public:
   explicit Online(uint16_t timeout_gap = 30);  // 超过多少 ms 没刷新就判离线
   Status refresh_task();   // 任务上下文：收到有效数据时刷新
   Status refresh_isr();    // 中断上下文：同上，ISR 安全
-  Status is_online() const;// OK=在线，TIMEOUT=离线
+  bool is_online() const;   // true = 在线（2.7 起；之前返回 Status）
 };
 ```
 
@@ -146,7 +146,7 @@ static bool        dispatch(CanT &can, const CanRxMsg &rx);  // 有节点消费�
 ```cpp
 static CanTxNodeT *regist(CanT &can, uint32_t can_id, uint8_t division = 1, uint8_t slot = 0,
                           uint32_t id_type = FDCAN_STANDARD_ID);
-Status filldata(uint8_t data[], uint8_t slot = 0);  // 往聚合缓冲的某个槽位填 8 / division 字节
+Status fill_data(uint8_t data[], uint8_t slot = 0);  // 往聚合缓冲的某个槽位填 8 / division 字节
 Stats  get_stats() const;                          // sent / partial_sends / heartbeat_sends / expired
 ```
 

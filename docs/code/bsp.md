@@ -165,8 +165,8 @@ inline BspPwm bsp_pwm_buzzer(
 | 类 | 构造 | 常用 |
 | --- | --- | --- |
 | `BspGpio` | `{port, pin}`，`constexpr` | `set() / reset() / toggle() / set_level(bool) / get_level()` |
-| `BspKey` | `{port, pin, active_low, ...}` | `init()` 开中断，`pressed()` 读稳定态 |
-| `BspEncoder` | `{htim, ...}` | `init()`，`read_delta()` 取本周期增量，`position()` 累计值，`reset()` 清零；增量按 16 位回绕算，CubeMX 的 Period 必须是 0xFFFF（32 位定时器 0xFFFFFFFF），否则 `init()` 返回 `BAD_ARG`（N37） |
+| `BspKey` | `{port, pin, active_low, ...}` | `init()` 开中断，`is_pressed()` 读稳定态 |
+| `BspEncoder` | `{htim, ...}` | `init()`，`read_delta()` 取本周期增量，`get_position()` 累计值，`reset()` 清零；增量按 16 位回绕算，CubeMX 的 Period 必须是 0xFFFF（32 位定时器 0xFFFFFFFF），否则 `init()` 返回 `BAD_ARG`（N37） |
 
 ### BspDwt
 

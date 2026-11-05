@@ -12,7 +12,7 @@
  *          把 16 位计数换算成「增量」和「累计位置」，并处理 0/65535 的回绕。
  *
  * @note 用法：init() 启动计数 → 在固定周期任务里调 read_delta() 取本周期增量，
- *       或直接读 position() 取上电以来的累计位置（可正可负，int32）。
+ *       或直接读 get_position() 取上电以来的累计位置（可正可负，int32）。
  *
  * @note 增量靠 `(int16_t)(now - last)` 算：只要两次调用之间走过不到 32768 个计数，
  *       回绕就是自动正确的。所以调用周期越短越安全。
@@ -79,7 +79,7 @@ public:
   Status init();
 
   /**
-   * @brief 取上次调用以来的增量（按计数器位宽处理回绕），并累加进 position()
+   * @brief 取上次调用以来的增量（按计数器位宽处理回绕），并累加进 get_position()
    *
    * @return 本次增量，向前为正（invert 时定义相反）
    *
@@ -88,7 +88,7 @@ public:
   int32_t read_delta();
 
   /** @brief 上电（或上次 reset()）以来的累计位置，int32 多圈计数 */
-  int32_t position() const { return _position; }
+  int32_t get_position() const { return _position; }
 
   /** @brief 计数器原始值，已按 invert 取反（16 位 TIM 为 -32768~32767，32 位 TIM 为 int32 全范围） */
   int32_t read_raw() const;
@@ -101,7 +101,7 @@ public:
   void reset();
 
   /** @brief 是否已成功 init() */
-  bool initialized() const { return _initialized; }
+  bool is_initialized() const { return _initialized; }
 
   /* ==================== */
 private:

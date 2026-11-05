@@ -76,7 +76,7 @@ public:
   static void service(CanT &can_item);
 
   /** @brief 写入一个槽位的数据（8 / division 字节）；返回 OK 表示已刷新 */
-  Status filldata(uint8_t data[], uint8_t slot = 0);
+  Status fill_data(uint8_t data[], uint8_t slot = 0);
 
   /** @brief 发送统计 */
   Stats get_stats() const
@@ -189,7 +189,8 @@ CanTxNodeT<CanT> *CanTxNodeT<CanT>::regist(CanT &can_item, uint32_t can_id, uint
         node->bufferRegister |= static_cast<uint8_t>(1U << slot);
         return node;
       }
-      sys_state.init_error(Status::FULL);
+      // 同一帧的槽位已被占用或分段数不一致：资源冲突，不是容量问题（评审 I7：原来报 FULL）
+      sys_state.init_error(Status::BUSY);
       return nullptr;
     }
   }
@@ -325,7 +326,7 @@ void CanTxNodeT<CanT>::service(CanT &can_item)
 }
 
 template <typename CanT>
-Status CanTxNodeT<CanT>::filldata(uint8_t data[], uint8_t slot)
+Status CanTxNodeT<CanT>::fill_data(uint8_t data[], uint8_t slot)
 {
   if (_statu != Status::OK || !_registered)
   {

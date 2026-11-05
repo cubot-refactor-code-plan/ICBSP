@@ -20,7 +20,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
   {                                             \
     listed = true;                              \
   }                                             \
-  if (name.handle() == hfdcan)                  \
+  if (name.get_handle() == hfdcan)                  \
   {                                             \
     same = same + 1U;                           \
   }
@@ -46,7 +46,7 @@ extern "C"
     {
     }
 #define X(name)                                  \
-  else if (hfdcan == name.handle())              \
+  else if (hfdcan == name.get_handle())              \
   {                                              \
     name.process_fifo0_isr(RxFifo0ITs, &woken);  \
   }
@@ -67,7 +67,7 @@ extern "C"
     {
     }
 #define X(name)                            \
-  else if (hfdcan == name.handle())        \
+  else if (hfdcan == name.get_handle())        \
   {                                        \
     name.trigger_tx_from_isr(&woken);      \
   }
@@ -87,7 +87,7 @@ extern "C"
     {
     }
 #define X(name)                             \
-  else if (hfdcan == name.handle())         \
+  else if (hfdcan == name.get_handle())         \
   {                                         \
     name.process_error_isr(ErrorStatusITs); \
   }

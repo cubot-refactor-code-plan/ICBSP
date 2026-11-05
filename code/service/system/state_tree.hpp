@@ -31,7 +31,7 @@
  *
  * @note 传播规则（Q6 / N16）：子节点出错只置父节点的错误位，**不清 RUNNING**；`init_error()` 只在初始化期有效。
  *       错误码粘滞到 `clear_error()` / `clear_errors()`，只清本节点、不传播。查哪条总线出过什么错：
- *       `bus_state(&bsp_can1)->error_bits()`；整机有没有出过错：`sys_state.error_bits()`。
+ *       `bus_state(&bsp_can1)->get_error_bits()`；整机有没有出过错：`sys_state.get_error_bits()`。
  * @note `ICBSP_SYS_TASK_ENABLE = 0` 时没有人调 `state_tree_poll()`，总线节点不会记运行期错误（设备掉线照常记）。
  */
 

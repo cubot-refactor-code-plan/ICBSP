@@ -135,7 +135,7 @@ Status EventState::clear_error(Status statu)
     return Status::BAD_ARG;
   }
   (void)xEventGroupClearBits(_handle, status_bit(statu));
-  if (error_bits() == 0U)
+  if (get_error_bits() == 0U)
   {
     (void)xEventGroupSetBits(_handle, status_bit(Status::OK));
   }
@@ -166,25 +166,25 @@ bool EventState::is_ready(void) const
 }
 
 /** @brief 本实例当前是否处于运行态 */
-bool EventState::running(void) const
+bool EventState::is_running(void) const
 {
   return is_ready() && ((xEventGroupGetBits(_handle) & RUNNING_BIT) != 0U);
 }
 
 /** @brief 已记录的错误码位图 */
-uint32_t EventState::error_bits(void) const
+uint32_t EventState::get_error_bits(void) const
 {
   return (_handle == nullptr) ? 0U : (static_cast<uint32_t>(xEventGroupGetBits(_handle)) & ERROR_MASK);
 }
 
 /** @brief 已记录的最小错误码；按位号从小到大扫，取到的即枚举值最小的那个 */
-Status EventState::error_code(void) const
+Status EventState::get_error_code(void) const
 {
   if (_handle == nullptr)
   {
     return Status::NOT_INIT;
   }
-  const uint32_t bits = error_bits();
+  const uint32_t bits = get_error_bits();
   for (uint32_t value = 1U; value < STATUS_MAX; ++value)
   {
     if ((bits & (1U << value)) != 0U)

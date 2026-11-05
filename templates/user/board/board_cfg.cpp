@@ -46,7 +46,7 @@ void board_init(void)
   // ③ 设备层：包装上面已 init 的外设。蜂鸣器只是包了一个 PWM 通道，没有额外 init()。
   //
   //    这里开始是“挂了 CAN 的设备”的位置，例如（示例，按实际设备打开）：
-  //      ICBSP_CHECK(chassis_lf.init() == Status::OK);   // DjiMotor<Motor3508, ...>
+  //      ICBSP_CHECK(chassis_lf.init() == Status::OK);   // DjiMotor<DjiMotorType::M3508, ...>
   //      ICBSP_CHECK(servo_yaw.init() == Status::OK);    // DeviceServo
   //      ICBSP_CHECK(damiao.init() == Status::OK);      // DeviceEmmv5Group
   //
