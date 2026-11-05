@@ -11,7 +11,8 @@
 
 | 文件 | 设备 | 依赖 | 关键类型 |
 | --- | --- | --- | --- |
-| `dji_motor.hpp/.cpp` | DJI M3508 / M2006 / GM6020 | `BspCanT`、`CanRxNodeT`、`CanTxNodeT` | `DjiMotor<DjiMotorType, CanT>` |
+| `motor/dji_motor.hpp` | DJI M3508 / M2006 / GM6020 | `BspCanT`、`CanRxNodeT`、`CanTxNodeT` | `DjiMotor<DjiMotorType, CanT>` |
+| `motor/dm_motor.hpp` | 达妙 CAN 电机（MIT / 位置速度 / 速度） | `BspCanT`、`CanRxNodeT` | `DmMotor<CanT>`、`DmMotorFeedback` |
 | `device_motor.hpp/.cpp` | 直流减速电机 + 编码器 + PID | `BspPwm`、`BspEncoder`、`PID` | `DeviceMotor` |
 | `device_servo.hpp/.cpp` | 舵机（脉宽控制） | `BspPwm` | `DeviceServo` |
 | `device_r9ds.hpp/.cpp` | R9DS 遥控接收机 | `BspUartT` | `DeviceR9dsT<Uart>` |
@@ -42,6 +43,25 @@ inline DjiMotor<DjiMotorType::M3508, decltype(bsp_can1)> chassis_lf(bsp_can1, 1U
 - `unpack(rx)` 由接收节点回调调用，`fill_data(output)` 往发送槽位填值，一般业务只用 `get_status()` 和设置输出
 
 ---
+
+## 2b. 达妙电机（DmMotor）
+
+协议来自《DM-J4310-2EC V1.2 使用说明书》CAN 通信一章（`docs/sheet/`）。**只编译验证、未上板。**
+
+```cpp
+inline DmMotor<decltype(bsp_can1)> yaw_motor(bsp_can1, {.can_id = 0x01, .master_id = 0x11, .mode = DmMode::MIT,
+                                                      .p_max = 12.5f, .v_max = 30.0f, .t_max = 10.0f});
+ICBSP_CHECK(yaw_motor.init() == Status::OK);   // board_init()
+yaw_motor.enable();                             // 上电是失能态
+yaw_motor.set_mit(p, v, kp, kd, t);             // 控制任务每周期调用
+```
+
+- `p_max` / `v_max` / `t_max` **必填**，必须和调试助手里的 PMAX / VMAX / TMAX 一致（不填 `init()` 返回 `BAD_ARG`）；Kp ∈ [0, 500]、Kd ∈ [0, 5]，超范围限幅，非有限值返回 `BAD_ARG` 不发。
+- 控制帧**不经过 `CanTxNodeT`**：发送槽位过期清零后，MIT 帧全 0 映射成 p = −P_MAX、t = −T_MAX（满负扭矩）。控制帧由 `send_latest()` 直接发，调用方按控制周期持续调用；停发后靠电机自己的通讯丢失保护失能。使能 / 失能 / 清错误 / 设零点用 `send()` 排队发，不会被同 ID 的控制帧挤掉。
+- 反馈是问询式的（电机收到发给自己的帧才回），不发控制帧时会判离线。每台电机的 `master_id` 要不同；反馈里的 ID 只有低 4 位，本类只认 `can_id & 0x0F` 对得上的帧。
+- `switch_mode()` 写 CTRL_MODE 寄存器（不存 flash）；写寄存器的回复也走 `master_id`，本类按挂起的那次写识别并吃掉，不当反馈解。
+- 只需要 `ICBSP_CAN_RX_ENABLE`（控制帧不走发送节点），关了接收路径时包含 `dm_motor.hpp` 会 `#error`。
+- 默认树：节点挂在 CAN 总线节点下，掉线记 `TIMEOUT`，反馈进入故障态（ERR ≥ 8：超压 / 欠压 / 过流 / 过温 / 通讯丢失 / 过载）记 `IO_ERROR`。
 
 ## 3. 直流电机（DeviceMotor）
 
@@ -130,6 +150,7 @@ Status stop(uint8_t addr);
 | 设备 | 挂在 | 记什么 |
 | --- | --- | --- |
 | `DjiMotor` | CAN 总线节点 | 初始化失败；掉线（Online 由在线变离线）→ `TIMEOUT` |
+| `DmMotor` | CAN 总线节点 | 初始化失败；掉线 → `TIMEOUT`；反馈进入故障态 → `IO_ERROR` |
 | `DeviceEmmv5GroupT` | 串口总线节点 | 初始化失败；任一台电机掉线 → `TIMEOUT` |
 | `DeviceR9dsT` | 串口总线节点 | 初始化失败；`update()` 发现由在线变离线 → `TIMEOUT` |
 | `DeviceBmi088` | SPI 总线节点 | 初始化失败；读帧失败 → 读帧返回的错误码 |

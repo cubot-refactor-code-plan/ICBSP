@@ -155,7 +155,8 @@
   - Emm_V5：帧缓冲跟随 `Uart::TX_CAPACITY`（`BspUartT` 新增公开常量 `TX_CAPACITY` / `RX_CAPACITY`），缓冲太小 `static_assert`；N33 ① `take_position()` / `take_status()` / `take_in_position()`，`in_position()` → `is_in_position()`，`last_multi_frame()` → `get_last_multi_frame()`；② 三处 `send()` 不再把 tick 当毫秒传；③ `lock_bus()` 用 `uart_detail::ms_to_ticks()`；④ `Config::checksum`（`emmv5::Checksum::FIXED_6B` / `XOR`，命令按配置封口，XOR 模式下回复帧 0x6B 和 XOR 都接受）。**XOR 未实测；CRC-8 没做**（说明书 Rev1.3 只说“前面全部字节进行 CRC-8 计算”，没有多项式 / 初值 / 示例帧，见待排期）
   - 默认树第三层（Q6）：Emm_V5 组、R9DS、BMI088 也各有节点（`get_state()`），挂在所用总线下；DeviceMotor / Servo / Buzzer 不在总线上，没有节点
   - 宿主编译探针 `compile_probe.cpp` 用库的 `-Wextra -Wshadow` 编译，覆盖 Emm_V5 组 / R9DS 的全部成员
-- [ ] **dm_motor（达妙）新写**：MIT / 位置速度 / 速度模式；使能、失能、清错误、设零点；反馈解包（ID、错误码、位置、速度、扭矩、温度）；`P_MAX` / `V_MAX` / `T_MAX` 可配；Online、`snapshot()`；接口风格对齐 DjiMotor
+- [x] **dm_motor（达妙）新写**：MIT / 位置速度 / 速度模式；使能、失能、清错误、设零点；反馈解包（ID、错误码、位置、速度、扭矩、温度）；`P_MAX` / `V_MAX` / `T_MAX` 可配；Online、`snapshot()`；接口风格对齐 DjiMotor
+  - 2026-11-06：`code/device/motor/dm_motor.hpp`（`DmMotor<CanT>`，只有头文件），协议按《DM-J4310-2EC V1.2 使用说明书》CAN 通信一章：MIT（`can_id`）、位置速度（`0x100+id`）、速度（`0x200+id`）、使能 / 失能 / 保存零点 / 清错误（`FF×7 + FC/FD/FE/FB`）、`switch_mode()`（`0x7FF` 写 CTRL_MODE），反馈解 ERR 状态、位置 / 速度 / 扭矩、MOS / 线圈温度；`P_MAX` / `V_MAX` / `T_MAX` 必填（说明书正文没给出厂默认值，不凭记忆填）；Online、`snapshot()`、`get_state()`（默认树）。控制帧**不走 CanTxNodeT**（槽位过期清零 = MIT 满负扭矩），直接 `send_latest()`；命令帧 `send()`。只需要 CAN 接收路径（偏离 Q4 原文“收发都开”，因为不用发送节点）。主机侧抽出头文件里的映射 / 拼包 / 解包代码做了往返与边界测试；**只编译验证，未上板**（没有达妙电机）。力位混控模式（4）未做
 - DR16 / ET08 接收机：按 Q12 的回答不进 v1.0.0，2026-11-06 移到文末“待排期”
 - [ ] 保留 fork 已有的：UART 七项（Q8）、CAN 三项（Q9）、Online ms + `is_online`（Q7）、DWT（Q11）、`can_tx_task` 按需创建（C10）、QuaternionPID 拆文件、PID `get()`；Matrix `_data` 改回 private + `friend`
 - [ ] 每加一项都补 HAL 模块保护（N24），对照附录 B 核对 N1~N37
