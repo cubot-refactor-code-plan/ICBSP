@@ -24,13 +24,13 @@
 #ifndef __BSP_ENCODER_HPP__
 #define __BSP_ENCODER_HPP__
 
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
 
 #include "status.hpp" // 统一状态码
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（TIM_HandleTypeDef / __HAL_TIM_*）
+#include "bsp_series.hpp" // IWYU pragma: keep（TIM_HandleTypeDef / __HAL_TIM_*）
 
 #include <stdint.h>
 
@@ -79,19 +79,19 @@ public:
   Status init();
 
   /**
-   * @brief 取上次调用以来的增量（带 16 位回绕处理），并累加进 position()
+   * @brief 取上次调用以来的增量（按计数器位宽处理回绕），并累加进 position()
    *
    * @return 本次增量，向前为正（invert 时定义相反）
    *
-   * @warning 两次调用之间走过超过 32767 个计数就会判错方向：任务周期别太长。
+   * @warning 两次调用之间走过超过半个量程（16 位 > 32767 / 32 位 > 2^31）就会判错方向：任务周期别太长。
    */
   int32_t read_delta();
 
   /** @brief 上电（或上次 reset()）以来的累计位置，int32 多圈计数 */
   int32_t position() const { return _position; }
 
-  /** @brief 计数器原始值，已按 invert 取反（int16，范围 -32768~32767） */
-  int16_t read_raw() const;
+  /** @brief 计数器原始值，已按 invert 取反（16 位 TIM 为 -32768~32767，32 位 TIM 为 int32 全范围） */
+  int32_t read_raw() const;
 
   /**
    * @brief 计数器清零，累计位置与增量基准一起清零
@@ -108,7 +108,7 @@ private:
   /* ==================== 成员变量 ==================== */
 
   Config  _config;               ///< 绑定与方向
-  int16_t _last = 0;             ///< 上次读到的计数值（增量基准）
+  int32_t _last = 0;             ///< 上次读到的计数值（增量基准，已按计数器位宽解释成有符号）
   int32_t _position = 0;         ///< 累计位置
   bool    _initialized = false;  ///< 是否已成功 init()
 

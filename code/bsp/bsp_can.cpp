@@ -1,7 +1,7 @@
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
-// 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本文件不参与编译
-#ifdef HAL_FDCAN_MODULE_ENABLED
+// F4：bxCAN 的 HAL 回调（H7 的 FDCAN 回调在 bsp_fdcan.cpp）
+#if defined(HAL_CAN_MODULE_ENABLED)
 
 #include "board_instances.hpp"
 #include "bsp_can.hpp"
@@ -9,9 +9,9 @@
 #include "FreeRTOS.h" // IWYU pragma: keep
 
 
-/* ==================== 实例清单核对 ==================== */
+/* ==================== 实例清单核对（bxCAN） ==================== */
 
-bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
+bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan)
 {
   bool     listed = false;
   uint32_t same   = 0U; // 清单里绑这个句柄的实例数
@@ -20,7 +20,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
   {                                             \
     listed = true;                              \
   }                                             \
-  if (name.handle() == hfdcan)                  \
+  if (name.handle() == hcan)                    \
   {                                             \
     same = same + 1U;                           \
   }
@@ -30,90 +30,129 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
 }
 
 
-/* ==================== HAL 回调分发 ==================== */
+/* ==================== HAL 回调分发（bxCAN） ==================== */
 
-// BspCanT 只有头文件，这里只放 HAL 回调：按句柄和 BSP_CAN_INSTANCES 清单逐个比对，清单外的 FDCAN 直接忽略。
+// 按句柄和 BSP_CAN_INSTANCES 清单逐个比对，清单外的 bxCAN 直接忽略。
 extern "C"
 {
-  /**
-   * @brief RX FIFO0 回调（RF0N / RF0L）
-   * @note HAL 调用前已把 RxFifo0ITs 里的标志清掉，这里是这些事件唯一的处理机会。
-   */
-  void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+  /** @brief RX FIFO0 有新报文 */
+  void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
   {
     BaseType_t woken = pdFALSE;
     if (false)
     {
     }
-#define X(name)                                  \
-  else if (hfdcan == name.handle())              \
-  {                                              \
-    name.process_fifo0_isr(RxFifo0ITs, &woken);  \
+#define X(name)                         \
+  else if (hcan == name.handle())       \
+  {                                     \
+    name.process_fifo0_isr(0U, &woken); \
   }
     BSP_CAN_INSTANCES(X)
 #undef X
     else
     {
-      icbsp_unhandled_fdcan_rx_fifo0(hfdcan, RxFifo0ITs);
+      icbsp_unhandled_bxcan_rx_fifo0(hcan);
     }
     portYIELD_FROM_ISR(woken);
   }
 
-  /** @brief TX FIFO 变空：续发软件缓冲里的帧 */
-  void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
+  /** @brief 发送邮箱 0 发完：续发软件缓冲里的帧 */
+  void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
   {
     BaseType_t woken = pdFALSE;
     if (false)
     {
     }
-#define X(name)                            \
-  else if (hfdcan == name.handle())        \
-  {                                        \
-    name.trigger_tx_from_isr(&woken);      \
+#define X(name)                       \
+  else if (hcan == name.handle())     \
+  {                                   \
+    name.trigger_tx_from_isr(&woken); \
   }
     BSP_CAN_INSTANCES(X)
 #undef X
     else
     {
-      icbsp_unhandled_fdcan_tx_fifo_empty(hfdcan);
+      icbsp_unhandled_bxcan_tx_mailbox(hcan, 0U);
+    }
+    portYIELD_FROM_ISR(woken);
+  }
+
+  /** @brief 发送邮箱 1 发完：续发软件缓冲里的帧 */
+  void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+  {
+    BaseType_t woken = pdFALSE;
+    if (false)
+    {
+    }
+#define X(name)                       \
+  else if (hcan == name.handle())     \
+  {                                   \
+    name.trigger_tx_from_isr(&woken); \
+  }
+    BSP_CAN_INSTANCES(X)
+#undef X
+    else
+    {
+      icbsp_unhandled_bxcan_tx_mailbox(hcan, 1U);
+    }
+    portYIELD_FROM_ISR(woken);
+  }
+
+  /** @brief 发送邮箱 2 发完：续发软件缓冲里的帧 */
+  void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
+  {
+    BaseType_t woken = pdFALSE;
+    if (false)
+    {
+    }
+#define X(name)                       \
+  else if (hcan == name.handle())     \
+  {                                   \
+    name.trigger_tx_from_isr(&woken); \
+  }
+    BSP_CAN_INSTANCES(X)
+#undef X
+    else
+    {
+      icbsp_unhandled_bxcan_tx_mailbox(hcan, 2U);
     }
     portYIELD_FROM_ISR(woken);
   }
 
   /** @brief 错误状态变化（EP / EW）：只计数 */
-  void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
+  void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
   {
     if (false)
     {
     }
 #define X(name)                             \
-  else if (hfdcan == name.handle())         \
+  else if (hcan == name.handle())           \
   {                                         \
-    name.process_error_isr(ErrorStatusITs); \
+    name.process_error_isr(hcan->ErrorCode); \
   }
     BSP_CAN_INSTANCES(X)
 #undef X
     else
     {
-      icbsp_unhandled_fdcan_error_status(hfdcan, ErrorStatusITs);
+      icbsp_unhandled_bxcan_error(hcan, hcan->ErrorCode);
     }
   }
 
-  // 清单外 FDCAN 的回调转调：默认空，宿主定义同名强函数即可（对比评估 N30）
-  __attribute__((weak)) void icbsp_unhandled_fdcan_rx_fifo0(FDCAN_HandleTypeDef *hfdcan, uint32_t its)
+  // 清单外 bxCAN 的回调转调：默认空，宿主定义同名强函数即可
+  __attribute__((weak)) void icbsp_unhandled_bxcan_rx_fifo0(CAN_HandleTypeDef *hcan)
   {
-    (void)hfdcan;
-    (void)its;
+    (void)hcan;
   }
-  __attribute__((weak)) void icbsp_unhandled_fdcan_tx_fifo_empty(FDCAN_HandleTypeDef *hfdcan)
+  __attribute__((weak)) void icbsp_unhandled_bxcan_tx_mailbox(CAN_HandleTypeDef *hcan, uint32_t mailbox)
   {
-    (void)hfdcan;
+    (void)hcan;
+    (void)mailbox;
   }
-  __attribute__((weak)) void icbsp_unhandled_fdcan_error_status(FDCAN_HandleTypeDef *hfdcan, uint32_t its)
+  __attribute__((weak)) void icbsp_unhandled_bxcan_error(CAN_HandleTypeDef *hcan, uint32_t error_code)
   {
-    (void)hfdcan;
-    (void)its;
+    (void)hcan;
+    (void)error_code;
   }
 }
 
-#endif // HAL_FDCAN_MODULE_ENABLED
+#endif // HAL_CAN_MODULE_ENABLED

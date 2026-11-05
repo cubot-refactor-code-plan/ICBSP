@@ -1,4 +1,4 @@
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
@@ -30,13 +30,18 @@ TickType_t ms_to_ticks(uint32_t ms)
  *
  * @note STM32H7 的 ITCM（0x0000_0000 起）与 DTCM（0x2000_0000 起，到 AXI SRAM 0x2400_0000 之前）
  *       只连到 CPU 与 MDMA，DMA1 / DMA2 访问会出传输错误。任务栈、默认 .bss 都在 DTCM。
+ * @note F4：主 SRAM 全部可 DMA，只有 CCM RAM 不可 DMA。
  */
 bool dma_reachable(const void *addr)
 {
+#if BSP_SERIES_F4
+  return bsp_series::dma_reachable(addr);
+#else
   const uintptr_t a    = reinterpret_cast<uintptr_t>(addr);
   const bool      itcm = a < 0x08000000U;
   const bool      dtcm = a >= 0x20000000U && a < 0x24000000U;
   return !itcm && !dtcm;
+#endif
 }
 
 /** @brief 调度器是否已经启动（启动前不取锁、不等信号量，一律轮询） */
