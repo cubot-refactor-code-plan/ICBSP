@@ -15,9 +15,14 @@
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"     // taskENTER_CRITICAL（snapshot / DataUnpack 写回）
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 // DjiMotor 同时依赖 CAN 接收和发送路径
+// 依赖（Q4）：CubeMX 开了 CAN、却关了收发任一路径时，用到 DjiMotor 就直接报错，而不是静默变成空头文件
+#if defined(HAL_FDCAN_MODULE_ENABLED) && !(ICBSP_CAN_RX_ENABLE && ICBSP_CAN_TX_ENABLE)
+#  error "DjiMotor 需要 CAN 收发都开：hardware_config.h 里 ICBSP_CAN_RX_ENABLE 与 ICBSP_CAN_TX_ENABLE 都要为 1"
+#endif
+
 #if defined(HAL_FDCAN_MODULE_ENABLED) && ICBSP_CAN_RX_ENABLE && ICBSP_CAN_TX_ENABLE
 
 #include "bsp/bsp_can.hpp"

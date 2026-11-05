@@ -5,7 +5,8 @@
     python3 tools/check_layers.py        # 有违规时退出码 1
 
 层次（低 → 高）：algorithm、bsp → service → device → tasks。
-例外：`service/system/status_code.hpp`（纯状态码，不依赖 RTOS / HAL）各层都能包含。
+例外：`service/system/status_code.hpp`（纯状态码，不依赖 RTOS / HAL）与 `service/system/config_check.hpp`
+（读宿主配置的唯一入口）各层都能包含。
 宿主文件（hardware_config.h、board_instances.hpp）和 HAL / FreeRTOS 头不在检查范围内。
 """
 
@@ -23,7 +24,7 @@ ALLOWED = {
     "device": {"device", "service", "bsp", "algorithm"},
     "tasks": {"tasks", "service", "bsp"},
 }
-SHARED = {"service/system/status_code.hpp"}
+SHARED = {"service/system/status_code.hpp", "service/system/config_check.hpp"}
 INC = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.M)
 
 

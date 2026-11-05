@@ -44,7 +44,7 @@
 #include "task.h" // IWYU pragma: keep
 
 #include "bsp/bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
-#include "hardware_config.h"  // ICBSP_UART_ENABLE_FIFO
+#include "service/system/config_check.hpp" // ICBSP_UART_ENABLE_FIFO
 #include "service/system/status_code.hpp"        // 统一状态码
 
 #include <stdarg.h>
