@@ -158,8 +158,11 @@
 - [x] **dm_motor（达妙）新写**：MIT / 位置速度 / 速度模式；使能、失能、清错误、设零点；反馈解包（ID、错误码、位置、速度、扭矩、温度）；`P_MAX` / `V_MAX` / `T_MAX` 可配；Online、`snapshot()`；接口风格对齐 DjiMotor
   - 2026-11-06：`code/device/motor/dm_motor.hpp`（`DmMotor<CanT>`，只有头文件），协议按《DM-J4310-2EC V1.2 使用说明书》CAN 通信一章：MIT（`can_id`）、位置速度（`0x100+id`）、速度（`0x200+id`）、使能 / 失能 / 保存零点 / 清错误（`FF×7 + FC/FD/FE/FB`）、`switch_mode()`（`0x7FF` 写 CTRL_MODE），反馈解 ERR 状态、位置 / 速度 / 扭矩、MOS / 线圈温度；`P_MAX` / `V_MAX` / `T_MAX` 必填（说明书正文没给出厂默认值，不凭记忆填）；Online、`snapshot()`、`get_state()`（默认树）。控制帧**不走 CanTxNodeT**（槽位过期清零 = MIT 满负扭矩），直接 `send_latest()`；命令帧 `send()`。只需要 CAN 接收路径（偏离 Q4 原文“收发都开”，因为不用发送节点）。主机侧抽出头文件里的映射 / 拼包 / 解包代码做了往返与边界测试；**只编译验证，未上板**（没有达妙电机）。力位混控模式（4）未做
 - DR16 / ET08 接收机：按 Q12 的回答不进 v1.0.0，2026-11-06 移到文末“待排期”
-- [ ] 保留 fork 已有的：UART 七项（Q8）、CAN 三项（Q9）、Online ms + `is_online`（Q7）、DWT（Q11）、`can_tx_task` 按需创建（C10）、QuaternionPID 拆文件、PID `get()`；Matrix `_data` 改回 private + `friend`
-- [ ] 每加一项都补 HAL 模块保护（N24），对照附录 B 核对 N1~N37
+- [x] 保留 fork 已有的：UART 七项（Q8）、CAN 三项（Q9）、Online ms + `is_online`（Q7）、DWT（Q11）、`can_tx_task` 按需创建（C10）、QuaternionPID 拆文件、PID `get()`；Matrix `_data` 改回 private + `friend`
+  - 2026-11-06 核对都在：`uart_mode::it`、`UartDir`、RX / TX 尺寸分开、`hw_error_cnt`、`check_format()`、`deinit()`、`get_` 查询；`BspCanT<RX, TX>`、TX-empty 动态开关、`HAL_FDCAN_ErrorStatusCallback`；Online 毫秒 + `is_online()`（2.7 起返回 bool）；DWT；`can_tx_task` 按 `has_tx_nodes()` 创建；`quaternion_pid.*`；`PID::get()`。Matrix `_data` 改私有，不同尺寸互为友元（外部用 `data()` / `operator[]`）
+- [x] 每加一项都补 HAL 模块保护（N24），对照附录 B 核对 N1~N37
+  - 2026-11-06 编译矩阵（临时拷贝的工程、实例清单留空、只编库目标 `icbsp`）：全开 / 只关 SPI / UART / FDCAN / TIM / 四个全关，0 error、0 warning；功能开关 `CAN_RX=0`、`CAN_TX=0`、两者都 0、`SYS=0 + PATROL=0`、`PATROL=0` 都 0 error / 0 warning，`SYS=0 + PATROL=1` 按设计报依赖错。顺带修了清单为空时 `*_is_listed()` / `bus_state()` 的未使用参数警告（1.3 之后才出现）
+  - 新代码对照附录 B：N9（Emm_V5 `lock_bus()` 改用 `ms_to_ticks()`）、N13（`bus_state()` 对清单外实例返回 nullptr，设备兜底挂 `sys_state`）、N16（默认树只置父错误位、不清运行位）、N24（上面的矩阵）、N33、N34（1.4）都满足；没有新增独占 HAL 回调（N30 不涉及）
 
 ## 阶段 3：功能全面测试
 
