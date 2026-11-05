@@ -3,11 +3,7 @@
 
 PID::PID(const Config& cfg) : _config(cfg)
 {
-  // 隐藏逻辑显式化：i_max 未设置（为0）时跟随 out_max
-  if (_config.i_max == 0.0f)
-  {
-    _config.i_max = _config.out_max;
-  }
+  // i_max == 0 的“跟随 out_max”改在计算时取（F4）：构造后再用链式接口改 out_max，积分上限也跟着变，两种配置方式语义一致
 
   // 微分模式沿用配置值
   _diff_mode = _config.diff_mode;
@@ -77,8 +73,9 @@ float PID::apply_limits_and_output()
                    ? _term.i_term + _config.ki * _input.error
                    : 0.0f;
 
-  // 积分项累加后立即钳位，防止积分无限累积（即使后续总输出有限幅）
-  _term.i_term = clamp_symmetric(_term.i_term, _config.i_max);
+  // 积分项累加后立即钳位，防止积分无限累积（即使后续总输出有限幅）；i_max 为 0 时跟随 out_max（F4）
+  const float i_max = (_config.i_max == 0.0f) ? _config.out_max : _config.i_max;
+  _term.i_term      = clamp_symmetric(_term.i_term, i_max);
 
   calc_d_term();
 
@@ -99,28 +96,44 @@ float PID::apply_limits_and_output()
 
 float PID::feed_forward(float feedforward)
 {
+  if (!isfinite(feedforward)) // NaN / Inf 进了前馈会一直传到输出（F1）
+  {
+    _nonfinite_count = _nonfinite_count + 1U;
+    return _term.f_term;
+  }
   _term.f_term += feedforward;
   return _term.f_term;
 }
 
 float PID::calc(float target, float feedback)
 {
+  if (!isfinite(target) || !isfinite(feedback))
+  {
+    // NaN 一旦进了积分就永远出不来（F1）：丢弃这一拍，状态不变，输出保持上一拍
+    _nonfinite_count = _nonfinite_count + 1U;
+    return _output;
+  }
   calc_input(target, feedback);
   return apply_limits_and_output();
 }
 
-float PID::calc(float target, float feedback, float df_dt)
+float PID::calc(float target, float feedback, float delta_feedback)
 {
+  if (!isfinite(target) || !isfinite(feedback) || !isfinite(delta_feedback))
+  {
+    _nonfinite_count = _nonfinite_count + 1U;
+    return _output;
+  }
   calc_input(target, feedback);
 
-  // 外部导入的反馈值一阶导数代替差分；DIFF_ERROR 按目标不动处理，误差变化率 = -反馈变化率
+  // 外部给的“每拍反馈增量”代替差分；DIFF_ERROR 按目标不动处理，误差变化率 = -反馈变化率
   if (_diff_mode == DiffMode::DIFF_FEEDBACK)
   {
-    _input.delta_feedback = df_dt;
+    _input.delta_feedback = delta_feedback;
   }
   else if (_diff_mode == DiffMode::DIFF_ERROR)
   {
-    _input.delta_error = -df_dt;
+    _input.delta_error = -delta_feedback;
   }
 
   return apply_limits_and_output();

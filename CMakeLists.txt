@@ -124,5 +124,12 @@ endif()
 set_target_properties(stm32_framework PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS ON
+    CXX_EXTENSIONS OFF          # 标准 C++20（-std=c++20），不依赖 GNU 扩展（评审 D3）
 )
+
+# 库自己的警告选项：“0 warning”不再取决于宿主的编译参数（评审 D3）。只作用于库的源文件，不传给宿主。
+target_compile_options(stm32_framework PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wshadow>
+)
+# 第三方源码（VQF，MIT）保持上游原样，不为 -Wshadow 改它
+set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/code/algorithm/vqf.cpp PROPERTIES COMPILE_OPTIONS "-Wno-shadow")

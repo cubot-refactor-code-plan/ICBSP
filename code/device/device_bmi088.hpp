@@ -26,7 +26,7 @@
  *   DeviceBmi088 imu_bmi088(bmi088_acc_spi, bmi088_gyro_spi, {DeviceBmi088::AccRange::G24, DeviceBmi088::GyroRange::DPS2000});
  *
  *   // 3) 初始化阶段，SPI 总线与两个片选设备之后（自动刷新任务在这里创建，调度器启动、system_start() 之后开始刷新）
- *   configASSERT(imu_bmi088.init() == Status::OK);
+ *   ICBSP_CHECK(imu_bmi088.init() == Status::OK);
  *
  *   // 4) 数据就绪中断：库不占用 HAL_GPIO_EXTI_Callback（宿主的按键等也用 EXTI），由宿主转调。
  *   //    没转调时自动刷新任务退化为每 10 ms 刷新一次（默认陀螺仪 1000 Hz，即每 1 ms 刷新一帧）
@@ -65,7 +65,7 @@
  *
  * @note 坐标轴为芯片本体坐标（数据手册 X / Y / Z），安装方向的旋转由上层处理：
  *       acc.x / y / z = 芯片 X / Y / Z；gyro.roll / pitch / yaw = 绕芯片 X / Y / Z 的角速度。
- * @note init() 需要等待芯片复位 / 上电（共约 100 ms）：调度器启动前用 HAL_Delay()，之后用 vTaskDelay()。
+ * @note init() 需要等待芯片复位 / 上电（共约 100 ms）：调度器启动前用 DWT 忙等（bsp_dwt，不依赖 HAL 时基中断的优先级，评审 A3），之后用 vTaskDelay()。
  * @warning 读写接口内部要取 SPI 总线锁、阻塞等传输完成，只能在任务上下文调用（init() 也可在调度器启动前调用）。
  */
 
@@ -80,6 +80,7 @@
 #include <stdint.h>
 
 #include "FreeRTOS.h" // IWYU pragma: keep
+#include "semphr.h"   // IWYU pragma: keep（_run_lock）
 #include "task.h"     // IWYU pragma: keep（TaskHandle_t）
 
 #include "bsp_spi.hpp"        // 两个片选设备
@@ -213,6 +214,8 @@ public:
    * @brief 拷贝一份同一帧的数据（临界区内拷贝，跨任务读用它）
    * @param data 换算后的 IMU 通用数据
    * @param raw  可选：同一帧的寄存器原始值；nullptr = 不要
+   * @note “同一帧”指同一次刷新：加速度、角速度、温度是同一次刷新里分三次片选读的，不是同一采样时刻
+   *       （两颗芯片本来也不同步，相差最多约一个 ODR 周期）（F8）。
    */
   void snapshot(ImuData &data, Bmi088RawData *raw = nullptr) const;
 
@@ -284,6 +287,16 @@ public:
     return _attitude_skip_cnt;
   }
 
+  /**
+   * @brief 姿态是否已经解算过（自 init() 起至少一帧）
+   * @note 没解算过时 ImuData 的四元数是单位四元数、欧拉角是 0，不代表实际姿态；姿态控制要先等它为 true（F1）。
+   *       手动模式、Config::attitude = false 或没有陀螺仪数据就绪中断时恒为 false。
+   */
+  bool attitude_ready() const
+  {
+    return _attitude_ready;
+  }
+
   /* ==================== */
   /* ==================== 数据就绪中断 ==================== */
 
@@ -294,7 +307,11 @@ public:
    */
   void attach_task(TaskHandle_t task);
 
-  /** @brief 加速度计数据就绪（INT1 上升沿，宿主 EXTI 回调里转调）：计数；手动模式下通知绑定的任务 */
+  /**
+   * @brief 加速度计数据就绪（INT1 上升沿，宿主 EXTI 回调里转调）：计数；手动模式下通知绑定的任务
+   * @note 自动模式只按陀螺仪节奏刷新，这个中断只计数（acc_drdy_count()）：不需要计数时宿主可以不转调，
+   *       或者在 CubeMX 里不开 INT1 对应的 EXTI，省掉每秒约 1600 次中断（F8）。
+   */
   void on_acc_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken);
 
   /** @brief 陀螺仪数据就绪（INT3 上升沿，宿主 EXTI 回调里转调）：计数；自动模式下唤醒内部任务，手动模式下通知绑定的任务 */
@@ -315,7 +332,7 @@ public:
   /* ==================== */
 
 private:
-  /** @brief 等 ms 毫秒：调度器启动前 HAL_Delay()，之后 vTaskDelay() */
+  /** @brief 等 ms 毫秒：调度器启动前 DWT 忙等（bsp_dwt 没起来时退回 HAL_Delay()），之后 vTaskDelay() */
   static void delay_ms(uint32_t ms);
 
   /**
@@ -364,6 +381,12 @@ private:
   volatile uint32_t _update_fail_cnt   = 0U;         ///< update() 失败次数
   volatile Status   _last_status       = Status::OK; ///< 最近一次 update() 的结果
   volatile uint32_t _attitude_skip_cnt = 0U;         ///< 姿态漏帧数
+  volatile bool     _attitude_ready    = false;      ///< 自 init() 起是否解算过姿态
+
+  SemaphoreHandle_t _run_lock = nullptr; ///< 自动刷新任务的一次刷新与 init() 互斥（F8：重新 init 时不和正在解算的那一帧并发改 VQF / 芯片）
+
+  /** @brief init() 的实际步骤（init() 持 _run_lock 调用它） */
+  Status init_locked();
 
   VQF *_vqf = nullptr; ///< 姿态解算器（auto_update 且 attitude 时 init() 分配，之后不释放）
 

@@ -12,11 +12,13 @@
 | 文件 | 职责 | 关键符号 |
 | --- | --- | --- |
 | `system.hpp/.cpp` | 库入口 + 三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`sys_state` |
-| `status.hpp/.cpp` | 状态码 + 事件状态树 | `Status`、`EventState`、`status_bit()` |
+| `status_code.hpp` | 状态码（纯定义，不依赖 RTOS，评审 A6） | `Status`、`status_bit()` |
+| `status.hpp/.cpp` | 事件状态树（包含 `status_code.hpp`） | `EventState` |
 | `online_check.hpp/.cpp` | 设备在线判定（内部单向链表） | `Online` |
 | `can_rx_node.hpp/.cpp` | 按 ID 分发 CAN 帧 | `CanRxNodeT<CanT>::regist/dispatch` |
 | `can_tx_node.hpp/.cpp` | 发送槽位聚合 + 保底心跳 | `CanTxNodeT<CanT>` |
-| `fault_record.hpp/.cpp` | 停机现场（assert / 栈溢出 / 分配失败） | `FaultKind`、`FaultRecord`、`fault_on_*()` |
+| `fault_record.hpp/.cpp` | 停机现场（assert / 栈溢出 / 分配失败 / 故障异常） | `FaultKind`、`FaultRecord`、`fault_on_*()`、`ICBSP_CHECK()` |
+| `newlib_lock.cpp` | newlib 堆的线程锁（弱符号，评审 A9） | `__malloc_lock` / `__malloc_unlock` |
 | `motor_definition.hpp` | 电机通用数据结构 | 供 device / app 共用 |
 | `imu_definition.hpp` | IMU 数据结构（`ImuData` 等） | 供 device / app 共用 |
 
@@ -138,17 +140,24 @@ Stats  get_stats() const;                          // sent / partial_sends / hea
 ## 6. fault_record：停机现场
 
 ```cpp
-enum class FaultKind : uint32_t { /* assert / stack_overflow / malloc_failed ... */ };
-struct alignas(8) FaultRecord { /* 种类、文件、行号、任务名、计数 */ };
+enum class FaultKind : uint32_t { NONE, ASSERT, STACK_OVERFLOW, MALLOC_FAILED, HARD_FAULT, MEM_MANAGE, BUS_FAULT, USAGE_FAULT };
+struct alignas(8) FaultRecord { /* 种类、文件、行号、任务名、计数、tick、IPSR；故障异常另有 CFSR / HFSR / MMFAR / BFAR / PC / LR / xPSR / EXC_RETURN；boot_rsr */ };
 
 void fault_on_assert(const char *file, int line);
 void fault_on_stack_overflow(const char *task_name);
 void fault_on_malloc_failed(void);
+void fault_on_exception(uint32_t kind, uint32_t exc_return);   // HardFault / MemManage / BusFault / UsageFault
+
+#define ICBSP_CHECK(expr)   // 求值并检查：失败走 fault_on_assert()；不会随 configASSERT 一起被编译掉
 ```
 
-- 记录区放在 `.noinit` 段，**复位后不清零**，下次上电还能读上次的停机现场
-- `configASSERT` 被 `integrate.py` 接到 `fault_on_assert()`（`FreeRTOSConfig.h` 的 USER CODE 1）
+- 记录区放在 `.noinit` 段，**复位后不清零**，下次上电还能读上次的停机现场；上电（POR / BOR）时整体清零（AXI SRAM 带 ECC，
+  上电后内容随机，评审 A8），本次启动的复位原因记在 `boot_rsr`（`RCC->RSR`，读完已清）
+- `configASSERT` 被 `integrate.py` 接到 `fault_on_assert()`（`FreeRTOSConfig.h` 的 USER CODE 1，`do { } while (0)` 形式）
 - 栈溢出与分配失败钩子在 `freertos.c` 的 USER CODE 4 / 5 里接好
+- 故障异常在 `stm32h7xx_it.c` 四个处理函数的 USER CODE 段里转调 `fault_on_exception()`（片段 `templates/stm32h7xx_it_user_code.c`，
+  `integrate.py` 自动写入，评审 A5）：任务里出错时从 PSP 解出出错指令地址 `pc`，用 `arm-none-eabi-addr2line -e <elf> <pc>` 找到源码行
+- **有副作用的初始化检查用 `ICBSP_CHECK(x.init() == Status::OK)`**，不要写进 `configASSERT(...)`（评审 A1，见编码规范）
 
 ---
 

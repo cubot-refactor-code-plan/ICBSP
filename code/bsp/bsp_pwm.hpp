@@ -59,8 +59,8 @@ public:
   /* ==================== */
   /* ==================== 公共接口 ==================== */
 
-  /** @brief 默认构造：未绑定通道，须再调 init() */
-  BspPwm() = default;
+  /** @brief 必须给出 Config：没有默认构造（I8：未绑定通道的对象没有意义） */
+  BspPwm() = delete;
 
   /**
    * @brief 只保存配置，硬件操作全部推迟到 init()
@@ -106,11 +106,15 @@ public:
 
   /**
    * @brief 动态改变频率（通过 ARR 实现，PSC 不动）
-   * @param freq_hz 目标频率 (Hz)；0 或未初始化时忽略
+   * @param freq_hz 目标频率 (Hz)
+   * @return OK=已生效（ARR 取整，实际频率见 get_freq_hz()）；NOT_SUPPORTED=超出这个定时器能做的范围，已按最近的边界生效；
+   *         BAD_ARG=freq_hz 为 0；NOT_INIT=未 init（F10：原来返回 void，限幅了调用方也不知道）
    *
    * @note 会改变该定时器所有通道的频率；占空比按新周期等比例保持。
+   * @note init() 打开了 ARR 预装载（ARPE）：新 ARR 在当前周期结束时才生效，不会因为新 ARR 小于当前计数值
+   *       而多出一个数到溢出的超长周期（F10：蜂鸣器爆音、舵机收到超长脉冲）。
    */
-  void set_freq(uint32_t freq_hz);
+  Status set_freq(uint32_t freq_hz);
 
   /** @brief 关断输出（CCR=0，PWM 仍在运行、引脚保持低电平） */
   void off();
@@ -121,8 +125,8 @@ public:
   /** @brief 计数器时钟 (Hz) = timer_clk_hz / (prescaler + 1) */
   uint32_t get_counter_clk_hz() const;
 
-  /** @brief 当前一个周期的计数个数（ARR + 1） */
-  uint32_t get_period_cnt() const;
+  /** @brief 当前一个周期的计数个数（ARR + 1；32 位定时器 ARR = 0xFFFFFFFF 时是 2^32，所以用 64 位） */
+  uint64_t get_period_cnt() const;
 
   /** @brief 当前频率 (Hz) = 计数器时钟 / 周期计数 */
   uint32_t get_freq_hz() const;

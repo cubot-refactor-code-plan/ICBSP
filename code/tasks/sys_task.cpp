@@ -57,6 +57,9 @@ extern "C" void sys_task(void *argument)
     uint32_t mark = 0U;
     (void)bsp_dwt.get_delta_s(&mark);
 
+    // DWT 绝对时间的回绕跟踪：两次调用要短于一圈（550 MHz 下 7.8 s），这里每 10 ms 推进一次（C11）
+    (void)bsp_dwt.get_cycles();
+
 #  if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
     // CAN：Bus-Off 自恢复 + 发送兜底（软件缓冲有帧、TX-FIFO-EMPTY 中断却关着时补发，N27）
 #    define X(name)                   \

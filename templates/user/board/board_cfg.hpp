@@ -56,7 +56,7 @@
  *   2. 本文件「外设实例」分节下面加：
  *          inline BspCanT<16, 16> bsp_can2({.hfdcan = &hfdcan2, .name = "CAN2"});
  *   3. `board_instances.hpp` 的 `BSP_CAN_INSTANCES` 里加 `X(bsp_can2)`
- *   4. `board_cfg.cpp` 的 `board_init()` 里加一行 `configASSERT(bsp_can2.init() == Status::OK);`
+ *   4. `board_cfg.cpp` 的 `board_init()` 里加一行 `ICBSP_CHECK(bsp_can2.init() == Status::OK);`
  */
 
 #ifndef __BOARD_CFG_HPP__

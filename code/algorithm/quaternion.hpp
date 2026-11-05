@@ -104,7 +104,7 @@ struct Quaternion
   /** @brief 模长 */
   double norm() const;
 
-  /** @brief 归一化（模长为 0 时返回单位四元数） */
+  /** @brief 归一化（模长为 0 或不是有限值时返回单位四元数） */
   Quaternion normalized() const;
 
   /** @brief 点积（两姿态的接近程度：|dot| = cos(夹角 / 2)） */
@@ -129,6 +129,7 @@ struct Quaternion
   /**
    * @brief 旋转向量（方向 = 转轴，模长 = 转角 rad，取 [0, π] 的短路径）：对数映射 2·log(q)
    * @note q 与 -q 是同一姿态，这里先把 w 转成非负再算，结果连续、不会给出绕远路的 2π - θ。
+   * @note 先按模长归一化；模长为 0 或不是有限值时返回零向量（不转），不会算出 NaN。
    */
   Vector3 rotation_vector() const;
 

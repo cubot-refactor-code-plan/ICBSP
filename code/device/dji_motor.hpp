@@ -13,7 +13,8 @@
 #define __DJI_MOTOR_HPP__
 
 #include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关来自 stm32h7xx_hal_conf.h）
-#include "cmsis_os2.h" // IWYU pragma: keep（osMutex）
+#include "FreeRTOS.h" // IWYU pragma: keep
+#include "task.h"     // taskENTER_CRITICAL（snapshot / DataUnpack 写回）
 #include "hardware_config.h"
 
 // DjiMotor 同时依赖 CAN 接收和发送路径
@@ -27,7 +28,6 @@
 
 #include <stdint.h>
 #include "system.hpp"
-#include <stdio.h>
 #include <string.h>
 #include <cmath>
 #include <cstdlib>
@@ -115,9 +115,6 @@ private:
   DjiMotorControlMode _control_mode; ///< GM6020 控制模式；其他型号忽略
   Status             _statu;        ///< 构造校验或初始化状态，运行期收发结果由函数返回
 
-  osMutexId_t       data_mutex_headler;
-  osMutexAttr_t     data_mutex_attr;
-  char              data_mutex_name[24];
 
   int64_t _total_ecd;      ///< 跨零展开后的累计转子编码器计数
   bool    _feedback_ready; ///< 是否已接收过至少一帧有效反馈
@@ -127,14 +124,21 @@ public:
   /**
    * @brief 获取只读电机数据
    * @return 内部 MotorData 的常量引用。
-   * @warning 返回实时引用而非快照；调用方须保证读取期间不并发执行 DataUnpack()。
+   * @warning 返回实时引用而非快照：can_rx_task 随时可能在改它，跨任务读请用 snapshot()。
    */
   const MotorData &data(void) const;
 
   /**
+   * @brief 拷贝一份同一帧的反馈（临界区内拷贝，跨任务读用它，F5）
+   * @param data 运动学数据
+   * @param raw  可选：同一帧的电调原始数据；nullptr = 不要
+   */
+  void snapshot(MotorData &data, DjiMotorRawData *raw = nullptr) const;
+
+  /**
    * @brief 获取 DJI 电调反馈协议原始数据
    * @return 内部 DjiMotorRawData 的常量引用。
-   * @warning 返回实时引用而非快照；调用方须保证读取期间不并发执行 DataUnpack()。
+   * @warning 返回实时引用而非快照；跨任务读请用 snapshot()。
    */
   const DjiMotorRawData &raw_data(void) const;
 
@@ -174,6 +178,7 @@ public:
    *                  M3508 为 3591/187，GM6020 为 1，M2006 为 36
    * @param offset     电机转子机械零位偏移，单位：rad
    * @param control_mode GM6020 的控制模式；其他电机型号忽略该参数
+   * @param online_timeout_ms 多久收不到有效反馈判离线（ms，默认 30，评审 I4）
    *
    * @note 构造后调用 init() 注册收发节点；错误可通过 statu() 查询。
    * @note 构造阶段不会调用 BspCanT::init() 或发送 CAN 帧。
@@ -182,16 +187,17 @@ public:
            uint8_t motor_id,
            float ratio = 0,
            float offset = 0.0f,
-           DjiMotorControlMode control_mode = DjiMotorControlMode::VOLTAGE);
+           DjiMotorControlMode control_mode = DjiMotorControlMode::VOLTAGE,
+           uint16_t online_timeout_ms = 30U);
 
   /**
    * @brief 初始化阶段注销收发节点并销毁电机对象。
-   * @note 接收节点注销成功后，释放发送槽位和互斥量。
+   * @note 接收节点注销成功后，释放发送槽位。
    * @warning 成功初始化后不支持运行期销毁；接收注册表冻结后析构会触发断言/终止。
    */
   ~DjiMotor();
 
-  /** @brief 系统运行前创建互斥量并注册发送槽位、标准帧反馈节点；重复成功初始化无副作用。 */
+  /** @brief 系统运行前注册发送槽位、标准帧反馈节点；重复成功初始化无副作用。 */
   Status init(void);
 
   /**
@@ -202,7 +208,7 @@ public:
    *         Status::NOT_INIT 电机未成功完成内部注册。
    *
    * @note 由 CanRxNode 在接收任务中调用；失败帧进入 BSP 回退缓冲。
-   *       互斥锁不可用时返回 Status::BUSY，不更新反馈。
+   *       写回在一段短临界区里做（和 snapshot() 互斥），不会因为读者占着锁而丢帧（F5：原来 try-lock 失败返回 BUSY，帧被当成没人认领）。
    * @note 只有完整且有效的反馈才能刷新 _online。相邻反馈转子位移必须小于半圈。
    * @note 首帧以绝对编码器位置初始化多圈角度；单圈角度为输出轴角度对 2π 取模。
    * @note 不计算角加速度；通用数据中的 acceleration 保持初始零值，不代表实际角加速度。
@@ -238,10 +244,12 @@ DjiMotor<type, CanT>::DjiMotor(CanT &can_item,
         uint8_t motor_id,
         float ratio,
         float offset,
-        DjiMotorControlMode control_mode) : 
+        DjiMotorControlMode control_mode,
+        uint16_t online_timeout_ms) : 
 _data(),
 _raw_data(),
 _param(),
+_online(online_timeout_ms),
 _lvbo_data(),
 _can_item(&can_item),
 _motor_id(motor_id),
@@ -250,8 +258,6 @@ _tx_node(nullptr),
 _rx_node(nullptr),
 _control_mode(control_mode),
 _statu(Status::NOT_INIT),
-data_mutex_headler(NULL),
-data_mutex_attr{},
 _total_ecd(0),
 _feedback_ready(false)
 {
@@ -299,19 +305,14 @@ _feedback_ready(false)
   switch (type) {
     case Motor3508:
       _param.current_limit = 16000;
-      snprintf(data_mutex_name, 24, "Mutex_DjiMotor_M3508_%d",motor_id);
       break;
     case Motor2006:
       _param.current_limit = 10000;
-      snprintf(data_mutex_name, 24, "Mutex_DjiMotor_M2006_%d",motor_id);
       break;
     case Motor6020:
       _param.current_limit = _control_mode == DjiMotorControlMode::CURRENT ? 16384 : 25000;
-      snprintf(data_mutex_name, 24, "Mutex_DjiMotor_GM6020_%d",motor_id);
       break;
   }
-
-  data_mutex_attr.name = data_mutex_name;
 }
 
 template <MotorType type, typename CanT>
@@ -340,14 +341,6 @@ DjiMotor<type, CanT>::~DjiMotor()
     _tx_node = nullptr;
   }
 
-  // 调用方须先停止本对象的收发和读取，避免销毁仍被使用的互斥量。
-  if (data_mutex_headler != nullptr)
-  {
-    const osStatus_t result = osMutexDelete(data_mutex_headler);
-    configASSERT(result == osOK);
-    (void)result;
-    data_mutex_headler = nullptr;
-  }
   // _online 是成员对象，其析构函数会自动注销在线检查节点。
 }
 
@@ -434,21 +427,10 @@ Status DjiMotor<type, CanT>::init()
     }
   }
 
-  // 互斥量创建
-  data_mutex_headler = osMutexNew(&data_mutex_attr);
-  if (data_mutex_headler == NULL)
-  {
-    _statu = Status::FULL;
-    sys_state.init_error(_statu);
-    return _statu;
-  }
-
   // 注册
   _tx_node = CanTxNodeT<CanT>::regist(*_can_item, tx_can_id, 4U, _bus_slot);
   if ( _tx_node == nullptr )
   {
-    osMutexDelete(data_mutex_headler);
-    data_mutex_headler = nullptr;
     _statu = Status::FULL;
     sys_state.init_error(_statu);
     return _statu;
@@ -463,8 +445,6 @@ Status DjiMotor<type, CanT>::init()
     configASSERT(result == Status::OK);
     (void)result;
     _tx_node = nullptr;
-    osMutexDelete(data_mutex_headler);
-    data_mutex_headler = nullptr;
     _statu = Status::IO_ERROR;
     return _statu;
   }
@@ -482,7 +462,7 @@ Status DjiMotor<type, CanT>::rx_callback(void *context, const CanRxMsg &rx)
 template <MotorType type, typename CanT>
 Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
 {
-  if (_tx_node == nullptr || data_mutex_headler == nullptr)
+  if (_tx_node == nullptr)
   {
     return Status::NOT_INIT;
   }
@@ -496,16 +476,13 @@ Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
   {
     return Status::BAD_ARG;
   }
-  // 接收队列在任务上下文中解析；不等待锁，避免阻塞 CAN 反馈处理。
-  if (osMutexAcquire(data_mutex_headler, 0U) != osOK)
-  {
-    return Status::BUSY;
-  }
-
-  _raw_data.rpm              = static_cast<int16_t>((rx.data[2] << 8) | rx.data[3]);
-  _raw_data.torque_current   = static_cast<int16_t>((rx.data[4] << 8) | rx.data[5]);
-  _raw_data.temperature      = type == Motor2006 ? 0U : rx.data[6];
-  _data.radian_data.velocity = _raw_data.rpm / _data.param.ratio * (PI / 30.0f);
+  // 先在局部算好，再在短临界区里整体写回：snapshot() 拿到的是同一帧（F5，替代原来的 try-lock）
+  MotorData       data = _data;
+  DjiMotorRawData raw  = _raw_data;
+  raw.rpm              = static_cast<int16_t>((rx.data[2] << 8) | rx.data[3]);
+  raw.torque_current   = static_cast<int16_t>((rx.data[4] << 8) | rx.data[5]);
+  raw.temperature      = type == Motor2006 ? 0U : rx.data[6];
+  data.radian_data.velocity = raw.rpm / data.param.ratio * (PI / 30.0f);
 
   if (!_feedback_ready)
   {
@@ -514,7 +491,7 @@ Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
   else
   {
     // 前后编码器差值超过半圈表示跨过零点，按方向补偿一圈计数。
-    int32_t delta = static_cast<int32_t>(ecd) - _raw_data.ecd;
+    int32_t delta = static_cast<int32_t>(ecd) - static_cast<uint16_t>(raw.ecd);
     if (delta > _param.ecd_full_range / 2)
     {
       delta -= _param.ecd_full_range;
@@ -526,20 +503,24 @@ Status DjiMotor<type, CanT>::DataUnpack(const CanRxMsg &rx)
     _total_ecd += delta;
   }
 
-  _raw_data.ecd = static_cast<int16_t>(ecd);
+  raw.ecd = static_cast<int16_t>(ecd);
 
-  // 保留双精度中间角度，避免多圈累计后单圈取模损失精度。
-  const double angle                   = (static_cast<double>(_total_ecd) * (2.0 * PI) / _param.ecd_full_range - _data.param.offset) / _data.param.ratio;
-  _data.radian_data.angle_multi_round  = static_cast<float>(angle);
-  _data.radian_data.angle_single_round = static_cast<float>(std::fmod(angle, 2.0 * PI));
-  if (_data.radian_data.angle_single_round < 0.0f)
+  // 保留双精度中间角度，避免多圈累计后单圈取模损失精度；多圈角度字段是 double，直接存（F11：原来先转 float 再存，精度还是 float）
+  const double angle                  = (static_cast<double>(_total_ecd) * (2.0 * PI) / _param.ecd_full_range - data.param.offset) / data.param.ratio;
+  data.radian_data.angle_multi_round  = angle;
+  data.radian_data.angle_single_round = static_cast<float>(std::fmod(angle, 2.0 * PI));
+  if (data.radian_data.angle_single_round < 0.0f)
   {
-    _data.radian_data.angle_single_round += 2.0f * PI;
+    data.radian_data.angle_single_round += 2.0f * PI;
   }
+
+  taskENTER_CRITICAL();
+  _data     = data;
+  _raw_data = raw;
+  taskEXIT_CRITICAL();
 
   _feedback_ready = true;
   _online.refresh_task();
-  osMutexRelease(data_mutex_headler);
   return Status::OK;
 }
 
@@ -571,6 +552,18 @@ template <MotorType type, typename CanT>
 const MotorData &DjiMotor<type, CanT>::data(void) const
 {
   return _data;
+}
+
+template <MotorType type, typename CanT>
+void DjiMotor<type, CanT>::snapshot(MotorData &data, DjiMotorRawData *raw) const
+{
+  taskENTER_CRITICAL();
+  data = _data;
+  if (raw != nullptr)
+  {
+    *raw = _raw_data;
+  }
+  taskEXIT_CRITICAL();
 }
 
 template <MotorType type, typename CanT>

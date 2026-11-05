@@ -53,7 +53,7 @@ python3 third_party/stm32-framework/tools/integrate.py             # 执行
 | 芯片     | STM32H7 系列                                             |
 | 工具链   | CubeMX → Project Manager → Toolchain = **CMake** |
 | RTOS     | FreeRTOS，**CMSIS_V2**，tick **1 kHz**       |
-| HAL 时基 | 不用 SysTick；优先级要高于 UART / CAN 中断               |
+| HAL 时基 | 不用 SysTick；优先级没有要求（CubeMX 默认 15 即可，1.4 起实测） |
 | FDCAN    | 经典 CAN，RX FIFO0，开 FDCAN 中断                        |
 | UART     | RX/TX DMA + 全局中断（驱动用 IDLE 断帧）                 |
 | SPI      | 全双工主机、软件 NSS、`MasterKeepIOState = ENABLE`     |

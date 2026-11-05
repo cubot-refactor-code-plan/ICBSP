@@ -43,7 +43,7 @@ void DeviceBuzzer::tone(uint32_t freq_hz, float volume_pct)
   if (!(volume_pct > 0.0f))
     volume_pct = _config.volume_pct;
 
-  _pwm.set_freq(freq_hz);
+  (void)_pwm.set_freq(freq_hz); // 超出范围时已按边界生效，蜂鸣器不需要区分
   _pwm.set_duty(volume_pct);
 }
 

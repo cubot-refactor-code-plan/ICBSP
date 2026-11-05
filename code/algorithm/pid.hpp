@@ -101,19 +101,19 @@ public:
     /**
      * @brief 按序构造配置（参数顺序 = 字段顺序）
      */
-    Config(float kp = 0.0f, float ki = 0.0f, float kd = 0.0f, float out_max = 0.0f, float p_max = 0.0f,
-           float i_max = 0.0f, float d_max = 0.0f, float f_max = 0.0f, float i_sep = 0.0f,
-           DiffMode diff_mode = DiffMode::DIFF_FEEDBACK)
-      : kp(kp),
-        ki(ki),
-        kd(kd),
-        out_max(out_max),
-        p_max(p_max),
-        i_max(i_max),
-        d_max(d_max),
-        f_max(f_max),
-        i_sep(i_sep),
-        diff_mode(diff_mode)
+    Config(float kp_ = 0.0f, float ki_ = 0.0f, float kd_ = 0.0f, float out_max_ = 0.0f, float p_max_ = 0.0f,
+           float i_max_ = 0.0f, float d_max_ = 0.0f, float f_max_ = 0.0f, float i_sep_ = 0.0f,
+           DiffMode diff_mode_ = DiffMode::DIFF_FEEDBACK)
+      : kp(kp_),
+        ki(ki_),
+        kd(kd_),
+        out_max(out_max_),
+        p_max(p_max_),
+        i_max(i_max_),
+        d_max(d_max_),
+        f_max(f_max_),
+        i_sep(i_sep_),
+        diff_mode(diff_mode_)
     {
     }
 
@@ -244,21 +244,22 @@ public:
    * @param target 目标值
    * @param feedback 反馈值
    * @return float 输出
+   * @note 输入不是有限值（NaN / Inf）时丢弃这一拍：状态不变、返回上一拍的输出，计入 nonfinite_count()（F1）。
    */
   float calc(float target, float feedback);
 
   /**
-   * @brief pid计算函数，反馈值一阶导数自行导入
+   * @brief pid计算函数，反馈的每拍增量自行导入
    *
    * @param target 目标值
    * @param feedback 反馈值
-   * @param df_dt 反馈值一阶导数（代替相邻两次反馈的差分；单位与 kd 整定时一致）。
-   *              DIFF_FEEDBACK：D = -kd·df_dt；DIFF_ERROR：按目标不动处理，误差变化率 = -df_dt，D = -kd·df_dt
-   * @note 示例:
-   * 当动态系统被控量为位移x时，df_dt项可填入速度v，以提高微分项计算精度
+   * @param delta_feedback 本拍反馈相对上一拍的增量（代替相邻两次反馈的差分，**不是每秒的导数**，N37）。
+   *              DIFF_FEEDBACK：D = -kd·delta_feedback；DIFF_ERROR：按目标不动处理，误差变化率 = -delta_feedback，D = -kd·delta_feedback
+   * @note 示例：被控量为位移 x、控制周期为 dt 时，填“速度 v × dt”能提高微分项精度；直接填速度 v 相当于 kd 放大了 1/dt 倍。
+   * @note 任一输入不是有限值时丢弃这一拍（同两参数版本）。
    * @return float 输出
    */
-  float calc(float target, float feedback, float df_dt);
+  float calc(float target, float feedback, float delta_feedback);
 
   /**
    * @brief 清空运行状态：积分项、前馈项、输入缓存与输出；配置（含链式设置）不变
@@ -276,6 +277,9 @@ public:
 
   /** @brief 读取目标值、当前值、原始输出 */
   Data get() const { return {_input.target, _input.feedback, _output}; }
+
+  /** @brief 因输入不是有限值（NaN / Inf）而丢弃的 calc() / feed_forward() 次数 */
+  uint32_t nonfinite_count() const { return _nonfinite_count; }
 
   /* ==================== */
   /* ==================== 数据接口 ==================== */
@@ -311,6 +315,7 @@ private:
   PidTerm   _term;                              ///< 各项计算值
   DiffMode  _diff_mode = DiffMode::DIFF_FEEDBACK; ///< 微分计算模式
   bool      _has_last  = false;                   ///< 是否有上一帧输入（首次调用 / reset() 后为 false，该帧微分为 0）
+  uint32_t  _nonfinite_count = 0U;                ///< 丢弃的非有限输入次数（F1）
 };
 
   /* ==================== */

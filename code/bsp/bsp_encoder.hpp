@@ -72,7 +72,7 @@ public:
   /**
    * @brief 启动编码器计数（幂等）
    *
-   * @return OK=成功；BAD_ARG=句柄为空；IO_ERROR=HAL 启动失败
+   * @return OK=成功；BAD_ARG=句柄为空，或 CubeMX 的 Period 不是 0xFFFF（32 位定时器 0xFFFFFFFF）：增量按 16 位回绕计算（N37）；IO_ERROR=HAL 启动失败
    *
    * @note 启动后以「当前计数值」为基准清零累计位置，避免把上电残留值当成增量。
    */
