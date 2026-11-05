@@ -133,7 +133,8 @@
   - 2026-11-06：CMake 目标 `icbsp`；宿主提供的配置宏、功能开关、实例清单（`ICBSP_CAN/UART/SPI_INSTANCES`）和系列宏（`ICBSP_SERIES_H7/F4`、`ICBSP_CAN_MODULE_ENABLED`、`ICBSP_UART_HAS_FIFO`）加前缀；README / 文档 / integrate.py / 模板改名，`LICENSE` 版权人 INVC & CUBOT。类名（`BspUartT` 等）与头文件保护宏不改。历史记录（`docs/bsp_test/`、对比评估、评审、F4 移植计划）保持原文。**GitHub 仓库改名（stm32-framework → ICBSP）要在网页上做**，做完宿主 `.gitmodules` 的 url 跟着改
 - [x] 目录重排（Q13）：`code/{bsp, service/{system,comm,monitor,definition}, device/{motor,sensor,remote,actuator}, algorithm, tasks}`，包含路径只加 `code/`（草案见对比评估 3.1）
   - 2026-11-06（分支 `phase2`）：按草案 `git mv`，`protocol/emmv5_protocol` 并进 `device/motor/`；包含语句全部写成 `"bsp/bsp_uart.hpp"` 形式（库、模板、宿主 `app/`）。bsp 改为只包含 `service/system/status_code.hpp`（原来经 `status.hpp` 间接带进 FreeRTOS 事件组），它是唯一允许各层包含的公共头；新增 `tools/check_layers.py` 检查分层。文档只改了目录描述，按新目录重写留到阶段 4
-- [ ] `examples/dm_mc02/Flash/README.md` 的经验（OpenOCD 0.12、不注册 OCTOSPI2 bank）补进 `templates/Flash` 和文档；README 的示例仓库链接先空着，阶段 6 再补（Q18）
+- [x] `examples/dm_mc02/Flash/README.md` 的经验（OpenOCD 0.12、不注册 OCTOSPI2 bank）补进 `templates/Flash` 和文档；README 的示例仓库链接先空着，阶段 6 再补（Q18）
+  - 2026-11-06：`daplink.cfg` / `jlink.cfg` 注明不注册外置 Flash bank、HID 后端（注释掉，按探针打开）；四个脚本支持 `OPENOCD` 环境变量，`.sh` 检测到 0.11 及以下时提示；`templates/Flash/README.md` 加实测经验（含烧录 CRC 造成的假 HardFault），接入指南常见问题加三条。README 没有示例仓库链接（保持空）
 - [ ] 配置检查（Q3）：库内 `config_check.hpp`（范围 `static_assert` + 缺宏 `#error`），模板同步
 - [ ] 功能开关（Q4）：放进 `hardware_config.h`，注释写清后果，依赖用 `static_assert`
 - [ ] sys_task（Q5）：10 ms；去掉开机 1 s 等待；`sys_task_stats`（DWT 计时）+ 可选回调；`CAN_BUSOFF_RETRY_MS` 等按 10 ms 粒度检查
