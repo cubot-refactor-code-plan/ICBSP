@@ -13,6 +13,9 @@
 
 bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan)
 {
+  // 实例清单为空时 X-macro 展开成空，参数用不到
+  (void)self;
+  (void)hcan;
   bool     listed = false;
   uint32_t same   = 0U; // 清单里绑这个句柄的实例数
 #define X(name)                                 \

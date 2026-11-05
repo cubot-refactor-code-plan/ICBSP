@@ -90,6 +90,7 @@ void check(unsigned index, const ErrCounts &now)
 /** @brief 取全部实例的当前计数，按清单顺序交给 fn(index, counts) */
 template <class Fn> void for_each_counts(Fn fn)
 {
+  (void)fn; // 三张清单都为空时用不到
   unsigned index = 0U;
 #define X(name) fn(index++, can_counts(name));
   TREE_CAN(X)
@@ -106,6 +107,8 @@ template <class Fn> void for_each_counts(Fn fn)
 
 EventState *bus_state(const void *bsp_instance)
 {
+  // 实例清单为空时 X-macro 展开成空，参数用不到
+  (void)bsp_instance;
   unsigned index = 0U;
 #define X(name)                                         \
   if (static_cast<const void *>(&name) == bsp_instance) \

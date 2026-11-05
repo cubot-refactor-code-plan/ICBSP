@@ -279,8 +279,12 @@ public:
   /** @brief 取唯一的元素（只有 1×1 可调用，例如 vᵀ·A·v 的结果） */
   float scalar() const;
 
-public:
-  float _data[ROWS * COLS]; ///< 数据，行优先（公开以便不同尺寸的 MatrixF32 互访）
+private:
+  // 不同尺寸的 MatrixF32 互为友元（乘法、转置、row() / col() 要访问别的尺寸的数据）；外部用 data() / operator[] 访问（C23）
+  template <uint32_t R, uint32_t C>
+  friend class MatrixF32;
+
+  float _data[ROWS * COLS]; ///< 数据，行优先
 };
 
   /* ==================== */
