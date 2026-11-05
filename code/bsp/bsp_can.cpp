@@ -20,7 +20,7 @@ bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan)
   {                                             \
     listed = true;                              \
   }                                             \
-  if (name.handle() == hcan)                    \
+  if (name.get_handle() == hcan)                    \
   {                                             \
     same = same + 1U;                           \
   }
@@ -43,7 +43,7 @@ extern "C"
     {
     }
 #define X(name)                         \
-  else if (hcan == name.handle())       \
+  else if (hcan == name.get_handle())       \
   {                                     \
     name.process_fifo0_isr(0U, &woken); \
   }
@@ -64,7 +64,7 @@ extern "C"
     {
     }
 #define X(name)                       \
-  else if (hcan == name.handle())     \
+  else if (hcan == name.get_handle())     \
   {                                   \
     name.trigger_tx_from_isr(&woken); \
   }
@@ -85,7 +85,7 @@ extern "C"
     {
     }
 #define X(name)                       \
-  else if (hcan == name.handle())     \
+  else if (hcan == name.get_handle())     \
   {                                   \
     name.trigger_tx_from_isr(&woken); \
   }
@@ -106,7 +106,7 @@ extern "C"
     {
     }
 #define X(name)                       \
-  else if (hcan == name.handle())     \
+  else if (hcan == name.get_handle())     \
   {                                   \
     name.trigger_tx_from_isr(&woken); \
   }
@@ -126,7 +126,7 @@ extern "C"
     {
     }
 #define X(name)                             \
-  else if (hcan == name.handle())           \
+  else if (hcan == name.get_handle())           \
   {                                         \
     name.process_error_isr(hcan->ErrorCode); \
   }

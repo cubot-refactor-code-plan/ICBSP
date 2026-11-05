@@ -65,8 +65,8 @@ public:
   bool get_level() const { return (HAL_GPIO_ReadPin(_port, _pin) != GPIO_PIN_RESET); }
 
   /** @brief 返回端口 / 引脚（供 SPI 片选等内部封装校验用） */
-  GPIO_TypeDef *port() const { return _port; }
-  uint16_t      pin() const { return _pin; }
+  GPIO_TypeDef *get_port() const { return _port; }
+  uint16_t      get_pin() const { return _pin; }
 
   /* ==================== */
 private:

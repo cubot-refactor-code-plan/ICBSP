@@ -153,11 +153,11 @@ public:
    */
   Status init();
 
-  /** @brief 中止进行中的传输并释放锁与信号量；之后 is_init() 为 false，传输接口返回 NOT_INIT */
+  /** @brief 中止进行中的传输并释放锁与信号量；之后 is_initialized() 为 false，传输接口返回 NOT_INIT */
   void deinit();
 
   /** @brief 是否已 init() 成功 */
-  bool is_init() const;
+  bool is_initialized() const;
 
   /* ==================== */
   /* ==================== 事务接口（多数情况用 BspSpiDevice，不直接调这些） ==================== */
@@ -203,13 +203,13 @@ public:
   /* ==================== 查询 ==================== */
 
   /** @brief 绑定的 SPI 句柄 */
-  SPI_HandleTypeDef *handle() const
+  SPI_HandleTypeDef *get_handle() const
   {
     return _hspi;
   }
 
   /** @brief 读诊断计数 */
-  Diag diag() const;
+  Diag get_diag() const;
 
   /* ==================== */
 
@@ -341,8 +341,8 @@ public:
   /* ==================== */
   /* ==================== 手动事务用 ==================== */
 
-  /** @brief 所在总线（手动事务：bus().lock() → select() → bus().transfer_locked() … → deselect() → bus().unlock()） */
-  BspSpi &bus() const
+  /** @brief 所在总线（手动事务：get_bus().lock() → select() → get_bus().transfer_locked() … → deselect() → get_bus().unlock()） */
+  BspSpi &get_bus() const
   {
     return _bus;
   }

@@ -124,6 +124,6 @@ extern "C" void system_start(void)
   state_tree_start();
 
   // 有初始化失败记录（设备 / 注册函数的 init_error 一路传上来）就在这里停机，fault_record 记下本行；
-  // 具体是哪条总线下的设备，查 bus_state(&实例)->error_code()
+  // 具体是哪条总线下的设备，查 bus_state(&实例)->get_error_code()
   ICBSP_CHECK(sys_state.complete_init() == Status::OK);
 }

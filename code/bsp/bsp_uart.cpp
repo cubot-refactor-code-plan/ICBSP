@@ -20,7 +20,7 @@ bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart)
   {                                                                \
     listed = true;                                                 \
   }                                                                \
-  if (name.handle() == huart)                                      \
+  if (name.get_handle() == huart)                                      \
   {                                                                \
     same = same + 1U;                                              \
   }
@@ -44,7 +44,7 @@ extern "C"
     {
     }
 #define X(name)                     \
-  else if (huart == name.handle())  \
+  else if (huart == name.get_handle())  \
   {                                 \
     name.on_idle_isr(Size, &woken); \
   }
@@ -65,7 +65,7 @@ extern "C"
     {
     }
 #define X(name)                               \
-  else if (huart == name.handle())            \
+  else if (huart == name.get_handle())            \
   {                                           \
     name.start_transmission_from_isr(&woken); \
   }
@@ -85,7 +85,7 @@ extern "C"
     {
     }
 #define X(name)                    \
-  else if (huart == name.handle()) \
+  else if (huart == name.get_handle()) \
   {                                \
     name.on_error_isr();           \
   }

@@ -67,9 +67,10 @@ public:
 
   /**
    * @brief 查询最近一次计算得到的在线状态
-   * @return Status::OK 设备在线；Status::TIMEOUT 设备已超时离线
+   * @return true = 在线；false = 已超时离线（构造后还没收到过数据也是 false）
+   * @note 阶段 2.7 前返回 Status（OK = 在线）：`if (x.is_online())` 会在离线时成立，所以改成 bool（Q10：布尔查询用 is_）
    */
-  Status is_online(void) const;
+  bool is_online(void) const;
 
   /**
    * @brief 关联设备的 EventState 节点（默认树的第三层，Q6）

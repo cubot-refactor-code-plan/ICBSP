@@ -59,7 +59,7 @@ constexpr double GYRO_ODR_HZ[] = {2000.0, 2000.0, 1000.0, 400.0, 200.0, 100.0, 2
 /** @brief 一次刷新最多补积分的陀螺仪样本数：限住内部任务单次耗时，任务被长时间饿住后不一口气补几百次 */
 constexpr uint32_t ATTITUDE_MAX_GYRO_STEPS = 10U;
 
-constexpr double RAD_TO_DEG = 180.0 / PI_D; ///< imu_definition.hpp 的 PI 是 float，精度不够
+constexpr double RAD_TO_DEG = 180.0 / ICBSP_PI;
 } // namespace
 
 /* ==================== */
@@ -226,7 +226,7 @@ Status DeviceBmi088::init_locked()
 
   // 7) 换算系数：加速度计满量程 = 1.5 g × 2^(range+1)
   _acc_scale  = 1.5f * static_cast<float>(1U << (static_cast<uint8_t>(_cfg.acc_range) + 1U)) * GRAVITY / 32768.0f;
-  _gyro_scale = GYRO_FULL_SCALE_DPS[static_cast<uint8_t>(_cfg.gyro_range)] * (PI / 180.0f) / 32768.0f;
+  _gyro_scale = GYRO_FULL_SCALE_DPS[static_cast<uint8_t>(_cfg.gyro_range)] * (ICBSP_PI_F / 180.0f) / 32768.0f;
 
   // 8) 姿态解算器（只有自动刷新任务用它）：第一次分配，之后重复 init() 时清空状态、从头解算
   if (_cfg.auto_update && _cfg.attitude)
@@ -398,17 +398,17 @@ void DeviceBmi088::convert(const Bmi088RawData &raw, ImuData &data, float &tempe
   data.acc.y = static_cast<float>(raw.acc[1]) * _acc_scale;
   data.acc.z = static_cast<float>(raw.acc[2]) * _acc_scale;
 
-  data.gyro.roll  = static_cast<float>(raw.gyro[0]) * _gyro_scale;
-  data.gyro.pitch = static_cast<float>(raw.gyro[1]) * _gyro_scale;
-  data.gyro.yaw   = static_cast<float>(raw.gyro[2]) * _gyro_scale;
+  data.gyro.x = static_cast<float>(raw.gyro[0]) * _gyro_scale;
+  data.gyro.y = static_cast<float>(raw.gyro[1]) * _gyro_scale;
+  data.gyro.z = static_cast<float>(raw.gyro[2]) * _gyro_scale;
 
   temperature = static_cast<float>(raw.temp) * 0.125f + 23.0f;
 }
 
 void DeviceBmi088::solve_attitude(ImuData &data, uint32_t gyro_steps)
 {
-  // 轴对应见文件头：gyro.roll / pitch / yaw = 绕芯片 X / Y / Z
-  const vqf_real_t gyr[3] = {static_cast<vqf_real_t>(data.gyro.roll), static_cast<vqf_real_t>(data.gyro.pitch), static_cast<vqf_real_t>(data.gyro.yaw)};
+  // gyro.x / y / z = 绕芯片 X / Y / Z（本体系）
+  const vqf_real_t gyr[3] = {static_cast<vqf_real_t>(data.gyro.x), static_cast<vqf_real_t>(data.gyro.y), static_cast<vqf_real_t>(data.gyro.z)};
   const vqf_real_t acc[3] = {static_cast<vqf_real_t>(data.acc.x), static_cast<vqf_real_t>(data.acc.y), static_cast<vqf_real_t>(data.acc.z)};
 
   // 漏掉的样本没有读数，按本帧角速度补积分（VQF 每次 updateGyr() 固定积分一个 ODR 周期）
@@ -538,7 +538,7 @@ void DeviceBmi088::delay_ms(uint32_t ms)
   if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
   {
     // 调度器启动前不用 HAL_Delay()：xTaskCreate() 之后 BASEPRI 一直挡着优先级 ≥ 5 的中断，HAL 时基优先级低于它时 tick 不走、永远等不完（A3）
-    if (bsp_dwt.is_init())
+    if (bsp_dwt.is_initialized())
     {
       bsp_dwt.delay_ms(static_cast<double>(ms));
     }

@@ -511,7 +511,7 @@ Status DeviceEmmv5GroupT<Uart>::_send_for(uint8_t addr, const emmv5::Frame &fram
     return Status::NOT_INIT;
   }
 
-  if (!_is_member(addr) || !frame.valid())
+  if (!_is_member(addr) || !frame.is_valid())
   {
     // frame 有效性由协议层保证：未封口 / 已溢出 / 空帧一律不发，避免把截断帧送上总线
     return Status::BAD_ARG;
@@ -540,7 +540,7 @@ Status DeviceEmmv5GroupT<Uart>::_queue_for(uint8_t addr, const emmv5::Frame &fra
     return Status::NOT_INIT;
   }
 
-  if (!_is_member(addr) || !frame.valid())
+  if (!_is_member(addr) || !frame.is_valid())
   {
     // 截断帧不能攒进总帧：否则整帧 MMCL 会带着半条子命令发出去
     return Status::BAD_ARG;
@@ -637,7 +637,7 @@ Status DeviceEmmv5GroupT<Uart>::stop_all()
   }
 
   const emmv5::Frame frame = emmv5::stop(emmv5::BROADCAST);
-  if (!frame.valid())
+  if (!frame.is_valid())
   {
     return Status::BAD_ARG;
   }
@@ -982,7 +982,7 @@ bool DeviceEmmv5GroupT<Uart>::is_online(uint8_t addr) const
 
   // 计时由 sys_task 里的 Online::update() 推进，这里只查锁存结果；
   // 所以本类不建任务，但要求调用方的刷新周期小于 ONLINE_TIMEOUT_MS。
-  return _motor[index].online.is_online() == Status::OK;
+  return _motor[index].online.is_online();
 }
 
 /** @brief 锁存位置并置有效标志（短临界区） */

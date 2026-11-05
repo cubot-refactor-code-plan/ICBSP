@@ -42,7 +42,7 @@ Status DeviceMotor::init()
     return Status::BAD_ARG;
 
   // 编码器必须已在 board_init() 里启动过，否则 read_delta() 恒为 0、闭环会一路积分到限幅
-  if (!_config.encoder->initialized())
+  if (!_config.encoder->is_initialized())
     return Status::NOT_INIT;
 
   // 输出轴每转计数 = 线数 × 倍频 × 减速比；每转行程 = π × 直径
@@ -155,7 +155,7 @@ bool DeviceMotor::update(float dt_s)
 }
 
 /** @brief JustFloat 组帧：按 fields 选择 1~3 个 PID 量，帧尾固定 00 00 80 7F */
-size_t DeviceMotor::pid_frame(uint8_t *buf, uint8_t fields) const
+size_t DeviceMotor::get_pid_frame(uint8_t *buf, uint8_t fields) const
 {
   fields &= PID_ALL;
   if (buf == nullptr || fields == 0U)

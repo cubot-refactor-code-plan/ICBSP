@@ -77,7 +77,7 @@ public:
   uint64_t get_cycles();
 
   /** @brief init() 是否成功（未成功时 delay_*() 不等待、时间恒为 0） */
-  bool is_init() const
+  bool is_initialized() const
   {
     return _inited;
   }

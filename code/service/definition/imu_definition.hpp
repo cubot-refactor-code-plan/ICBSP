@@ -9,15 +9,13 @@
  *       协议原始值和器件配置由具体 IMU 类型自行定义（如 BMI088 的 Bmi088RawData）。
  * @note 不同器件能填的字段不同：自带姿态解算的器件全部字段都填；只有原始传感器的器件由驱动自己解算
  *       （BMI088 在自动刷新且 Config::attitude 时用 VQF 解算，否则只填 gyro / acc，欧拉角保持 0、四元数保持单位四元数，不代表实际姿态；
- *       BMI088 用 attitude_ready() 区分）。
+ *       BMI088 用 is_attitude_ready() 区分）。
  *       温度等并非所有器件都有的数据，放在具体器件自己的数据里。
  */
 #ifndef __IMU_DEFINITION_HPP__
 #define __IMU_DEFINITION_HPP__
 
-#ifndef PI
-#define PI 3.1415926f
-#endif  // PI
+#include "algorithm/math_constants.hpp" // IWYU pragma: export（ICBSP_PI / ICBSP_PI_F；原来的 PI 宏已删除，评审 I6）
 
 /**
  * @brief 单个 IMU 的通用数据
@@ -26,11 +24,16 @@
  */
 struct ImuData
 {
-  struct Gyro{
-    double yaw;
-    double pitch;
-    double roll;
-  }gyro;  // 角速度，单位：rad/s
+  /**
+   * @brief 角速度，单位：rad/s，**传感器本体系**（绕器件自己的 X / Y / Z 轴）
+   * @note 评审 I5：原来叫 yaw / pitch / roll，安装方向一旋转名字就和含义对不上；欧拉角速率请从姿态现算
+   */
+  struct Gyro
+  {
+    double x; ///< 绕本体 X 轴
+    double y; ///< 绕本体 Y 轴
+    double z; ///< 绕本体 Z 轴
+  } gyro;
 
   struct Acceleration{
     double x,y,z;

@@ -93,8 +93,8 @@ enum class SystemParam : uint8_t
  * @brief 协议帧（值类型，可直接返回、拷贝）
  *
  * @note 只提供顺序追加接口，多字节字段按协议要求写大端。
- *       越界写入或封口后继续写入会置 `overflow`，`valid()` 随即为 false；
- *       设备层发送前会统一检查 `valid()`，不会把截断帧发上总线。
+ *       越界写入或封口后继续写入会置 `overflow`，`is_valid()` 随即为 false；
+ *       设备层发送前会统一检查 `is_valid()`，不会把截断帧发上总线。
  */
 struct Frame
 {
@@ -144,7 +144,7 @@ struct Frame
   }
 
   ///< 是否是可直接发送的完整帧
-  bool valid() const
+  bool is_valid() const
   {
     return sealed && !overflow && (size > 0U);
   }
