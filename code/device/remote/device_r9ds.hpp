@@ -37,7 +37,9 @@
 #ifdef HAL_UART_MODULE_ENABLED
 
 
+#include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
 #include "service/system/status.hpp"
+#include "service/system/system.hpp"     // sys_state
 #include <stdint.h>
 #include "FreeRTOS.h"  // IWYU pragma: keep (pdMS_TO_TICKS)
 #include "bsp/bsp_uart.hpp" // IWYU pragma: keep（BspUartT 实例化与 UART 宏）
@@ -47,7 +49,7 @@
 /**
  * @brief R9DS 遥控接收机设备
  *
- * @note 不拥有串口、不创建任务、不创建 RTOS 资源、也不注册到 Online 链表：只解析调用方喂进来的
+ * @note 不拥有串口、不创建任务、不注册到 Online 链表（唯一的 RTOS 资源是 init() 建的默认树节点事件组）：只解析调用方喂进来的
  *       时间片，在线判定自己按 tick 算。
  */
 template <typename Uart>
@@ -224,6 +226,12 @@ public:
   Diag get_diag(void) const;
 
   /**
+   * @brief 本接收机在 EventState 默认树里的节点（第三层，挂在所用串口的总线节点下）
+   * @return `is_running()` = init() 成功；`get_error_bits()` 里的 TIMEOUT = 掉过线（粘滞）。掉线在 update() 里检测
+   */
+  const EventState &get_state(void) const { return _state; }
+
+  /**
    * @brief 拷贝一份同一帧的遥控器数据（临界区内拷贝，跨任务读用它，F5）
    * @param rc  遥控器语义值
    * @param raw 可选：同一帧的 16 个原始通道值（CHANNEL_NUM 个）；nullptr = 不要
@@ -260,6 +268,8 @@ private:
   bool     _frame_lost = false;   ///< 最近一帧 flags 的 bit2：本帧丢失
   bool     _failsafe   = false;   ///< 最近一帧 flags 的 bit3：失控保护激活
   Diag     _diag {};              ///< 诊断计数（frame_cnt 顺带当“收到过帧吗”的标志用）
+  EventState _state;              ///< 默认树节点（Q6）
+  bool       _was_online = false; ///< 上一次 update() 结束时是否在线（检测由在线变离线）
   uint32_t _last_frame_tick = 0U; ///< 最近一帧的 tick，is_online() 拿它算“接收机静默了多久”
   /* ==================== */
 };
@@ -298,11 +308,20 @@ DeviceR9dsT<Uart>::DeviceR9dsT(Uart &uart) : _uart(uart)
 template <typename Uart>
 Status DeviceR9dsT<Uart>::init(void)
 {
+  // 默认树第三层（Q6）：挂在所用串口的总线节点下（串口不在清单里时挂 sys_state）；重复调用无害
+  if (_state.init() == Status::OK)
+  {
+    EventState *bus = bus_state(&_uart);
+    (void)_state.set_parent((bus != nullptr) ? *bus : sys_state);
+  }
+
   if (!_uart.check_format(100000U, UART_WORDLENGTH_9B, UART_PARITY_EVEN, UART_STOPBITS_2))
   {
+    (void)_state.init_error(Status::BAD_ARG);
     return Status::BAD_ARG;
   }
 
+  (void)_state.complete_init();
   return Status::OK;
 }
 
@@ -326,7 +345,14 @@ void DeviceR9dsT<Uart>::update(uint32_t timeout_ms)
     // 首字节按调用方给的超时等；一旦开始解帧就一律 0，把已有数据排空
     if ((_uart.receive(&byte, 1U, wait_ms, &got) != Status::OK) || (got == 0U))
     {
-      return; // 这一拍的字节取完了
+      // 这一拍的字节取完了：由在线变离线时在本节点记 TIMEOUT（构造后从没上线过的不算）
+      const bool online = is_online();
+      if (_was_online && !online)
+      {
+        (void)_state.error(Status::TIMEOUT);
+      }
+      _was_online = online;
+      return;
     }
 
     wait_ms = 0U; // 后续字节不再等待

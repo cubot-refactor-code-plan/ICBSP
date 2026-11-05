@@ -9,6 +9,7 @@
 #include <new>
 
 #include "bsp/bsp_dwt.hpp" // 调度器启动前的忙等
+#include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
 #include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 #include "algorithm/quaternion.hpp"
@@ -78,6 +79,13 @@ DeviceBmi088::DeviceBmi088(BspSpiDevice &acc, BspSpiDevice &gyro, const Config &
  */
 Status DeviceBmi088::init()
 {
+  // 默认树第三层（Q6）：挂在所用 SPI 的总线节点下（总线不在清单里时挂 sys_state）；重复调用无害
+  if (_state.init() == Status::OK)
+  {
+    EventState *bus = bus_state(&_acc.get_bus());
+    (void)_state.set_parent((bus != nullptr) ? *bus : sys_state);
+  }
+
   // 运行中重新 init()：先拿到刷新锁，内部任务正在做的那一帧做完、之后的帧等 init() 结束（F8）
   const bool scheduler = xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED;
   if (_run_lock == nullptr)
@@ -85,6 +93,7 @@ Status DeviceBmi088::init()
     _run_lock = xSemaphoreCreateMutex();
     if (_run_lock == nullptr)
     {
+      (void)_state.init_error(Status::FULL);
       return Status::IO_ERROR;
     }
   }
@@ -96,6 +105,14 @@ Status DeviceBmi088::init()
   if (scheduler)
   {
     (void)xSemaphoreGive(_run_lock);
+  }
+  if (st == Status::OK)
+  {
+    (void)_state.complete_init();
+  }
+  else
+  {
+    (void)_state.init_error(st); // 运行中重新 init() 失败时降级成 error()，不清运行位
   }
   return st;
 }
@@ -280,6 +297,10 @@ Status DeviceBmi088::refresh(uint32_t timeout_ms, uint32_t gyro_steps)
   else
   {
     _update_fail_cnt = _update_fail_cnt + 1U;
+    if (_init)
+    {
+      (void)_state.error(st); // 读帧失败记在本节点（向上传到 SPI 总线节点与 sys_state，不动运行位）
+    }
   }
   _last_status = st;
   return st;

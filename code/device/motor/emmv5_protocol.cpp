@@ -116,7 +116,7 @@ bool InPositionScanner::feed(uint8_t addr, const uint8_t *data, size_t size)
         && window[0] == addr
         && window[1] == IN_POSITION_MARK1
         && window[2] == IN_POSITION_MARK2
-        && window[3] == IN_POSITION_MARK3)
+        && reply_checksum_ok(window, sizeof(window), checksum)) // 0x6B 模式下即 window[3] == IN_POSITION_MARK3
     {
       length = 0;
       hit    = true;
@@ -160,7 +160,7 @@ bool PositionScanner::feed(uint8_t addr, const uint8_t *data, size_t size, int32
 
     window[length++] = data[i];
 
-    if (length == sizeof(window) && window[0] == addr && window[1] == 0x36 && window[7] == CHECKSUM)
+    if (length == sizeof(window) && window[0] == addr && window[1] == 0x36 && reply_checksum_ok(window, sizeof(window), checksum))
     {
       const uint32_t magnitude = (static_cast<uint32_t>(window[3]) << 24) | (static_cast<uint32_t>(window[4]) << 16)
                                  | (static_cast<uint32_t>(window[5]) << 8) | static_cast<uint32_t>(window[6]);
@@ -207,7 +207,7 @@ bool StatusScanner::feed(uint8_t addr, const uint8_t *data, size_t size, uint8_t
 
     window[length++] = data[i];
 
-    if (length == sizeof(window) && window[0] == addr && window[1] == 0x3A && window[3] == CHECKSUM)
+    if (length == sizeof(window) && window[0] == addr && window[1] == 0x3A && reply_checksum_ok(window, sizeof(window), checksum))
     {
       status = window[2];
       length = 0;
@@ -233,9 +233,9 @@ bool StatusScanner::feed(uint8_t addr, const uint8_t *data, size_t size, uint8_t
  *
  * @note 总帧布局：地址(1) + 0xAA(1) + 总长度(2, 大端) + 子命令(N) + 0x6B(1)
  *       总长度包含头尾 5 字节；子命令里的地址仍是各电机自己的地址。
- *       说明书要求总帧一次发完；发送流缓冲区 128 字节下子命令最多 123 字节。
+ *       说明书要求总帧一次发完；子命令最多 = 串口发送缓冲 − 5 字节（设备层按 BspUartT::TX_CAPACITY 算）。
  */
-size_t build_multi_frame(uint8_t target, const uint8_t *payload, size_t payload_size, uint8_t *out, size_t out_capacity)
+size_t build_multi_frame(uint8_t target, const uint8_t *payload, size_t payload_size, uint8_t *out, size_t out_capacity, Checksum checksum)
 {
   if (payload == nullptr || payload_size == 0 || out == nullptr)
   {
@@ -257,7 +257,7 @@ size_t build_multi_frame(uint8_t target, const uint8_t *payload, size_t payload_
 
   // payload 可能就在 out+4（调用方把子命令直接攒在总帧缓冲里），必须用 memmove
   memmove(out + 4U, payload, payload_size);
-  out[4U + payload_size] = CHECKSUM;
+  out[4U + payload_size] = checksum_of(out, 4U + payload_size, checksum);
 
   return total;
 }

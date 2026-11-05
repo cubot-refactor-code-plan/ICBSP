@@ -85,7 +85,7 @@
 
 #include "bsp/bsp_spi.hpp"        // 两个片选设备
 #include "service/definition/imu_definition.hpp" // IMU 通用数据
-#include "service/system/status.hpp"         // 统一状态码
+#include "service/system/status.hpp"         // 统一状态码、EventState
 
 class VQF; // algorithm/vqf.hpp：姿态解算，只在 .cpp 里用
 
@@ -273,6 +273,15 @@ public:
   }
 
   /** @brief 最近一次 update() 的返回值 */
+  /**
+   * @brief 本 IMU 在 EventState 默认树里的节点（第三层，挂在所用 SPI 的总线节点下）
+   * @return `is_running()` = init() 成功；`get_error_bits()` 记着出过的读帧错误（粘滞）
+   */
+  const EventState &get_state() const
+  {
+    return _state;
+  }
+
   Status get_last_status() const
   {
     return _last_status;
@@ -379,6 +388,7 @@ private:
 
   volatile uint32_t _update_cnt        = 0U;         ///< update() 成功次数
   volatile uint32_t _update_fail_cnt   = 0U;         ///< update() 失败次数
+  EventState        _state;                         ///< 默认树节点（Q6）
   volatile Status   _last_status       = Status::OK; ///< 最近一次 update() 的结果
   volatile uint32_t _attitude_skip_cnt = 0U;         ///< 姿态漏帧数
   volatile bool     _attitude_ready    = false;      ///< 自 init() 起是否解算过姿态

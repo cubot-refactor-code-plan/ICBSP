@@ -22,7 +22,43 @@ namespace emmv5
 {
 /* ==================== 协议常量 ==================== */
 
-constexpr uint8_t  CHECKSUM = 0x6B; ///< 每条命令固定校验字节
+constexpr uint8_t  CHECKSUM = 0x6B; ///< 默认的固定校验字节
+
+/**
+ * @brief 校验方式（驱动器菜单 Checksum，必须和驱动器上的设置一致；N33）
+ *
+ * @note 说明书（Emm_V5.0 Rev1.3 6.2.1）：0x6B = 最后一个字节固定为 0x6B（默认）；XOR = 最后一个字节是前面全部字节异或
+ *       （含地址字节，说明书例：01 06 45 → 42）。说明书没写回复帧在 XOR 模式下用哪种校验，所以 XOR 模式下解析回复时
+ *       0x6B 与 XOR 都接受。**XOR 模式未实测。**
+ * @note CRC-8 没有实现：说明书没给多项式 / 初值 / 示例帧，不靠猜参数实现。
+ */
+enum class Checksum : uint8_t
+{
+  FIXED_6B = 0, ///< 固定 0x6B（驱动器出厂默认）
+  XOR      = 1, ///< 前面全部字节异或
+};
+
+/** @brief 按校验方式算出 data[0..n) 后面应跟的校验字节 */
+inline uint8_t checksum_of(const uint8_t *data, size_t n, Checksum mode)
+{
+  if (mode != Checksum::XOR)
+  {
+    return CHECKSUM;
+  }
+  uint8_t x = 0U;
+  for (size_t i = 0U; i < n; ++i)
+  {
+    x = static_cast<uint8_t>(x ^ data[i]);
+  }
+  return x;
+}
+
+/** @brief 回复帧的校验字节是否可接受（frame 共 size 字节，最后一个是校验）；XOR 模式下 0x6B 也接受，见 Checksum */
+inline bool reply_checksum_ok(const uint8_t *frame, size_t size, Checksum mode)
+{
+  const uint8_t last = frame[size - 1U];
+  return (last == CHECKSUM) || (mode == Checksum::XOR && last == checksum_of(frame, size - 1U, Checksum::XOR));
+}
 constexpr uint8_t  BROADCAST = 0x00; ///< 广播地址
 constexpr size_t   FRAME_MAX_SIZE = 32U; ///< 单条命令的最大字节数（最长约 20 字节）
 
@@ -143,6 +179,15 @@ struct Frame
     sealed = true;
   }
 
+  ///< 按校验方式改写已封口帧的最后一个字节（命令构造函数一律先按 0x6B 封口，设备层发送前再换）
+  void apply_checksum(Checksum mode)
+  {
+    if (is_valid())
+    {
+      data[size - 1U] = checksum_of(data, size - 1U, mode);
+    }
+  }
+
   ///< 是否是可直接发送的完整帧
   bool is_valid() const
   {
@@ -164,6 +209,7 @@ struct InPositionScanner
 {
   uint8_t window[4] = {}; ///< 滑动窗口
   uint8_t length    = 0;  ///< 窗口当前有效字节数
+  Checksum checksum = Checksum::FIXED_6B; ///< 回复帧校验方式（设备 init() 时按 Config 设置）
 
   ///< 清空窗口
   void reset();
@@ -194,6 +240,7 @@ struct PositionScanner
 {
   uint8_t window[8] = {}; ///< 滑动窗口
   uint8_t length    = 0;  ///< 窗口当前有效字节数
+  Checksum checksum = Checksum::FIXED_6B; ///< 回复帧校验方式（设备 init() 时按 Config 设置）
 
   ///< 清空窗口
   void reset();
@@ -221,6 +268,7 @@ struct StatusScanner
 {
   uint8_t window[4] = {}; ///< 滑动窗口
   uint8_t length    = 0;  ///< 窗口当前有效字节数
+  Checksum checksum = Checksum::FIXED_6B; ///< 回复帧校验方式（设备 init() 时按 Config 设置）
 
   ///< 清空窗口
   void reset();
@@ -255,7 +303,8 @@ constexpr size_t  MULTI_OVERHEAD    = MULTI_PREFIX_SIZE + 1U; ///< 再加校验�
  *
  * @note 长度字段是**总帧**字节数（含头尾），大端。
  */
-size_t build_multi_frame(uint8_t target, const uint8_t *payload, size_t payload_size, uint8_t *out, size_t out_capacity);
+size_t build_multi_frame(uint8_t target, const uint8_t *payload, size_t payload_size, uint8_t *out, size_t out_capacity,
+                         Checksum checksum = Checksum::FIXED_6B); ///< checksum：总帧末尾的校验方式（子命令的校验字节由调用方入队前写好）
 
 
 /* ==================== */

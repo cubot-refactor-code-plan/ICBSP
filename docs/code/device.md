@@ -119,6 +119,23 @@ Status stop(uint8_t addr);
 `lock_bus()` / `unlock_bus()` 用于多条指令的原子性（多任务共用一条 485 时必须包起来）。
 每一帧的字节由 `device/motor/emmv5_protocol.hpp` 负责，设备层只管「发给谁、发什么参数、等不等回复」。
 
+- 回复的读取：`take_position()` / `take_status()` / `take_in_position()` **读完就清**（`take_`，N33）；`is_in_position(i)` / `is_online(addr)` 只查不清。
+- 校验方式：`Config::checksum` 必须和驱动器菜单 Checksum 一致，支持 `emmv5::Checksum::FIXED_6B`（默认）和 `XOR`（**未实测**；回复帧两种都接受，因为说明书没写回复用哪种）。CRC-8 没有实现（说明书没给参数）。
+- 帧缓冲跟随串口实例的 `TX_SIZE`（`BspUartT::TX_CAPACITY`），MMCL 子命令最多 `TX_SIZE − 5` 字节。
+
+### 默认树里的设备节点（Q6）
+
+挂在总线上的设备各有一个 EventState 节点，在自己的 `init()` 里挂到所用总线的节点下（`get_state()` 读取）：
+
+| 设备 | 挂在 | 记什么 |
+| --- | --- | --- |
+| `DjiMotor` | CAN 总线节点 | 初始化失败；掉线（Online 由在线变离线）→ `TIMEOUT` |
+| `DeviceEmmv5GroupT` | 串口总线节点 | 初始化失败；任一台电机掉线 → `TIMEOUT` |
+| `DeviceR9dsT` | 串口总线节点 | 初始化失败；`update()` 发现由在线变离线 → `TIMEOUT` |
+| `DeviceBmi088` | SPI 总线节点 | 初始化失败；读帧失败 → 读帧返回的错误码 |
+
+`DeviceMotor`、`DeviceServo`、`DeviceBuzzer` 不在总线上（PWM / 编码器），没有节点。
+
 ### DeviceBmi088
 
 ```cpp

@@ -29,7 +29,9 @@
 #include "bsp/bsp_uart.hpp"
 #include "device/motor/emmv5_protocol.hpp"
 #include "service/monitor/online_check.hpp"
+#include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
 #include "service/system/status.hpp"
+#include "service/system/system.hpp"     // sys_state
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "semphr.h"   // IWYU pragma: keep（总线互斥锁）
@@ -52,12 +54,14 @@ class DeviceEmmv5GroupT
 private:
   /* ==================== 内部常量 ==================== */
 
-  static constexpr size_t   UART_BUFFER_SIZE  = 128U; ///< 与 board_cfg.cpp 的 DMA 串口发送缓冲区一致
+  static constexpr size_t   UART_BUFFER_SIZE  = Uart::TX_CAPACITY; ///< 跟随串口实例的发送缓冲（BspUartT 的 TX_SIZE；原来写死 128）
   static constexpr size_t   MAX_MOTORS        = 8U;   ///< 组内最大电机数
   static constexpr uint16_t ONLINE_TIMEOUT_MS = 100U; ///< 超过 100 ms 无有效应答判离线
 
   ///< 单帧入队等待上限：921600 下 13 B ≈ 0.14 ms，20 ms 足够；缓冲卡死时返回 TIMEOUT，不无限挂住调用任务
   static constexpr uint32_t TX_TIMEOUT_MS = 20U;
+
+  static_assert(UART_BUFFER_SIZE > emmv5::MULTI_OVERHEAD + 13U, "DeviceEmmv5GroupT：串口发送缓冲太小，放不下一条 MMCL 总帧");
 
   ///< MMCL 子命令总字节上限：整帧不能超过串口发送缓冲
   static constexpr size_t MULTI_PAYLOAD_MAX = UART_BUFFER_SIZE - emmv5::MULTI_OVERHEAD;
@@ -76,8 +80,9 @@ public:
    */
   struct Config
   {
-    Uart    &uart;                  ///< bsp_uart 实例引用
-    uint8_t  addr[MAX_MOTORS] = {}; ///< 地址表（1~255，0 = 结尾）
+    Uart            &uart;                                  ///< bsp_uart 实例引用
+    uint8_t          addr[MAX_MOTORS] = {};                 ///< 地址表（1~255，0 = 结尾）
+    emmv5::Checksum  checksum         = emmv5::Checksum::FIXED_6B; ///< 校验方式，必须和驱动器菜单 Checksum 一致（XOR 未实测，见 emmv5_protocol.hpp）
   };
 
   /* ==================== */
@@ -154,7 +159,7 @@ public:
   Status set_position(uint8_t addr, emmv5::Direction dir, uint16_t rpm, uint8_t accel, int32_t pulses, emmv5::PositionMode mode);
 
   ///< 取最近一次 MMCL 总帧的字节（调试用；未发送过时长度 0）
-  const uint8_t *last_multi_frame(size_t &len) const;
+  const uint8_t *get_last_multi_frame(size_t &len) const;
 
   ///< 设置快速位置模式的运动参数
   Status set_quick_position_params(uint8_t addr, uint16_t rpm, uint8_t accel, emmv5::PositionMode mode);
@@ -231,14 +236,14 @@ public:
    * @brief 取走累计的到位位图并清零
    * @return bit i = 下标 i 的电机自上次取走后至少到位过一次
    */
-  uint32_t get_in_position();
+  uint32_t take_in_position();
 
   /**
    * @brief 查询某个电机是否累计到位（不清零）
    * @param index 下标（0 ~ count()-1，顺序与 Config 里的地址表一致）
-   * @return true=自上次 get_in_position() 后至少到位过一次
+   * @return true=自上次 take_in_position() 后至少到位过一次
    */
-  bool in_position(size_t index) const;
+  bool is_in_position(size_t index) const;
 
   /**
    * @brief 取走某台电机最近一次 0x36 位置
@@ -248,7 +253,7 @@ public:
    *
    * @note 读后清有效标志；数值与标志在短临界区内一起拷贝，允许在其他任务调用。
    */
-  bool get_position(uint8_t addr, int32_t &out);
+  bool take_position(uint8_t addr, int32_t &out);
 
   /**
    * @brief 取走某台电机最近一次 0x3A 状态字节
@@ -256,7 +261,7 @@ public:
    * @param out  状态字节（位定义见说明书 6.3.4）
    * @return true=有新数据；false=没有新数据或地址不在组内
    */
-  bool get_status(uint8_t addr, uint8_t &out);
+  bool take_status(uint8_t addr, uint8_t &out);
 
   /**
    * @brief 某台电机最近 100 ms 内是否收到过有效应答
@@ -266,6 +271,12 @@ public:
    * @note 计时由 sys_task 里的 Online::update() 推进；查询周期应小于 100 ms。
    */
   bool is_online(uint8_t addr) const;
+
+  /**
+   * @brief 本组在 EventState 默认树里的节点（第三层，挂在所用串口的总线节点下）
+   * @return `is_running()` = init() 成功；`get_error_bits()` 里的 TIMEOUT = 有电机掉过线（粘滞）
+   */
+  const EventState &get_state() const { return _state; }
 
   /**
    * @brief 把串口里攒的字节读完并分发给组内电机
@@ -355,6 +366,9 @@ private:
 
   SemaphoreHandle_t _bus_lock = nullptr; ///< 半双工总线递归锁；init() 创建
 
+  emmv5::Checksum _checksum = emmv5::Checksum::FIXED_6B; ///< 校验方式（Config::checksum）
+  EventState      _state;                                 ///< 本组在默认树里的节点（挂在所用串口的总线节点下，Q6）
+
   /* ==================== */
 };
 
@@ -369,7 +383,7 @@ private:
 
 /** @brief 只保存串口引用与地址表，地址个数由地址表的 0 结尾推导 */
 template <typename Uart>
-DeviceEmmv5GroupT<Uart>::DeviceEmmv5GroupT(const Config &cfg) : _uart(cfg.uart)
+DeviceEmmv5GroupT<Uart>::DeviceEmmv5GroupT(const Config &cfg) : _uart(cfg.uart), _checksum(cfg.checksum)
 {
   // 只把地址表拷进来；重复 / 为 0 的地址交给 init() 拒绝，
   // 总线锁也放到 init() 里建（构造函数里不碰 FreeRTOS API）。
@@ -390,8 +404,16 @@ DeviceEmmv5GroupT<Uart>::DeviceEmmv5GroupT(const Config &cfg) : _uart(cfg.uart)
 template <typename Uart>
 Status DeviceEmmv5GroupT<Uart>::init()
 {
+  // 默认树第三层（Q6）：节点挂在所用串口的总线节点下（串口不在清单里时挂 sys_state）；重复调用无害
+  if (_state.init() == Status::OK)
+  {
+    EventState *bus = bus_state(&_uart);
+    (void)_state.set_parent((bus != nullptr) ? *bus : sys_state);
+  }
+
   if (_count == 0)
   {
+    (void)_state.init_error(Status::BAD_ARG);
     return Status::BAD_ARG;
   }
 
@@ -400,6 +422,7 @@ Status DeviceEmmv5GroupT<Uart>::init()
   {
     if (_motor[i].addr == 0)
     {
+      (void)_state.init_error(Status::BAD_ARG);
       return Status::BAD_ARG;
     }
 
@@ -407,6 +430,7 @@ Status DeviceEmmv5GroupT<Uart>::init()
     {
       if (_motor[j].addr == _motor[i].addr)
       {
+        (void)_state.init_error(Status::BAD_ARG);
         return Status::BAD_ARG;
       }
     }
@@ -423,9 +447,19 @@ Status DeviceEmmv5GroupT<Uart>::init()
 
     if (_bus_lock == nullptr)
     {
+      (void)_state.init_error(Status::FULL);
       return Status::FULL; // 堆不够
     }
   }
+
+  for (size_t i = 0; i < _count; i++)
+  {
+    _motor[i].inpos_scanner.checksum    = _checksum;
+    _motor[i].position_scanner.checksum = _checksum;
+    _motor[i].status_scanner.checksum   = _checksum;
+    _motor[i].online.set_state(&_state); // 任意一台由在线变离线：本组节点记 TIMEOUT
+  }
+  (void)_state.complete_init();
 
   _ready = true;
 
@@ -483,7 +517,7 @@ Status DeviceEmmv5GroupT<Uart>::lock_bus(uint32_t timeout_ms)
   }
 
   // timeout_ms = 0 相当于 try-lock；递归锁让同一任务可以层层嵌套而不会自锁
-  if (xSemaphoreTakeRecursive(_bus_lock, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
+  if (xSemaphoreTakeRecursive(_bus_lock, uart_detail::ms_to_ticks(timeout_ms)) != pdTRUE) // portMAX_DELAY 原样保留（N33 / N9）
   {
     return Status::TIMEOUT;
   }
@@ -524,8 +558,10 @@ Status DeviceEmmv5GroupT<Uart>::_send_for(uint8_t addr, const emmv5::Frame &fram
     return ls;
   }
 
-  // 短帧入队：正常几 ms 内就排空，卡死时靠 TX_TIMEOUT_MS 退出
-  const Status status = _uart.send(frame.data, frame.size, pdMS_TO_TICKS(TX_TIMEOUT_MS), nullptr);
+  // 按配置的校验方式封口；短帧入队：正常几 ms 内就排空，卡死时靠 TX_TIMEOUT_MS 退出（send() 收的就是毫秒，N33）
+  emmv5::Frame out = frame;
+  out.apply_checksum(_checksum);
+  const Status status = _uart.send(out.data, out.size, TX_TIMEOUT_MS, nullptr);
 
   unlock_bus();
   return status;
@@ -559,7 +595,10 @@ Status DeviceEmmv5GroupT<Uart>::_queue_for(uint8_t addr, const emmv5::Frame &fra
     return ls;
   }
 
+  // 子命令各自带校验字节（按配置的方式）
   memcpy(_multi + emmv5::MULTI_PREFIX_SIZE + _multi_payload, frame.data, frame.size);
+  _multi[emmv5::MULTI_PREFIX_SIZE + _multi_payload + frame.size - 1U] =
+    emmv5::checksum_of(_multi + emmv5::MULTI_PREFIX_SIZE + _multi_payload, frame.size - 1U, _checksum);
   _multi_payload += frame.size;
 
   unlock_bus();
@@ -636,7 +675,8 @@ Status DeviceEmmv5GroupT<Uart>::stop_all()
     return Status::NOT_INIT;
   }
 
-  const emmv5::Frame frame = emmv5::stop(emmv5::BROADCAST);
+  emmv5::Frame frame = emmv5::stop(emmv5::BROADCAST);
+  frame.apply_checksum(_checksum);
   if (!frame.is_valid())
   {
     return Status::BAD_ARG;
@@ -648,7 +688,7 @@ Status DeviceEmmv5GroupT<Uart>::stop_all()
     return ls;
   }
 
-  const Status status = _uart.send(frame.data, frame.size, pdMS_TO_TICKS(TX_TIMEOUT_MS), nullptr);
+  const Status status = _uart.send(frame.data, frame.size, TX_TIMEOUT_MS, nullptr);
 
   unlock_bus();
   return status;
@@ -707,7 +747,7 @@ Status DeviceEmmv5GroupT<Uart>::request_status(uint8_t addr)
 
 /** @brief 取最近一次发出的 MMCL 字节（诊断用，长度写入 len） */
 template <typename Uart>
-const uint8_t *DeviceEmmv5GroupT<Uart>::last_multi_frame(size_t &len) const
+const uint8_t *DeviceEmmv5GroupT<Uart>::get_last_multi_frame(size_t &len) const
 {
   len = _last_frame_len;
   return _last_frame;
@@ -739,7 +779,7 @@ Status DeviceEmmv5GroupT<Uart>::multi_send(uint8_t target)
     return Status::OK;
   }
 
-  const size_t total = emmv5::build_multi_frame(target, _multi + emmv5::MULTI_PREFIX_SIZE, _multi_payload, _multi, sizeof(_multi));
+  const size_t total = emmv5::build_multi_frame(target, _multi + emmv5::MULTI_PREFIX_SIZE, _multi_payload, _multi, sizeof(_multi), _checksum);
   if (total == 0)
   {
     return Status::BAD_ARG; // 理论上不会发生：_queue_for 已经保证整帧放得下
@@ -752,7 +792,7 @@ Status DeviceEmmv5GroupT<Uart>::multi_send(uint8_t target)
     return ls;
   }
 
-  const Status status = _uart.send(_multi, total, pdMS_TO_TICKS(TX_TIMEOUT_MS), nullptr);
+  const Status status = _uart.send(_multi, total, TX_TIMEOUT_MS, nullptr);
 
   // 记下实际发出的字节，供控制台 dump 对账
   _last_frame_len = (total < sizeof(_last_frame)) ? total : sizeof(_last_frame);
@@ -909,7 +949,7 @@ uint32_t DeviceEmmv5GroupT<Uart>::feed_rx(const uint8_t *data, size_t size)
 
 /** @brief 取走一台最近一次的 0x36 位置（读后清标志） */
 template <typename Uart>
-bool DeviceEmmv5GroupT<Uart>::get_position(uint8_t addr, int32_t &out)
+bool DeviceEmmv5GroupT<Uart>::take_position(uint8_t addr, int32_t &out)
 {
   if (!_ready)
   {
@@ -938,7 +978,7 @@ bool DeviceEmmv5GroupT<Uart>::get_position(uint8_t addr, int32_t &out)
 
 /** @brief 取走一台最近一次的 0x3A 状态（读后清标志） */
 template <typename Uart>
-bool DeviceEmmv5GroupT<Uart>::get_status(uint8_t addr, uint8_t &out)
+bool DeviceEmmv5GroupT<Uart>::take_status(uint8_t addr, uint8_t &out)
 {
   if (!_ready)
   {
@@ -1032,9 +1072,9 @@ bool DeviceEmmv5GroupT<Uart>::_valid_direction(emmv5::Direction dir)
 
 /** @brief 只查该台的累计到位标志，不清零 */
 template <typename Uart>
-bool DeviceEmmv5GroupT<Uart>::in_position(size_t index) const
+bool DeviceEmmv5GroupT<Uart>::is_in_position(size_t index) const
 {
-  // 只查询不清零：给“看看这台到没到”用，不影响 get_in_position() 的位图
+  // 只查询不清零：给“看看这台到没到”用，不影响 take_in_position() 的位图
   if (!_ready || index >= _count)
   {
     return false;
@@ -1048,7 +1088,7 @@ bool DeviceEmmv5GroupT<Uart>::in_position(size_t index) const
 
 /** @brief 取走累计到位位图并清零 */
 template <typename Uart>
-uint32_t DeviceEmmv5GroupT<Uart>::get_in_position()
+uint32_t DeviceEmmv5GroupT<Uart>::take_in_position()
 {
   if (!_ready)
   {
