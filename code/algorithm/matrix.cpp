@@ -1,4 +1,4 @@
-#include "matrix.hpp"
+#include "algorithm/matrix.hpp"
 
 
 /* ==================== 常用向量 ==================== */

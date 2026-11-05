@@ -130,7 +130,8 @@
 ## 阶段 2：加入新功能
 
 - [ ] 改名 **ICBSP**（Q15）：仓库名、CMake 目标 `icbsp`、配置宏 / 开关加 `ICBSP_` 前缀、文档前缀、`LICENSE` 版权人 INVC & CUBOT
-- [ ] 目录重排（Q13）：`code/{bsp, service/{system,comm,monitor,definition}, device/{motor,sensor,remote,actuator}, algorithm, tasks}`，包含路径只加 `code/`（草案见对比评估 3.1）
+- [x] 目录重排（Q13）：`code/{bsp, service/{system,comm,monitor,definition}, device/{motor,sensor,remote,actuator}, algorithm, tasks}`，包含路径只加 `code/`（草案见对比评估 3.1）
+  - 2026-11-06（分支 `phase2`）：按草案 `git mv`，`protocol/emmv5_protocol` 并进 `device/motor/`；包含语句全部写成 `"bsp/bsp_uart.hpp"` 形式（库、模板、宿主 `app/`）。bsp 改为只包含 `service/system/status_code.hpp`（原来经 `status.hpp` 间接带进 FreeRTOS 事件组），它是唯一允许各层包含的公共头；新增 `tools/check_layers.py` 检查分层。文档只改了目录描述，按新目录重写留到阶段 4
 - [ ] `examples/dm_mc02/Flash/README.md` 的经验（OpenOCD 0.12、不注册 OCTOSPI2 bank）补进 `templates/Flash` 和文档；README 的示例仓库链接先空着，阶段 6 再补（Q18）
 - [ ] 配置检查（Q3）：库内 `config_check.hpp`（范围 `static_assert` + 缺宏 `#error`），模板同步
 - [ ] 功能开关（Q4）：放进 `hardware_config.h`，注释写清后果，依赖用 `static_assert`

@@ -17,7 +17,7 @@
 #ifndef __BSP_DMA_BUFFER_HPP__
 #define __BSP_DMA_BUFFER_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（ICBSP_DMA_BUFFER、DMA_HandleTypeDef、IS_BDMA_CHANNEL_INSTANCE）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（ICBSP_DMA_BUFFER、DMA_HandleTypeDef、IS_BDMA_CHANNEL_INSTANCE）
 
 #include <stdint.h>
 

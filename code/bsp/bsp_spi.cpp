@@ -1,10 +1,10 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
 
 #  include "board_instances.hpp"
-#  include "bsp_spi.hpp"
+#  include "bsp/bsp_spi.hpp"
 
 #  include <string.h>
 

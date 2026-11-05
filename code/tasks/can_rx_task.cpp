@@ -1,12 +1,12 @@
 #include "hardware_config.h"
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 FDCAN 或 CAN_RX_ENABLE=0 时，本文件不参与编译
 #if defined(HAL_FDCAN_MODULE_ENABLED) && CAN_RX_ENABLE
 
 #  include "board_instances.hpp"
-#  include "can_rx_node.hpp"
-#  include "system.hpp"
+#  include "service/comm/can_rx_node.hpp"
+#  include "service/system/system.hpp"
 
 template <typename CanT>
 static void can_rx_service(CanT &can)

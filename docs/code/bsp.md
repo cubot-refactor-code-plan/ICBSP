@@ -3,7 +3,7 @@
 [← 代码层索引](README.md) · [service](service.md) · [device](device.md)
 
 **职责**：一个外设「怎么初始化、怎么收发、出错怎么恢复」。
-**不负责**：帧格式（→ `protocol/`）、设备语义（→ `device/`）、重连与调度策略（→ `service/`、`tasks/`）。
+**不负责**：帧格式（→ `device/motor/emmv5_protocol`）、设备语义（→ `device/`）、重连与调度策略（→ `service/`、`tasks/`）。
 
 ---
 
@@ -174,7 +174,7 @@ inline BspPwm bsp_pwm_buzzer(
 bsp_dwt.get_delta_s(&last);   // 实例在库内，system_init() 已经 init() 过
 ```
 
-实例由库定义（`code/service/system.cpp`），`init()` 在 `system_init()` 里调用，宿主**不要**再定义或 `init()`。
+实例由库定义（`code/service/system/system.cpp`），`init()` 在 `system_init()` 里调用，宿主**不要**再定义或 `init()`。
 CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个实例就够。
 
 | 方法 | 说明 |

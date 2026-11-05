@@ -11,7 +11,7 @@
  *     | 宏                   | 谁展开它                                    | 用来做什么                       |
  *     | -------------------- | ------------------------------------------- | -------------------------------- |
  *     | `BSP_CAN_INSTANCES`  | `code/bsp/bsp_can.cpp`                      | FDCAN 的 HAL 回调按句柄找到实例   |
- *     |                      | `code/service/system.cpp`                   | 判断有没有发送节点、要不要建 can_tx |
+ *     |                      | `code/service/system/system.cpp`                   | 判断有没有发送节点、要不要建 can_tx |
  *     |                      | `code/tasks/can_rx_task.cpp`                | 每条总线轮询取帧并分发           |
  *     |                      | `code/tasks/can_tx_task.cpp`                | 每条总线下发聚合帧               |
  *     |                      | `code/tasks/sys_task.cpp`                   | 每条总线的 Bus-Off 恢复          |

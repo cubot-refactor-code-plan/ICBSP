@@ -23,13 +23,13 @@
 #ifndef __BSP_PWM_HPP__
 #define __BSP_PWM_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
 
-#include "status.hpp" // 统一状态码
-#include "bsp_series.hpp" // IWYU pragma: keep（TIM_HandleTypeDef / TIM_CHANNEL_x）
+#include "service/system/status_code.hpp" // 统一状态码
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（TIM_HandleTypeDef / TIM_CHANNEL_x）
 
 #include <stdint.h>
 

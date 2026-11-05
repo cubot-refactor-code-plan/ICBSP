@@ -1,19 +1,19 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
 
-#include "device_bmi088.hpp"
-#include "system.hpp"
+#include "device/sensor/device_bmi088.hpp"
+#include "service/system/system.hpp"
 
 #include <new>
 
-#include "bsp_dwt.hpp" // 调度器启动前的忙等
+#include "bsp/bsp_dwt.hpp" // 调度器启动前的忙等
 #include "hardware_config.h"
 
 static_assert(BMI088_TASK_PRIORITY > tskIDLE_PRIORITY && BMI088_TASK_PRIORITY < configMAX_PRIORITIES, "BMI088_TASK_PRIORITY 取 1 ~ configMAX_PRIORITIES - 1");
-#include "quaternion.hpp"
-#include "vqf.hpp"
+#include "algorithm/quaternion.hpp"
+#include "algorithm/vqf.hpp"
 
 
 /* ==================== 寄存器表（BMI088 数据手册 BST-BMI088-DS001） ==================== */

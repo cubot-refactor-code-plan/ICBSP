@@ -8,8 +8,8 @@
 
 #include <stdint.h>
 
-#include "pid.hpp"
-#include "quaternion.hpp"
+#include "algorithm/pid.hpp"
+#include "algorithm/quaternion.hpp"
 
 
 /**
