@@ -30,8 +30,8 @@
 #define HARDWARE_CONFIG_H
 
 #include "FreeRTOS.h"      // IWYU pragma: keep（configMAX_PRIORITIES）
-#include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
-#include "task.h"          // IWYU pragma: keep（configMAX_PRIORITIES）
+#include "bsp_series.hpp" // IWYU pragma: keep（HAL_*_MODULE_ENABLED）
+#include "task.h"         // IWYU pragma: keep（configMAX_PRIORITIES）
 
 /* ==================== ① 功能开关：关掉就不编译对应代码、也不创建对应任务 ==================== */
 
@@ -44,8 +44,8 @@
 /** @brief sys_task 里的串口补救巡检 */
 #define UART_PATROL_ENABLE 1
 
-/* HAL 没开对应模块时强制关闭，避免任务引用不存在的类型（例如换板时 CubeMX 里没开 FDCAN） */
-#ifndef HAL_FDCAN_MODULE_ENABLED
+/* 宿主没开 CAN（H7 的 FDCAN / F4 的 bxCAN）时强制关闭，避免任务引用不存在的类型 */
+#if !BSP_CAN_MODULE_ENABLED
 #  undef CAN_RX_ENABLE
 #  undef CAN_TX_ENABLE
 #  define CAN_RX_ENABLE 0
@@ -99,8 +99,10 @@
 /* ==================== */
 /* ==================== UART ==================== */
 
-/** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置 */
-#define UART_ENABLE_FIFO 1
+/** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置
+ *  @note 默认关：开了以后 tx_recover() 中止发送会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）。
+ *        要用就自己改成 1；F4 没有硬件 FIFO，本宏在 F4 上恒为 0（有 static_assert 拦）。 */
+#define UART_ENABLE_FIFO 0
 
 /* 注意：`BspUart::printf()` 的等待上限目前是**库内固定值**（取锁 10 ms / 入队 10 ms，
  * 见 code/bsp/bsp_uart.hpp 的 PRINTF_TIMEOUT_MS），没有做成可调宏；调试打印开关 UART_PRINT_ENABLE 也在
@@ -143,6 +145,7 @@ static_assert(CAN_CMD_EXPIRE_MS > CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指�
 static_assert(CAN_TX_GATHER_MS >= 1 && CAN_TX_GATHER_MS < CAN_TX_HEARTBEAT_MS, "hardware_config.h: CAN_TX_GATHER_MS 取 1 ~ 心跳周期 - 1");
 static_assert(CAN_BUSOFF_RETRY_MS >= 10, "hardware_config.h: CAN_BUSOFF_RETRY_MS 至少 10 ms（sys_task 每 10 ms 检查一次）");
 static_assert(UART_ENABLE_FIFO == 0 || UART_ENABLE_FIFO == 1, "hardware_config.h: UART_ENABLE_FIFO 取 0 或 1");
+static_assert(BSP_UART_HAS_FIFO != 0 || UART_ENABLE_FIFO == 0, "hardware_config.h: 本系列（F4）没有 UART 硬件 FIFO，UART_ENABLE_FIFO 必须为 0");
 static_assert(SPI_DMA_BUFFER_SIZE >= 16 && SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: SPI_DMA_BUFFER_SIZE 取 16~65535");
 static_assert(SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
 static_assert(BMI088_TASK_STACK >= 128, "hardware_config.h: BMI088_TASK_STACK 至少 128 字");

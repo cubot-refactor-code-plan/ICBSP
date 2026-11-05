@@ -37,7 +37,9 @@ void board_init(void)
   // ① 计时基准 `bsp_dwt` 已由 `system_init()` 内部 init()，这里不再重复初始化。
 
   // ② 总线与外设：失败会停在对应行号，fault_record 里能看到是哪一路。
+#if BSP_CAN_MODULE_ENABLED
   ICBSP_CHECK(bsp_can1.init() == Status::OK);
+#endif
   ICBSP_CHECK(bsp_uart1.init() == Status::OK);
   ICBSP_CHECK(bsp_pwm_buzzer.init() == Status::OK);
 
