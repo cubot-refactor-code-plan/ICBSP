@@ -2,8 +2,14 @@
  * @file dm_motor.hpp
  * @brief 达妙（DAMIAO）CAN 电机：MIT / 位置速度 / 速度模式，使能、失能、清错误、设零点，反馈解包（阶段 2.9）
  *
- * @details 协议来源：《DM-J4310-2EC V1.2 使用说明书 V1.2》与《DM-J4340P-2EC 减速电机使用说明书 V1.2》“CAN 通信”一章（库里 docs/sheet/），
- *          映射函数照 J4340P 说明书给出的 float_to_uint / uint_to_float（截断取整）。
+ * @details 协议来源：《DM-J4310-2EC V1.2》《DM-J4340P-2EC V1.2 / V1.1》《DM-J8009P-2EC V1.3 / V1.1》说明书的“CAN 通信”一章
+ *          （库里 docs/sheet/），映射函数照 J4340P 说明书给出的 float_to_uint / uint_to_float（截断取整）。
+ *
+ *   **型号**：三个系列的 CAN 协议逐项相同（帧 ID、帧格式、映射、命令、ERR 状态码），不同的只是数值，所以不做成按型号的模板
+ *   （DJI 用模板是因为不同型号的反馈 / 控制帧 ID、ID 范围本身就不同）。型号经 `Config::model` 给出，用来查
+ *   `dm_model_info()` 的减速比 / 额定与峰值扭矩 / 空载转速，并把 MIT 前馈扭矩限在峰值扭矩以内。
+ *   映射范围 P_MAX / V_MAX / T_MAX 是驱动器里**可改的寄存器**（实测 J4340P 是 12.5 / 10 / 28，不是说明书写的预设 12.5 / 30 / 10），
+ *   不能从型号推出来：要么在 Config 里填和调试助手一致的值，要么填 0、启动后调 `sync_ranges()` 从驱动器读。
  *
  *   | 帧 | 帧 ID | 数据 |
  *   | --- | --- | --- |
@@ -15,13 +21,14 @@
  *   | 反馈 | `master_id`（调试助手里的 Master ID） | `ID|ERR<<4`、POS 16 位、VEL 12 位、T 12 位、T_MOS、T_Rotor |
  *
  *   位置 / 速度 / 扭矩按 [−P_MAX, P_MAX]、[−V_MAX, V_MAX]、[−T_MAX, T_MAX] 线性映射成无符号定点数，
- *   Kp 范围 [0, 500]、Kd 范围 [0, 5]（说明书原文）。P_MAX / V_MAX / T_MAX 必须和调试助手里设定的一致。
+ *   Kp 范围 [0, 500]、Kd 范围 [0, 5]（说明书原文）。P_MAX / V_MAX / T_MAX 必须和驱动器里的一致，否则指令和反馈按比例缩放。
  *
  * @note 用法（实例写在 board_cfg.hpp，init() 写在 board_init()）：
  *
- *   inline DmMotor<decltype(bsp_can1)> yaw_motor(bsp_can1, {.can_id = 0x01, .master_id = 0x11, .mode = DmMode::MIT,
- *                                                         .p_max = 12.5f, .v_max = 30.0f, .t_max = 10.0f});
+ *   inline DmMotor<decltype(bsp_can2)> yaw_motor(bsp_can2, {.model = DmModel::J4340P, .can_id = 0x02, .master_id = 0x12,
+ *                                                         .mode = DmMode::MIT});      // 映射范围留 0：启动后从驱动器读
  *   ICBSP_CHECK(yaw_motor.init() == Status::OK);              // board_init() 里，system_start() 之前
+ *   yaw_motor.sync_ranges();                                   // 任务里、system_start() 之后：读 PMAX / VMAX / TMAX / 控制模式
  *   yaw_motor.enable();                                        // 上电后电机是失能态
  *   yaw_motor.set_mit(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);           // 控制任务里每个周期发一次
  *   DmMotorFeedback fb; yaw_motor.snapshot(fb);                 // 跨任务读反馈
@@ -92,6 +99,49 @@ enum class DmState : uint8_t
   COMM_LOST      = 0xDU, ///< 通讯丢失
   OVERLOAD       = 0xEU, ///< 过载
 };
+
+/**
+ * @brief 达妙电机型号（只决定 dm_model_info() 的数值，协议都一样）
+ * @note J4310P 仓库里没有说明书，暂按 J4310 V1.2 的数值；P 型号的参数以厂家资料为准。
+ */
+enum class DmModel : uint8_t
+{
+  UNKNOWN = 0, ///< 不限型号：不按峰值扭矩限幅，dm_model_info() 全 0
+  J4310,       ///< DM-J4310-2EC V1.2（也用于 J4310P，见上）
+  J4340P,      ///< DM-J4340P-2EC（说明书 V1.2）
+  J4340P_V11,  ///< DM-J4340P-2EC V1.1（说明书 V1.4，峰值扭矩更大）
+  J8009P,      ///< DM-J8009P-2EC 与 V1.1（两版参数相同，只差编码器位数）
+};
+
+/** @brief 型号的说明书参数（24 V 版本，48 V 版本另列空载转速） */
+struct DmModelInfo
+{
+  const char *name;           ///< 型号名
+  float       gear_ratio;     ///< 减速比（输出轴 : 电机轴 = 1 : gear_ratio）
+  float       rated_torque;   ///< 额定扭矩 (N·m)
+  float       peak_torque;    ///< 峰值扭矩 (N·m)，MIT 前馈扭矩按它限幅
+  float       no_load_rpm_24; ///< 24 V 空载最高转速 (rpm，输出轴)
+  float       no_load_rpm_48; ///< 48 V 空载最高转速 (rpm，输出轴)
+};
+
+/** @brief 查型号参数（数值抄自各型号说明书的“特征参数”表） */
+constexpr DmModelInfo dm_model_info(DmModel model)
+{
+  switch (model)
+  {
+    case DmModel::J4310:
+      return {"DM-J4310-2EC", 10.0f, 3.5f, 12.5f, 200.0f, 450.0f};
+    case DmModel::J4340P:
+      return {"DM-J4340P-2EC", 40.0f, 9.0f, 27.0f, 52.5f, 100.0f};
+    case DmModel::J4340P_V11:
+      return {"DM-J4340P-2EC V1.1", 40.0f, 12.0f, 40.0f, 56.0f, 112.0f};
+    case DmModel::J8009P:
+      return {"DM-J8009P-2EC", 9.0f, 20.0f, 40.0f, 168.0f, 335.0f};
+    case DmModel::UNKNOWN:
+    default:
+      return {"unknown", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  }
+}
 
 /** @brief 一帧反馈解出来的数据 */
 struct DmMotorFeedback
@@ -172,12 +222,13 @@ public:
   /** @brief 配置（聚合体，用指定初始化器写） */
   struct Config
   {
+    DmModel  model             = DmModel::UNKNOWN; ///< 型号（查 dm_model_info()；UNKNOWN = 不按峰值扭矩限幅）
     uint16_t can_id            = 0U;          ///< 电机 CAN ID（1~0xFF；控制帧 ID 由它和模式决定）
     uint16_t master_id         = 0U;          ///< 反馈帧 ID（调试助手里的 Master ID，每台不同，不能是 0x7FF）
-    DmMode   mode              = DmMode::MIT; ///< 驱动器当前的控制模式（决定控制帧 ID；要改用 switch_mode()）
-    float    p_max             = 0.0f;        ///< 位置映射范围 P_MAX（rad），**必填**，与调试助手一致
-    float    v_max             = 0.0f;        ///< 速度映射范围 V_MAX（rad/s），**必填**
-    float    t_max             = 0.0f;        ///< 扭矩映射范围 T_MAX（N·m），**必填**
+    DmMode   mode              = DmMode::MIT; ///< 驱动器当前的控制模式（决定控制帧 ID；sync_ranges() 会按驱动器的值改；要改驱动器用 switch_mode()）
+    float    p_max             = 0.0f;        ///< 位置映射范围 P_MAX（rad），与驱动器一致；0 = 启动后用 sync_ranges() 从驱动器读
+    float    v_max             = 0.0f;        ///< 速度映射范围 V_MAX（rad/s）；0 = 同上
+    float    t_max             = 0.0f;        ///< 扭矩映射范围 T_MAX（N·m）；0 = 同上
     uint16_t online_timeout_ms = 30U;         ///< 多久收不到反馈判离线 (ms)
   };
 
@@ -189,9 +240,13 @@ public:
     uint32_t reg_reply_cnt; ///< 收到的写寄存器回复数
     uint32_t send_busy_cnt; ///< send_latest() 因同 ID 上一帧还没发出而丢掉的控制帧数
     uint32_t fault_cnt;     ///< 反馈进入故障态（ERR 不是 0 / 1）的次数
+    uint32_t range_mismatch; ///< sync_ranges() 发现 Config 里填的映射范围 / 模式和驱动器不一致的次数（之后以驱动器为准）
   };
 
-  DmMotor(CanT &can, const Config &cfg) : _can(can), _cfg(cfg), _mode(cfg.mode), _online(cfg.online_timeout_ms) {}
+  DmMotor(CanT &can, const Config &cfg) :
+    _can(can), _cfg(cfg), _mode(cfg.mode), _p_max(cfg.p_max), _v_max(cfg.v_max), _t_max(cfg.t_max), _online(cfg.online_timeout_ms)
+  {
+  }
   /** @brief 注销反馈接收节点（运行态冻结后注销会失败：此时继续析构会留下悬空回调，直接 abort，同 DjiMotor） */
   ~DmMotor()
   {
@@ -274,7 +329,24 @@ public:
   /** @brief 初始化结果：OK = init() 成功，NOT_INIT = 还没 init，其余为失败原因 */
   Status get_status() const { return _statu; }
   /** @brief 诊断计数 */
-  Diag get_diag() const { return {_feedback_cnt, _reject_cnt, _reg_reply_cnt, _send_busy_cnt, _fault_cnt}; }
+  Diag get_diag() const { return {_feedback_cnt, _reject_cnt, _reg_reply_cnt, _send_busy_cnt, _fault_cnt, _range_mismatch}; }
+
+  /**
+   * @brief 从驱动器读 PMAX / VMAX / TMAX / CTRL_MODE，以驱动器的值为准更新本对象（只能在任务里、system_start() 之后调用）
+   * @return OK；其余同 read_register()（读失败时保持原来的值）
+   * @note Config 里填了非 0 的映射范围、或模式和驱动器不一致时，计入 Diag::range_mismatch，并在默认树节点上记 BAD_ARG。
+   * @note 不需要使能，不会让电机动作。CTRL_MODE 是力位混控（4）等本类不支持的模式时返回 NOT_SUPPORTED，映射范围照常更新。
+   */
+  Status sync_ranges(uint32_t timeout_ms = 20U);
+
+  /** @brief 映射范围是否已知（Config 填了，或 sync_ranges() 成功过）；未知时 set_*() 返回 NOT_INIT、反馈只有原始值 */
+  bool has_ranges() const { return _p_max > 0.0f && _v_max > 0.0f && _t_max > 0.0f; }
+  /** @brief 当前使用的映射范围 */
+  float get_p_max() const { return _p_max; }
+  float get_v_max() const { return _v_max; }
+  float get_t_max() const { return _t_max; }
+  /** @brief 型号参数（Config::model） */
+  DmModelInfo get_model_info() const { return dm_model_info(_cfg.model); }
 
   /** @brief 解一帧发到 master_id 的报文（接收节点回调；不属于本电机返回 BAD_ARG，帧进回退缓冲） */
   Status unpack(const CanRxMsg &rx);
@@ -319,6 +391,9 @@ private:
   CanT                  &_can;
   Config                 _cfg;
   DmMode                 _mode;
+  volatile float         _p_max;  ///< 当前映射范围（Config 或 sync_ranges()；任务写、can_rx_task 读，32 位读写原子）
+  volatile float         _v_max;
+  volatile float         _t_max;
   Status                 _statu   = Status::NOT_INIT;
   CanRxNodeT<CanT>      *_rx_node = nullptr;
   Online                 _online;
@@ -333,6 +408,7 @@ private:
   volatile uint32_t      _reg_reply_cnt = 0U;
   volatile uint32_t      _send_busy_cnt = 0U;
   volatile uint32_t      _fault_cnt     = 0U;
+  volatile uint32_t      _range_mismatch = 0U;
 };
 
 /* ==================== 成员函数定义（只有头文件） ==================== */
@@ -362,8 +438,9 @@ Status DmMotor<CanT>::init()
   EventState *bus = bus_state(&_can);
   (void)_state.set_parent((bus != nullptr) ? *bus : sys_state);
 
-  const bool range_ok = std::isfinite(_cfg.p_max) && std::isfinite(_cfg.v_max) && std::isfinite(_cfg.t_max) && _cfg.p_max > 0.0f &&
-                        _cfg.v_max > 0.0f && _cfg.t_max > 0.0f;
+  // 映射范围：0 = 启动后 sync_ranges() 再读；填了就必须是正的有限值
+  const bool range_ok = std::isfinite(_cfg.p_max) && std::isfinite(_cfg.v_max) && std::isfinite(_cfg.t_max) && _cfg.p_max >= 0.0f &&
+                        _cfg.v_max >= 0.0f && _cfg.t_max >= 0.0f;
   const bool mode_ok  = _cfg.mode == DmMode::MIT || _cfg.mode == DmMode::POS_VEL || _cfg.mode == DmMode::VEL;
   if (!range_ok || !mode_ok || _cfg.can_id == 0U || _cfg.can_id > 0xFFU || _cfg.master_id > 0x7FFU || _cfg.master_id == dm::PARAM_ID)
   {
@@ -401,11 +478,20 @@ Status DmMotor<CanT>::set_mit(float p, float v, float kp, float kd, float t)
   {
     return Status::BAD_ARG; // 不把 NaN 映射成某个极值发出去
   }
-  const uint16_t pu  = dm::float_to_uint(p, -_cfg.p_max, _cfg.p_max, 16U);
-  const uint16_t vu  = dm::float_to_uint(v, -_cfg.v_max, _cfg.v_max, 12U);
+  if (!has_ranges())
+  {
+    return Status::NOT_INIT; // 映射范围未知：调 sync_ranges() 或在 Config 里填
+  }
+  const float peak = dm_model_info(_cfg.model).peak_torque;
+  if (peak > 0.0f)
+  {
+    t = (t > peak) ? peak : ((t < -peak) ? -peak : t); // 型号的峰值扭矩以内（映射范围可能被设得比它大）
+  }
+  const uint16_t pu  = dm::float_to_uint(p, -_p_max, _p_max, 16U);
+  const uint16_t vu  = dm::float_to_uint(v, -_v_max, _v_max, 12U);
   const uint16_t kpu = dm::float_to_uint(kp, dm::KP_MIN, dm::KP_MAX, 12U);
   const uint16_t kdu = dm::float_to_uint(kd, dm::KD_MIN, dm::KD_MAX, 12U);
-  const uint16_t tu  = dm::float_to_uint(t, -_cfg.t_max, _cfg.t_max, 12U);
+  const uint16_t tu  = dm::float_to_uint(t, -_t_max, _t_max, 12U);
   const uint8_t  d[8] = {static_cast<uint8_t>(pu >> 8),
                          static_cast<uint8_t>(pu),
                          static_cast<uint8_t>(vu >> 4),
@@ -526,6 +612,55 @@ Status DmMotor<CanT>::read_register(uint8_t rid, uint32_t &raw, uint32_t timeout
 }
 
 template <typename CanT>
+Status DmMotor<CanT>::sync_ranges(uint32_t timeout_ms)
+{
+  uint32_t p = 0U, v = 0U, t = 0U, m = 0U;
+  Status   st = read_register(dm::RID_PMAX, p, timeout_ms);
+  if (st == Status::OK)
+  {
+    st = read_register(dm::RID_VMAX, v, timeout_ms);
+  }
+  if (st == Status::OK)
+  {
+    st = read_register(dm::RID_TMAX, t, timeout_ms);
+  }
+  if (st == Status::OK)
+  {
+    st = read_register(dm::RID_CTRL_MODE, m, timeout_ms);
+  }
+  if (st != Status::OK)
+  {
+    return st;
+  }
+  const float pf = dm::reg_as_float(p);
+  const float vf = dm::reg_as_float(v);
+  const float tf = dm::reg_as_float(t);
+  if (!(pf > 0.0f) || !(vf > 0.0f) || !(tf > 0.0f) || !std::isfinite(pf) || !std::isfinite(vf) || !std::isfinite(tf))
+  {
+    return Status::IO_ERROR; // 读回来的不是合理的映射范围
+  }
+  // Config 填了值却和驱动器不一致：说明配置写错了（指令 / 反馈会被按比例缩放），记一笔
+  auto differs = [](float cfg, float drv) { return cfg > 0.0f && std::fabs(cfg - drv) > 1e-3f * drv; };
+  const bool mode_known = m == static_cast<uint32_t>(DmMode::MIT) || m == static_cast<uint32_t>(DmMode::POS_VEL) ||
+                          m == static_cast<uint32_t>(DmMode::VEL);
+  if (differs(_cfg.p_max, pf) || differs(_cfg.v_max, vf) || differs(_cfg.t_max, tf) ||
+      (mode_known && static_cast<uint32_t>(_cfg.mode) != m))
+  {
+    _range_mismatch = _range_mismatch + 1U;
+    (void)_state.error(Status::BAD_ARG);
+  }
+  _p_max = pf;
+  _v_max = vf;
+  _t_max = tf;
+  if (!mode_known)
+  {
+    return Status::NOT_SUPPORTED; // 例如力位混控：本类不发这种控制帧
+  }
+  _mode = static_cast<DmMode>(m);
+  return Status::OK;
+}
+
+template <typename CanT>
 Status DmMotor<CanT>::unpack(const CanRxMsg &rx)
 {
   if (rx.header.IdType != FDCAN_STANDARD_ID || rx.header.RxFrameType != FDCAN_DATA_FRAME || rx.header.DataLength != FDCAN_DLC_BYTES_8)
@@ -568,9 +703,12 @@ Status DmMotor<CanT>::unpack(const CanRxMsg &rx)
   fb.raw_pos  = static_cast<uint16_t>((d[1] << 8) | d[2]);
   fb.raw_vel  = static_cast<uint16_t>((d[3] << 4) | (d[4] >> 4));
   fb.raw_tor  = static_cast<uint16_t>(((d[4] & 0x0FU) << 8) | d[5]);
-  fb.position = dm::uint_to_float(fb.raw_pos, -_cfg.p_max, _cfg.p_max, 16U);
-  fb.velocity = dm::uint_to_float(fb.raw_vel, -_cfg.v_max, _cfg.v_max, 12U);
-  fb.torque   = dm::uint_to_float(fb.raw_tor, -_cfg.t_max, _cfg.t_max, 12U);
+  if (has_ranges()) // 映射范围未知时只留原始值
+  {
+    fb.position = dm::uint_to_float(fb.raw_pos, -_p_max, _p_max, 16U);
+    fb.velocity = dm::uint_to_float(fb.raw_vel, -_v_max, _v_max, 12U);
+    fb.torque   = dm::uint_to_float(fb.raw_tor, -_t_max, _t_max, 12U);
+  }
   fb.t_mos    = d[6];
   fb.t_rotor  = d[7];
 
