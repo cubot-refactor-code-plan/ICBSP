@@ -282,6 +282,18 @@ public:
     return _state;
   }
 
+  /**
+   * @brief init() 失败的诊断：失败次数与最近一次失败处的源码行号（device_bmi088.cpp），定位是哪一步出错（阶段 3）
+   */
+  uint32_t get_init_fail_count() const
+  {
+    return _init_fail_cnt;
+  }
+  uint32_t get_init_fail_line() const
+  {
+    return _init_fail_line;
+  }
+
   Status get_last_status() const
   {
     return _last_status;
@@ -389,6 +401,16 @@ private:
   volatile uint32_t _update_cnt        = 0U;         ///< update() 成功次数
   volatile uint32_t _update_fail_cnt   = 0U;         ///< update() 失败次数
   EventState        _state;                         ///< 默认树节点（Q6）
+  volatile uint32_t _init_fail_cnt  = 0U; ///< init() 失败次数
+  volatile uint32_t _init_fail_line = 0U; ///< 最近一次失败处的源码行号
+
+  /** @brief 记下失败位置后原样返回状态码 */
+  Status init_fail(Status st, uint32_t line)
+  {
+    _init_fail_cnt  = _init_fail_cnt + 1U;
+    _init_fail_line = line;
+    return st;
+  }
   volatile Status   _last_status       = Status::OK; ///< 最近一次 update() 的结果
   volatile uint32_t _attitude_skip_cnt = 0U;         ///< 姿态漏帧数
   volatile bool     _attitude_ready    = false;      ///< 自 init() 起是否解算过姿态
