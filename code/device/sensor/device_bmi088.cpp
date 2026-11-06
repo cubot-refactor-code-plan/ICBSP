@@ -570,8 +570,10 @@ void DeviceBmi088::delay_ms(uint32_t ms)
   }
   else
   {
-    const TickType_t ticks = pdMS_TO_TICKS(ms);
-    vTaskDelay(ticks > 0U ? ticks : 1U);
+    // vTaskDelay(n) 只等到第 n 个 tick 边界，实际时长在 (n − 1, n] ms 之间：n = 1 时可能几乎不等。
+    // 芯片时序要的是“至少 ms 毫秒”（例如加速度计软复位后 1 ms 才能切回 SPI），所以多等一个 tick。
+    // 阶段 3 实测：原来的 vTaskDelay(1) 让 P04（连续 200 次 init）在两次完整回归里都有 48 次读错加速度计芯片 ID。
+    vTaskDelay(pdMS_TO_TICKS(ms) + 1U);
   }
 }
 
