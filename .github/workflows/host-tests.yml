@@ -1,0 +1,20 @@
+# 主机侧检查（阶段 3）：algorithm/ 单元测试 + 分层检查。固件本身要接宿主 CubeMX 工程才能编，不在这里编。
+name: host-tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 分层检查（下层不包含上层）
+        run: python3 tools/check_layers.py
+      - name: 构建主机单元测试
+        run: |
+          cmake -S tests/host -B build/host
+          cmake --build build/host
+      - name: 运行
+        run: ctest --test-dir build/host --output-on-failure
