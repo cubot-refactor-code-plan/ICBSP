@@ -46,17 +46,22 @@ inline DjiMotor<DjiMotorType::M3508, decltype(bsp_can1)> chassis_lf(bsp_can1, 1U
 
 ## 2b. 达妙电机（DmMotor）
 
-协议来自《DM-J4310-2EC V1.2 使用说明书》CAN 通信一章（`docs/sheet/`）。**只编译验证、未上板。**
+协议来自 J4310 / J4340P / J8009P 说明书的 CAN 通信一章（`docs/sheet/`），三个系列逐项相同，所以**不按型号做模板**：
+型号经 `Config::model`（`DmModel::J4310` / `J4340P` / `J4340P_V11` / `J8009P`）查 `dm_model_info()`（减速比、额定 / 峰值扭矩、空载转速），
+MIT 前馈扭矩按峰值扭矩限幅。映射范围是驱动器里可改的寄存器，不能从型号推出：实测 J4340P 是 12.5 / 10 / 28，不是说明书的预设 12.5 / 30 / 10。
+
+实板（2026-11-06）：J4340P（MIT）与 J4310P（速度模式）的读寄存器、`sync_ranges()`、状态反馈都通过；**还没有使能过**。
 
 ```cpp
-inline DmMotor<decltype(bsp_can1)> yaw_motor(bsp_can1, {.can_id = 0x01, .master_id = 0x11, .mode = DmMode::MIT,
-                                                      .p_max = 12.5f, .v_max = 30.0f, .t_max = 10.0f});
+inline DmMotor<decltype(bsp_can2)> yaw_motor(bsp_can2, {.model = DmModel::J4340P, .can_id = 0x02, .master_id = 0x12,
+                                                      .mode = DmMode::MIT});   // 映射范围留 0
 ICBSP_CHECK(yaw_motor.init() == Status::OK);   // board_init()
+yaw_motor.sync_ranges();                        // 任务里、system_start() 之后：从驱动器读 PMAX / VMAX / TMAX / 模式
 yaw_motor.enable();                             // 上电是失能态
 yaw_motor.set_mit(p, v, kp, kd, t);             // 控制任务每周期调用
 ```
 
-- `p_max` / `v_max` / `t_max` **必填**，必须和调试助手里的 PMAX / VMAX / TMAX 一致（不填 `init()` 返回 `BAD_ARG`）；Kp ∈ [0, 500]、Kd ∈ [0, 5]，超范围限幅，非有限值返回 `BAD_ARG` 不发。
+- `p_max` / `v_max` / `t_max`：填和驱动器一致的值，或留 0、启动后 `sync_ranges()` 从驱动器读（未知时 `set_*()` 返回 `NOT_INIT`）。填了但和驱动器不一致时 `sync_ranges()` 计入 `Diag::range_mismatch`、在默认树节点记 `BAD_ARG`，之后以驱动器为准；模式同理；Kp ∈ [0, 500]、Kd ∈ [0, 5]，超范围限幅，非有限值返回 `BAD_ARG` 不发。
 - 控制帧**不经过 `CanTxNodeT`**：发送槽位过期清零后，MIT 帧全 0 映射成 p = −P_MAX、t = −T_MAX（满负扭矩）。控制帧由 `send_latest()` 直接发，调用方按控制周期持续调用；停发后靠电机自己的通讯丢失保护失能。使能 / 失能 / 清错误 / 设零点用 `send()` 排队发，不会被同 ID 的控制帧挤掉。
 - 反馈是问询式的（电机收到发给自己的帧才回），不发控制帧时会判离线。每台电机的 `master_id` 要不同；反馈里的 ID 只有低 4 位，本类只认 `can_id & 0x0F` 对得上的帧。
 - `switch_mode()` 写 CTRL_MODE 寄存器（不存 flash）；写寄存器的回复也走 `master_id`，本类按挂起的那次写识别并吃掉，不当反馈解。
