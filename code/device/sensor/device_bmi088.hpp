@@ -353,7 +353,7 @@ public:
   /* ==================== */
 
 private:
-  /** @brief 等 ms 毫秒：调度器启动前 DWT 忙等（bsp_dwt 没起来时退回 HAL_Delay()），之后 vTaskDelay() */
+  /** @brief 至少等 ms 毫秒：调度器启动前 DWT 忙等（bsp_dwt 没起来时退回 HAL_Delay()），之后 vTaskDelay(ticks + 1)（vTaskDelay(n) 可能只等 n − 1 ms 多一点） */
   static void delay_ms(uint32_t ms);
 
   /**
