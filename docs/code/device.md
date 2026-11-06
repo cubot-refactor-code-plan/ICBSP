@@ -61,7 +61,7 @@ yaw_motor.set_mit(p, v, kp, kd, t);             // 控制任务每周期调用
 - 反馈是问询式的（电机收到发给自己的帧才回），不发控制帧时会判离线。每台电机的 `master_id` 要不同；反馈里的 ID 只有低 4 位，本类只认 `can_id & 0x0F` 对得上的帧。
 - `switch_mode()` 写 CTRL_MODE 寄存器（不存 flash）；写寄存器的回复也走 `master_id`，本类按挂起的那次写识别并吃掉，不当反馈解。
 - 只需要 `ICBSP_CAN_RX_ENABLE`（控制帧不走发送节点），关了接收路径时包含 `dm_motor.hpp` 会 `#error`。
-- 默认树：节点挂在 CAN 总线节点下，掉线记 `TIMEOUT`，反馈进入故障态（ERR ≥ 8：超压 / 欠压 / 过流 / 过温 / 通讯丢失 / 过载）记 `IO_ERROR`。
+- 默认树：节点挂在 CAN 总线节点下，掉线记 `TIMEOUT`，反馈进入故障态（ERR 不是 0 失能 / 1 使能：校准 / 传感器异常、超压 / 欠压 / 过流 / 过温 / 通讯丢失 / 过载）记 `IO_ERROR`；`read_register()` 读寄存器（不用使能，可用来核对 PMAX / VMAX / TMAX / 控制模式）。
 
 ## 3. 直流电机（DeviceMotor）
 

@@ -2,7 +2,8 @@
  * @file dm_motor.hpp
  * @brief 达妙（DAMIAO）CAN 电机：MIT / 位置速度 / 速度模式，使能、失能、清错误、设零点，反馈解包（阶段 2.9）
  *
- * @details 协议来源：《DM-J4310-2EC V1.2 使用说明书 V1.2》“CAN 通信”一章（库里 docs/sheet/）。
+ * @details 协议来源：《DM-J4310-2EC V1.2 使用说明书 V1.2》与《DM-J4340P-2EC 减速电机使用说明书 V1.2》“CAN 通信”一章（库里 docs/sheet/），
+ *          映射函数照 J4340P 说明书给出的 float_to_uint / uint_to_float（截断取整）。
  *
  *   | 帧 | 帧 ID | 数据 |
  *   | --- | --- | --- |
@@ -10,7 +11,7 @@
  *   | 位置速度控制 | `0x100 + can_id` | p_des、v_des 两个 float，低字节在前 |
  *   | 速度控制 | `0x200 + can_id` | v_des 一个 float（4 字节） |
  *   | 使能 / 失能 / 保存零点 / 清错误 | 当前模式的控制帧 ID | `FF ×7` + `FC` / `FD` / `FE` / `FB` |
- *   | 写寄存器（切模式） | `0x7FF` | `CANID_L CANID_H 0x55 RID` + 4 字节数据 |
+ *   | 读 / 写寄存器 | `0x7FF` | `CANID_L CANID_H 0x33 RID`（读）/ `CANID_L CANID_H 0x55 RID` + 4 字节数据（写），回复发到 master_id |
  *   | 反馈 | `master_id`（调试助手里的 Master ID） | `ID|ERR<<4`、POS 16 位、VEL 12 位、T 12 位、T_MOS、T_Rotor |
  *
  *   位置 / 速度 / 扭矩按 [−P_MAX, P_MAX]、[−V_MAX, V_MAX]、[−T_MAX, T_MAX] 线性映射成无符号定点数，
@@ -31,7 +32,7 @@
  * @note 反馈是问询式的：电机只在收到发给自己的帧时回一帧反馈，所以不发控制帧时 is_online() 会变成 false。
  * @note 每台电机的 master_id 要不同（反馈帧按 master_id 分发到接收节点）；反馈里的 ID 只有低 4 位
  *       （高 4 位是 ERR），所以同一 master_id 下靠 can_id 低 4 位区分，本类只认 `can_id & 0x0F` 对得上的帧。
- * @note 默认树（Q6）：本电机的节点挂在所用 CAN 的总线节点下；掉线记 TIMEOUT，反馈进入故障态（ERR ≥ 8）记 IO_ERROR。
+ * @note 默认树（Q6）：本电机的节点挂在所用 CAN 的总线节点下；掉线记 TIMEOUT，反馈进入故障态（ERR 不是 0 / 1）记 IO_ERROR。
  * @note **只编译验证，未上板**（本工程没有达妙电机）。
  */
 
@@ -75,6 +76,9 @@ enum class DmState : uint8_t
 {
   DISABLED       = 0x0U, ///< 失能
   ENABLED        = 0x1U, ///< 使能
+  SHAFT_CAL_ERR  = 0x3U, ///< 输出轴校准异常（J4340P 说明书）
+  SENSOR_ERR     = 0x4U, ///< 传感器输出异常（J4340P 说明书）
+  ENCODER_CAL_ERR = 0x5U, ///< 电机编码器校准异常（J4340P 说明书）
   OVER_VOLTAGE   = 0x8U, ///< 超压
   UNDER_VOLTAGE  = 0x9U, ///< 欠压
   OVER_CURRENT   = 0xAU, ///< 过电流
@@ -107,15 +111,29 @@ constexpr float KD_MIN = 0.0f;   ///< MIT Kd 下限
 constexpr float KD_MAX = 5.0f;   ///< MIT Kd 上限
 
 constexpr uint32_t PARAM_ID      = 0x7FFU; ///< 读写寄存器的帧 ID
+constexpr uint8_t  CMD_READ_REG  = 0x33U;  ///< 读寄存器
 constexpr uint8_t  CMD_WRITE_REG = 0x55U;  ///< 写寄存器
-constexpr uint8_t  RID_CTRL_MODE = 0x0AU;  ///< 控制模式寄存器
+constexpr uint8_t  RID_MST_ID    = 0x07U;  ///< 反馈 ID（uint32）
+constexpr uint8_t  RID_ESC_ID    = 0x08U;  ///< 接收 ID（uint32）
+constexpr uint8_t  RID_CTRL_MODE = 0x0AU;  ///< 控制模式（uint32）
+constexpr uint8_t  RID_PMAX      = 0x15U;  ///< 位置映射范围（float）
+constexpr uint8_t  RID_VMAX      = 0x16U;  ///< 速度映射范围（float）
+constexpr uint8_t  RID_TMAX      = 0x17U;  ///< 扭矩映射范围（float）
 
-/** @brief 浮点 → 定点：先限幅到 [x_min, x_max]，再线性映射到 [0, 2^bits − 1]（四舍五入） */
+/** @brief 寄存器原始值（低字节在前的 4 字节）当 float 解释 */
+inline float reg_as_float(uint32_t raw)
+{
+  float f = 0.0f;
+  memcpy(&f, &raw, sizeof(f));
+  return f;
+}
+
+/** @brief 浮点 → 定点：先限幅到 [x_min, x_max]，再按说明书的 float_to_uint 线性映射到 [0, 2^bits − 1]（截断取整，与驱动器一致） */
 inline uint16_t float_to_uint(float x, float x_min, float x_max, uint8_t bits)
 {
   const float top = static_cast<float>((1U << bits) - 1U);
   x               = (x < x_min) ? x_min : ((x > x_max) ? x_max : x);
-  return static_cast<uint16_t>((x - x_min) * top / (x_max - x_min) + 0.5f);
+  return static_cast<uint16_t>((x - x_min) * top / (x_max - x_min));
 }
 
 /** @brief 定点 → 浮点：float_to_uint() 的逆映射 */
@@ -162,10 +180,10 @@ public:
   struct Diag
   {
     uint32_t feedback_cnt;  ///< 有效反馈帧数
-    uint32_t reject_cnt;    ///< 发到 master_id 但不属于本电机（ID 低 4 位不符 / 长度不对）的帧数
+    uint32_t reject_cnt;    ///< 发到 master_id 但不当反馈解的帧数（ID 低 4 位不符 / 长度不对 / 不是本对象发起的寄存器回复）
     uint32_t reg_reply_cnt; ///< 收到的写寄存器回复数
     uint32_t send_busy_cnt; ///< send_latest() 因同 ID 上一帧还没发出而丢掉的控制帧数
-    uint32_t fault_cnt;     ///< 反馈进入故障态（ERR ≥ 8）的次数
+    uint32_t fault_cnt;     ///< 反馈进入故障态（ERR 不是 0 / 1）的次数
   };
 
   DmMotor(CanT &can, const Config &cfg) : _can(can), _cfg(cfg), _mode(cfg.mode), _online(cfg.online_timeout_ms) {}
@@ -217,6 +235,16 @@ public:
    * @note 说明书：切换时电机清零位置 / 速度 / 扭矩 / Kp / Kd 指令，建议零速时切换。发出去之后本类就按新模式选帧 ID。
    */
   Status switch_mode(DmMode mode);
+
+  /**
+   * @brief 读一个寄存器（阻塞等回复，只能在任务里、system_start() 之后调用：回复要靠 can_rx_task 分发）
+   * @param rid        寄存器地址（dm::RID_*，见说明书“寄存器列表及范围”）
+   * @param raw        回复里的 4 字节数据（低字节在前）；float 寄存器用 dm::reg_as_float() 转
+   * @param timeout_ms 最多等多久
+   * @return OK；TIMEOUT = 没收到回复（ID 不对、电机没上电、总线不通）；BUSY = 上一次寄存器操作还没完；其余同 send()
+   * @note 不需要使能，读寄存器不会让电机动作——用来确认通信、核对 PMAX / VMAX / TMAX / 控制模式。
+   */
+  Status read_register(uint8_t rid, uint32_t &raw, uint32_t timeout_ms = 20U);
 
   /** @brief 当前按哪个模式发控制帧 */
   DmMode get_mode() const { return _mode; }
@@ -291,8 +319,10 @@ private:
   Online                 _online;
   EventState             _state;
   DmMotorFeedback        _fb;
-  volatile bool          _reg_pending = false; ///< 发过写寄存器、回复还没到（回复也走 master_id，要和反馈区分开）
+  volatile bool          _reg_pending = false; ///< 发过读 / 写寄存器、回复还没到（回复也走 master_id，要和反馈区分开）
+  volatile uint8_t       _reg_cmd     = 0U;     ///< 挂起的是读（0x33）还是写（0x55）
   volatile uint8_t       _reg_rid     = 0U;
+  volatile uint32_t      _reg_value   = 0U;     ///< 最近一次寄存器回复的数据
   volatile uint32_t      _feedback_cnt  = 0U;
   volatile uint32_t      _reject_cnt    = 0U;
   volatile uint32_t      _reg_reply_cnt = 0U;
@@ -436,6 +466,11 @@ Status DmMotor<CanT>::switch_mode(DmMode mode)
   }
   uint8_t d[8] = {static_cast<uint8_t>(_cfg.can_id), static_cast<uint8_t>(_cfg.can_id >> 8), dm::CMD_WRITE_REG, dm::RID_CTRL_MODE,
                   static_cast<uint8_t>(mode), 0U, 0U, 0U}; // uint32，低字节在 D4
+  if (_reg_pending)
+  {
+    return Status::BUSY;
+  }
+  _reg_cmd     = dm::CMD_WRITE_REG;
   _reg_rid     = dm::RID_CTRL_MODE;
   _reg_pending = true;
   const Status st = _can.send(dm::PARAM_ID, d, 8U);
@@ -451,6 +486,41 @@ Status DmMotor<CanT>::switch_mode(DmMode mode)
 }
 
 template <typename CanT>
+Status DmMotor<CanT>::read_register(uint8_t rid, uint32_t &raw, uint32_t timeout_ms)
+{
+  if (_statu != Status::OK)
+  {
+    return Status::NOT_INIT;
+  }
+  if (_reg_pending)
+  {
+    return Status::BUSY;
+  }
+  const uint8_t d[4] = {static_cast<uint8_t>(_cfg.can_id), static_cast<uint8_t>(_cfg.can_id >> 8), dm::CMD_READ_REG, rid};
+  _reg_cmd     = dm::CMD_READ_REG;
+  _reg_rid     = rid;
+  _reg_pending = true;
+  const Status st = _can.send(dm::PARAM_ID, d, 4U);
+  if (st != Status::OK)
+  {
+    _reg_pending = false;
+    return st;
+  }
+  const TickType_t t0 = xTaskGetTickCount();
+  while (_reg_pending)
+  {
+    if ((xTaskGetTickCount() - t0) >= pdMS_TO_TICKS(timeout_ms))
+    {
+      _reg_pending = false;
+      return Status::TIMEOUT;
+    }
+    vTaskDelay(1U);
+  }
+  raw = _reg_value;
+  return Status::OK;
+}
+
+template <typename CanT>
 Status DmMotor<CanT>::unpack(const CanRxMsg &rx)
 {
   if (rx.header.IdType != FDCAN_STANDARD_ID || rx.header.RxFrameType != FDCAN_DATA_FRAME || rx.header.DataLength != FDCAN_DLC_BYTES_8)
@@ -460,13 +530,25 @@ Status DmMotor<CanT>::unpack(const CanRxMsg &rx)
   }
   const uint8_t *d = rx.data;
 
-  // 写寄存器的回复也发到 master_id：CANID_L CANID_H 0x55 RID …，按挂起的那次写对上了就吃掉，不当反馈解
+  // 读 / 写寄存器的回复也发到 master_id：CANID_L CANID_H 0x33/0x55 RID 数据，按挂起的那次操作对上了就吃掉，不当反馈解
   if (_reg_pending && d[0] == static_cast<uint8_t>(_cfg.can_id) && d[1] == static_cast<uint8_t>(_cfg.can_id >> 8) &&
-      d[2] == dm::CMD_WRITE_REG && d[3] == _reg_rid)
+      d[2] == _reg_cmd && d[3] == _reg_rid)
   {
+    _reg_value     = static_cast<uint32_t>(d[4]) | (static_cast<uint32_t>(d[5]) << 8) | (static_cast<uint32_t>(d[6]) << 16) |
+                 (static_cast<uint32_t>(d[7]) << 24);
     _reg_pending   = false;
     _reg_reply_cnt = _reg_reply_cnt + 1U;
     return Status::OK;
+  }
+
+  // 不是本对象发起的读 / 写 / 存储寄存器的回复（别的代码、上位机发的请求）：同样发到 master_id，不能当反馈解，
+  // 否则控制回路里会出现一帧假位置（2026-11-06 实板扫描时发现）。代价：位置恰好落在 −PMAX 附近的极小区间
+  // （POS[15:8] == CANID_H 且 POS[7:0] 是这三个值之一，约占量程的 3 / 65536）时丢一帧真反馈
+  if (d[0] == static_cast<uint8_t>(_cfg.can_id) && d[1] == static_cast<uint8_t>(_cfg.can_id >> 8) &&
+      (d[2] == dm::CMD_READ_REG || d[2] == dm::CMD_WRITE_REG || d[2] == 0xAAU))
+  {
+    _reject_cnt = _reject_cnt + 1U;
+    return Status::OK; // 吃掉，不进回退缓冲
   }
 
   if ((d[0] & 0x0FU) != (_cfg.can_id & 0x0FU))
@@ -487,9 +569,9 @@ Status DmMotor<CanT>::unpack(const CanRxMsg &rx)
   fb.t_mos    = d[6];
   fb.t_rotor  = d[7];
 
-  // 由正常态进入故障态（ERR ≥ 8）时计一次、在默认树节点上记 IO_ERROR
-  const bool was_fault = static_cast<uint8_t>(_fb.state) >= 0x8U;
-  const bool fault     = static_cast<uint8_t>(fb.state) >= 0x8U;
+  // 由正常态进入故障态（ERR 不是失能 / 使能）时计一次、在默认树节点上记 IO_ERROR
+  const bool was_fault = _fb.valid && _fb.state != DmState::DISABLED && _fb.state != DmState::ENABLED;
+  const bool fault     = fb.state != DmState::DISABLED && fb.state != DmState::ENABLED;
 
   taskENTER_CRITICAL();
   _fb = fb;
