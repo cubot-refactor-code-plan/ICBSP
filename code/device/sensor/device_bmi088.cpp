@@ -129,25 +129,25 @@ Status DeviceBmi088::init_locked()
   st = _acc.read_reg8(ACC_CHIP_ID, id);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   st = _acc.write_reg8(ACC_SOFTRESET, SOFTRESET_CMD);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   delay_ms(1U);
   st = _acc.read_reg8(ACC_CHIP_ID, id);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
 
   // 2) 陀螺仪软复位（复位后约 30 ms 可访问）
   st = _gyro.write_reg8(GYRO_SOFTRESET, SOFTRESET_CMD);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   delay_ms(30U);
 
@@ -155,60 +155,60 @@ Status DeviceBmi088::init_locked()
   st = _acc.read_reg8(ACC_CHIP_ID, id);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   if (id != ACC_CHIP_ID_VALUE)
   {
-    return Status::IO_ERROR;
+    return init_fail(Status::IO_ERROR, __LINE__);
   }
   st = _gyro.read_reg8(GYRO_CHIP_ID, id);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   if (id != GYRO_CHIP_ID_VALUE)
   {
-    return Status::IO_ERROR;
+    return init_fail(Status::IO_ERROR, __LINE__);
   }
 
   // 4) 加速度计上电：打开后等 50 ms 再切到工作模式
   st = write_verify(_acc, ACC_PWR_CTRL, 0x04U);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   delay_ms(50U);
   st = write_verify(_acc, ACC_PWR_CONF, 0x00U);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
 
   // 5) 量程与数据率
   st = write_verify(_acc, ACC_CONF, static_cast<uint8_t>(0xA0U | static_cast<uint8_t>(_cfg.acc_odr)));
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   st = write_verify(_acc, ACC_RANGE, static_cast<uint8_t>(_cfg.acc_range));
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   st = write_verify(_gyro, GYRO_RANGE, static_cast<uint8_t>(_cfg.gyro_range));
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   st = write_verify(_gyro, GYRO_BANDWIDTH, static_cast<uint8_t>(_cfg.gyro_odr), 0x7FU);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
   st = write_verify(_gyro, GYRO_LPM1, 0x00U);
   if (st != Status::OK)
   {
-    return st;
+    return init_fail(st, __LINE__);
   }
 
   // 6) 数据就绪中断：加速度计 INT1、陀螺仪 INT3，推挽、高有效
@@ -217,27 +217,27 @@ Status DeviceBmi088::init_locked()
     st = write_verify(_acc, ACC_INT1_IO_CTRL, 0x0AU); // bit3 输出使能、bit1 高有效、bit2 = 0 推挽
     if (st != Status::OK)
     {
-      return st;
+      return init_fail(st, __LINE__);
     }
     st = write_verify(_acc, ACC_INT_MAP_DATA, 0x04U);
     if (st != Status::OK)
     {
-      return st;
+      return init_fail(st, __LINE__);
     }
     st = write_verify(_gyro, GYRO_INT3_INT4_IO_CONF, 0x01U, 0x0FU); // 高 4 位保留
     if (st != Status::OK)
     {
-      return st;
+      return init_fail(st, __LINE__);
     }
     st = write_verify(_gyro, GYRO_INT3_INT4_IO_MAP, 0x01U);
     if (st != Status::OK)
     {
-      return st;
+      return init_fail(st, __LINE__);
     }
     st = write_verify(_gyro, GYRO_INT_CTRL, 0x80U);
     if (st != Status::OK)
     {
-      return st;
+      return init_fail(st, __LINE__);
     }
   }
 
@@ -253,7 +253,7 @@ Status DeviceBmi088::init_locked()
       _vqf = new (std::nothrow) VQF(1.0 / GYRO_ODR_HZ[static_cast<uint8_t>(_cfg.gyro_odr)]);
       if (_vqf == nullptr)
       {
-        return Status::IO_ERROR;
+        return init_fail(Status::IO_ERROR, __LINE__);
       }
     }
     else
@@ -270,7 +270,7 @@ Status DeviceBmi088::init_locked()
     TaskHandle_t worker = nullptr;
     if (xTaskCreate(task_entry, "imu", ICBSP_BMI088_TASK_STACK, this, ICBSP_BMI088_TASK_PRIORITY, &worker) != pdPASS)
     {
-      return Status::IO_ERROR;
+      return init_fail(Status::IO_ERROR, __LINE__);
     }
     _worker = worker;
   }
