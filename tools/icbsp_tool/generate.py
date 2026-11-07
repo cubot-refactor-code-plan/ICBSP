@@ -11,6 +11,8 @@
 init() 先外设、后设备（设备要用已 init 的外设）。
 """
 
+import re
+
 from . import selection as S
 
 KIND_ORDER = ("can", "uart", "spi", "pwm", "encoder")
@@ -206,6 +208,17 @@ class Generator:
             lines += [f"  {'if' if k == 0 else 'else if'} (GPIO_Pin == {pin}_Pin)", "  {", f"    {call}", "  }"]
         lines += ["  portYIELD_FROM_ISR(woken);", "}"]
         return "\n".join(lines)
+
+    def generated_names(self):
+        """生成区里定义的全部全局名字（外设实例、设备及其附属实例）"""
+        names = [c["instance"] for c, _ in self.periphs()]
+        for d in self.devices():
+            f = self.device_fmt(d)
+            for l in self.m["devices"][d["type"]]["extern"]:
+                m = re.search(r"(\w+)\s*;\s*$", l.format(**f))
+                if m:
+                    names.append(m.group(1))
+        return names
 
     def notes(self):
         """生成后要提醒用户的事（不进代码）"""
