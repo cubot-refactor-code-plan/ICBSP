@@ -141,6 +141,8 @@ def validate(ioc, manifest, sel):
             if k in spec:
                 bad += [("error", f"{ip}.{k}", m) for m in check_value(spec[k], v)]
         names.add(c["instance"])
+        if c["kind"] == "uart" and "baudrate" in p["params"] and int(p["params"]["baudrate"]) != c["facts"]["baudrate"]:
+            bad.append(("warn", f"{ip}.baudrate", f"{p['params']['baudrate']} 与 CubeMX 的 {c['facts']['baudrate']} 不一致：线路按 CubeMX 跑，库按这里估算卡死阈值——改 .ioc 或这里"))
     if sel.get("debug_uart") and not sel["peripherals"].get(sel["debug_uart"], {}).get("enabled"):
         bad.append(("error", "debug_uart", f"调试串口 {sel['debug_uart']} 没有选中"))
     devs = manifest["devices"]

@@ -111,7 +111,7 @@ class Checker:
             self.add("can_fifo", ip, not fix, f"RX FIFO0 = {c['rx_fifo0']}，TX = {c['tx_fifo_queue'] + c['tx_buffers']}", fix)
             self.add("can_nvic", ip, c["nvic_it0"], "", [(f"NVIC.{ip}_IT0_IRQn", _nvic_on(ioc, f"{ip}_IT0_IRQn"))])
             self.add("can_std_filters", ip, c["std_filters"] >= 1, f"当前 {c['std_filters']}", _ip_param(ioc, ip, "StdFiltersNbr", "1"))
-        # Message RAM：所有 FDCAN（不只是选中的）都占 RAM；按“修好之后”的元素数算
+        # Message RAM：所有 FDCAN（不只是选中的）都占 RAM；按“其他规则都修好之后”的元素数算
         allc = ioc.can_instances()
         if not allc:
             return
@@ -121,6 +121,8 @@ class Checker:
                 c = dict(c, rx_fifo0=16)
             if c["tx_fifo_queue"] + c["tx_buffers"] == 0:
                 c = dict(c, tx_fifo_queue=16)
+            if c["std_filters"] < 1:
+                c = dict(c, std_filters=1)  # 按 can_std_filters 也修好之后算；不修的话只是空出 1 字，不会重叠
             w = fdcan_words(c)
             spans.append((c["ip"], c["msgram_offset"], c["msgram_offset"] + w))
             if c["msgram_offset"] != offset:
