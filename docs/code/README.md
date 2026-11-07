@@ -74,7 +74,40 @@ MX_FREERTOS_Init()            freertos.c 的 USER CODE Init 段
 
 ---
 
-## 4. 建议的阅读顺序
+## 4. 实测状态
+
+“实测”= 在 DM-MC02（STM32H723）上按用例跑过，结果有记录；“只编译验证”= 没有硬件或没写用例，只保证 Debug / -O2 0 warning
+（头文件模板由回归宿主的 `compile_probe.cpp` 显式实例化）。以阶段 3（ICBSP `phase2` 分支，2026-11-06 ~ 07）为准，用例编号见
+[phase3_2026-11-06.md](../bsp_test/phase3_2026-11-06.md) 与宿主 `app/test/`。
+
+| 层 | 模块 | 状态 | 依据 |
+| --- | --- | --- | --- |
+| bsp | `BspCanT`（H7 FDCAN） | 实测 | C00~C12：收发、扩展帧 / DLC、Bus-Off、无 ACK、TX-empty 动态开关（N27）、错误状态回调、Queue / FIFO、5 分钟浸泡、`CAN_RX_ENABLE = 0`（N28） |
+| bsp | `BspCanT`（F4 bxCAN） | 只编译验证 | Rh-i 的 F4 移植；本回归工程（H7）不编译这一分支 |
+| bsp | `BspUartT`（DMA / IT） | 实测 | U01~U21、R01~R06：收发、边界、故障注入与恢复、循环 DMA 专项、F2 短段压力、RS485 硬件 DE、IT 模式、浸泡 |
+| bsp | `BspSpi` / `BspSpiDevice` | 实测 | S01~S05、P01~P06（经 BMI088） |
+| bsp | `BspPwm` | 实测 | Y11（ARR 预装载、`set_freq()` 边界）；蜂鸣器开机提示音 |
+| bsp | `BspDwt` | 实测 | Y08（两任务并发、跨一次 7.8 s 回绕）；没有专门跑满 10 圈 |
+| bsp | `icbsp_dma_reachable()` | 实测 | Y10（DTCM / AXI / SRAM4 × DMA1 / BDMA） |
+| bsp | `BspGpio`、`BspKey`、`BspEncoder` | 只编译验证 | 没有用例 |
+| service | `system`、EventState、默认状态树、`Online` | 实测 | Y01~Y04、E01~E14、O01~O11、T01~T04、Y13（N13） |
+| service | `fault_record` | 实测 | Y12、1.4 故意触发 BusFault |
+| service | `CanRxNodeT` / `CanTxNodeT` | 实测 | C03~C11 |
+| service | `config_check`、功能开关 | 编译验证 | 宿主 `tools/compile_matrix.sh` 13 种配置 |
+| service | `newlib_lock` | 只编译验证 | 没有并发浮点打印的用例 |
+| device | `DjiMotor` | 实测（M3508、GM6020） | M01 / M02（反馈）、M07 / M08（速度闭环；GM6020 电流模式）；M2006 没有实物 |
+| device | `DmMotor` | 实测（J4340P） | M03（读寄存器、`sync_ranges()`）、M05（使能）、M09（MIT 零力矩 / 阻尼 / 位置）；J4310 只做 M04 的读寄存器与反馈；J8009P 没有实物 |
+| device | `DeviceBmi088`（含 VQF 姿态） | 实测 | I01~I07、P01~P06 |
+| device | `DeviceBuzzer` | 上板使用 | 开机提示音，没有专门用例 |
+| device | `DeviceMotor`、`DeviceServo`、`DeviceR9dsT`、`DeviceEmmv5GroupT`（含 `emmv5_protocol`） | 只编译验证 | 没有硬件；Emm_V5 的 XOR 校验未实测 |
+| algorithm | `PID`、`Quaternion`、`MatrixF32`、`Rls` | 主机单元测试 | `tests/host/`（45 条判据）；PID 另在 M07 / M08 上板 |
+| algorithm | `QuaternionPID` | 只编译验证 | 没有用例 |
+| algorithm | `VQF` | 实测 | BMI088 自动刷新任务里运行（I06、P 组） |
+| tasks | sys / can_rx / can_tx | 实测 | 随上面各组用例运行 |
+
+---
+
+## 5. 建议的阅读顺序
 
 | 想知道 | 看哪里 |
 | --- | --- |

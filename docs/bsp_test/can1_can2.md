@@ -1,5 +1,7 @@
 # CAN1 ⇄ CAN2 测试记录
 
+> 对应代码：旧库 STM32_BSP `97e138b` + 当天的修复（提交为 `d32a996`）。API 名称是旧的；当前实现的 CAN 回归见 `phase3_2026-11-06.md`。
+
 - 硬件：DM-MC02 CAN1、CAN2 的 H–H、L–L 用短线对接，**没有 120 Ω 终端电阻**（用户确认）；USB 供电（CAN 收发器 5 V）。
 - 配置：经典 CAN，1 Mbps（FDCAN 内核 96 MHz，NBRP 6，TSEG1 11，TSEG2 4），RX FIFO0 16 帧，TX FIFO 16 帧，自动重发开。
 - 实例：`bsp_can1`、`bsp_can2`（`BspCan`），库默认配置（RX / 回退 / TX 队列各 8 帧，节点上限 50，心跳 5 ms，指令有效期 100 ms）。

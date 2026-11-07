@@ -1,5 +1,7 @@
 # UART U7 ⇄ U10 测试记录
 
+> 对应代码：旧库 STM32_BSP `97e138b` + 当天的修复（提交为 `d32a996`）。API 名称是旧的；当前实现的 UART 回归见 `phase3_2026-11-06.md`。
+
 - 硬件：DM-MC02，U7 TX PE8 → U10 RX PE2，U10 TX PE3 → U7 RX PE7，同板共地，杜邦线。
 - 实例：`bsp_uart7` = `BspUart<128>`，`bsp_uart10` = `BspUart<256>`（同时覆盖两种模板实例），CubeMX 921600 8N1，RX DMA Normal（FIFO 关）、TX DMA（FIFO 开）。
 - 代码：`app/test/test_uart.cpp`；结果读 `bsp_test_results[]`（字段含义见各用例注释）。
