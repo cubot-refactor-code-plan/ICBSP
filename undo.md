@@ -172,7 +172,8 @@
   - 2026-11-06 宿主 `tools/compile_matrix.sh`，13 种配置全部符合预期；2026-11-07 实板 C12：不建接收节点时 `receive()` 按序收全，溢出丢新帧并计 `rx_dropped`
 - [x] BSP 实板回归：`docs/bsp_test/` 的 UART / RS485 / CAN / SPI + BMI088 全部用例 + UART IT 模式，Debug 与 -O2 各一遍，加浸泡测试
   - 2026-11-06 ~ 07 两轮（宿主 `docs/bsp_test/phase3_2026-11-06.md`）。修了 `DeviceBmi088::delay_ms()`：`vTaskDelay(1)` 可能几乎不等，软复位后重读芯片 ID 偶发失败（P04 200 次里 48 次）。SPI 压力用例的不合理帧都是板子被碰 / 振动，SPI 层 0 错误
-- [ ] DMA 循环模式专项测试（TIM8 = 15 不卡死）；F2 短帧压力测试
+- [x] DMA 循环模式专项测试（TIM8 = 15 不卡死）；F2 短帧压力测试
+  - 2026-11-07 **F2 短段压力完成**：宿主 U21（4 Mbps、1~4 字节 send()、3 个高优先级干扰任务，各 10 万字节），Debug / -O2 / IT 模式 0 重复 0 丢失。顺带发现并修了 `tx_recover()` 的“空闲补发”误报（巡检抢占写者落在“写缓冲区 → 拿锁启动”之间，两次都看到空闲却有数据）：第二次观察要求期间没有任何启动；新增 `TxDiag::idle_kick_cnt` / `idle_kick_uart_err` / `idle_kick_dma_err`
   - 2026-11-07 **DMA 循环模式专项完成**：宿主 U16~U20（回绕位置全覆盖、4 Mbps 1 MB 多圈连续流、IDLE 风暴、中断延迟容限、50 次中止 / 重挂恢复），Debug / -O2 / U10 IT 模式全部通过，HAL tick 正常、未卡死。U19 测出使用约束：串口 / RX DMA 中断被挡住超过收满半个 RX_SIZE 的时间会被 DMA 套圈、静默丢数据（库计数察觉不到），已写进 `bsp_uart.hpp` 文件头；检测手段记在“待排期”
   - 2026-11-06 TIM8 = 15 部分完成：UART 组（含 U09~U12 故障注入、U14 浸泡）在 Debug / -O2 / IT 模式下都没有卡死。**F2 还没有专门的短帧压力用例**，只有间接覆盖（U02 全双工 8000 帧、U07 多写者、U14 30 万帧，序号校验 0 重复）；补用例需要 U7 ⇄ U10 跳线
 - [x] Service：EventState 树（81 条 + 默认树传播 + 不清 RUNNING）、Online 毫秒语义、N16 回归、N13 回归（漏写实例时 `init()` 返回 `BAD_ARG`）
