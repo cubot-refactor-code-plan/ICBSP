@@ -1,0 +1,52 @@
+{
+  "ioc": "mc02_h723.ioc",
+  "selection": {
+    "peripherals": {
+      "FDCAN3": {
+        "enabled": false
+      },
+      "UART4": {
+        "enabled": false
+      },
+      "UART5": {
+        "enabled": false
+      },
+      "UART8": {
+        "enabled": false
+      },
+      "UART9": {
+        "enabled": false
+      },
+      "USART10": {
+        "params": {
+          "rx_size": 256,
+          "tx_size": 256
+        }
+      },
+      "TIM12_CH2": {
+        "enabled": true
+      }
+    },
+    "devices": [
+      {
+        "type": "bmi088",
+        "name": "imu_bmi088",
+        "needs": {
+          "bus": "SPI2",
+          "acc_cs": "GYRO_ACC_CS",
+          "gyro_cs": "GYRO_GYRO_CS",
+          "acc_int": "GYRO_ACC_INT",
+          "gyro_int": "GYRO_GYRO_INT"
+        }
+      },
+      {
+        "type": "buzzer",
+        "name": "buzzer",
+        "needs": {
+          "pwm": "TIM12_CH2"
+        }
+      }
+    ],
+    "debug_uart": "USART1"
+  }
+}

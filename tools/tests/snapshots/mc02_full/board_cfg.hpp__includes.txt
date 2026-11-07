@@ -1,0 +1,15 @@
+// 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep
+#include "main.h"         // IWYU pragma: keep（GPIO 标签宏）
+#include "fdcan.h"
+#include "spi.h"
+#include "tim.h"
+#include "usart.h"
+#include "bsp/bsp_can.hpp"
+#include "bsp/bsp_dma_buffer.hpp"
+#include "bsp/bsp_dwt.hpp"
+#include "bsp/bsp_pwm.hpp"
+#include "bsp/bsp_spi.hpp"
+#include "bsp/bsp_uart.hpp"
+#include "device/actuator/device_buzzer.hpp"
+#include "device/sensor/device_bmi088.hpp"

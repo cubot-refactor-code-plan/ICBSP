@@ -1,0 +1,5 @@
+// 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+#define ICBSP_SYS_TASK_ENABLE 1 ///< 系统维护任务 sys_task
+#define ICBSP_CAN_RX_ENABLE 1 ///< CAN 接收路径（can_rx_task + 接收节点）
+#define ICBSP_CAN_TX_ENABLE 1 ///< CAN 发送路径（can_tx_task + 发送节点）
+#define ICBSP_UART_PATROL_ENABLE 0 ///< sys_task 里的串口巡检

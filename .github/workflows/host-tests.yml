@@ -1,4 +1,5 @@
-# 主机侧检查（阶段 3）：algorithm/ 单元测试 + 分层检查。固件本身要接宿主 CubeMX 工程才能编，不在这里编。
+# 主机侧检查（阶段 3 / 5）：algorithm/ 单元测试、分层检查、接入引擎测试。固件要接 CubeMX 工程才能编：
+# 生成结果的编译测试是 tools/tests/compile_test.py（要 ARM 工具链与 STM32CubeMX，本地跑）。
 name: host-tests
 
 on:
@@ -14,6 +15,8 @@ jobs:
         run: python3 tools/check_layers.py
       - name: 接入清单自检（tools/manifest.json 的片段占位符、规则引用）
         run: cd tools && python3 -m icbsp_tool.manifest
+      - name: 接入引擎测试（.ioc 解析 / 校验 / 生成快照 / 生成区同步）
+        run: cd tools && python3 -m unittest discover -s tests -v
       - name: 构建主机单元测试
         run: |
           cmake -S tests/host -B build/host
