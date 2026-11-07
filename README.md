@@ -2,7 +2,7 @@
 
 **ICBSP = INVC & CUBOT Board Support Package**，由 INVC 与 CUBOT 共同维护（前身 stm32-framework / STM32_BSP）。
 
-![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP)[![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP)[![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  
 ![](https://img.shields.io/badge/chip-STM32H7xx%20%7C%20STM32F4xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg)
 
 面向 **STM32H7 / STM32F4 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Algorithm、Tasks 分层，宿主工程通过 git submodule 接入。
@@ -37,7 +37,7 @@ ICBSP/
 │  ├─ algorithm/    PID、QuaternionPID、Quaternion、VQF、Matrix、RLS
 │  └─ tasks/        sys_task、can_rx_task、can_tx_task
 ├─ templates/       宿主接入模板（user/board、user/app、链接脚本、FreeRTOS / 中断钩子、.vscode、Flash）
-├─ tools/           integrate.py（自动接入）、check_layers.py（分层检查）、draw_diagrams.py（画架构图）
+├─ tools/           integrate.py（自动接入与生成）、manifest.json（生成清单）、web_ui/（图形界面）、check_layers.py、draw_diagrams.py
 ├─ tests/host/      algorithm/ 的主机侧单元测试（CI：.github/workflows/host-tests.yml）
 ├─ docs/            接入指南、常用接口、编码规范、代码层说明、架构图、实板测试记录、器件手册
 └─ CMakeLists.txt
@@ -55,6 +55,12 @@ python3 third_party/icbsp/tools/integrate.py             # 执行
 脚本可重复执行，已完成的步骤会跳过。它会检查 CubeMX 前提、给链接脚本加 `.dma_buffer` / `.noinit`、
 接 `FreeRTOSConfig.h`、`freertos.c`、`stm32h7xx_it.c` 的 USER CODE 段、复制 `user/board` 与 `user/app` 模板、
 改根 `CMakeLists.txt`、生成 `.vscode/*`、复制 `Flash/` 烧录脚本。
+
+按 CubeMX 的 `.ioc` 生成外设实例和设备、校验并修改 `.ioc`，可以用图形界面（零依赖，不用 `npm install`）：
+
+```bash
+node third_party/icbsp/tools/web_ui/server.mjs   # 浏览器打开 http://127.0.0.1:8765/
+```
 
 参数、每步的判定条件、手动接入步骤、排错见 **[docs/接入指南.md](docs/接入指南.md)**。
 

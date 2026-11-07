@@ -9,6 +9,7 @@
   - 区外的冲突：宿主别处已经定义了要生成的 HAL_GPIO_EXTI_Callback、或区外手写了同名实例：报错停下
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -16,6 +17,15 @@ from . import regions as R
 
 TEMPLATES = Path(__file__).resolve().parent.parent.parent / "templates" / "user" / "board"
 STEP = "生成"
+SELECTION_FILE = "icbsp_selection.json"
+
+
+def saved_selection(host, board_dir):
+    p = host / board_dir / SELECTION_FILE
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    except ValueError:
+        return None
 
 
 def target_files(host, board_dir):
@@ -117,6 +127,20 @@ def plan(host, board_dir, plan_obj, rep, gen, text_file_cls, overwrite_edited=Fa
     if not ok:
         return False
 
+    # 选择本身也存进宿主：生成区的“源”，随工程提交；下次扫描 / 打开 Web UI 从它开始
+    sel_path = host / board_dir / SELECTION_FILE
+    sel_text = json.dumps(gen.sel, ensure_ascii=False, indent=2) + "\n"
+    if sel_path in plan_obj.new_files:
+        plan_obj.create(sel_path, sel_text)
+    elif not sel_path.exists():
+        plan_obj.create(sel_path, sel_text)
+        created.append(sel_path)
+    else:
+        stf = text_file_cls(sel_path)
+        if stf.text != sel_text:
+            stf.text = sel_text
+            plan_obj.edit(stf)
+            changed.append(sel_path.relative_to(host).as_posix())
     for path, (tf, new) in pending.items():
         if path in plan_obj.new_files or tf is None:
             plan_obj.create(path, new)

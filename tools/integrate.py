@@ -1439,7 +1439,13 @@ def emit_json(host, args, rep, plan, ioc, ioc_results, sel):
     }
     if ioc is not None and ioc.series:
         man = ioc_manifest.load()
-        full = sel if sel is not None else ioc_selection.default_selection(ioc, man)
+        saved = ioc_sync.saved_selection(host, args.board_dir)
+        if sel is not None:
+            full, out["selection_source"] = sel, "given"
+        elif saved is not None:
+            full, out["selection_source"] = ioc_selection.merge(ioc, man, saved), "saved"
+        else:
+            full, out["selection_source"] = ioc_selection.default_selection(ioc, man), "default"
         out["candidates"] = ioc_selection.candidates(ioc, man)
         out["selection"] = full
         out["devices"] = ioc_selection.device_catalog(ioc, man, full)
