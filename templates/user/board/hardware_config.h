@@ -38,19 +38,22 @@
 /* ==================== ① 功能开关：关掉就不编译对应代码、也不创建对应任务 ==================== */
 /*
  * 取 0 或 1。CubeMX 没开对应外设（CAN / UART）时，库会把相关开关强制置 0，这里不用改。
- * 依赖：ICBSP_UART_PATROL_ENABLE 需要 ICBSP_SYS_TASK_ENABLE；DjiMotor（以及以后的 dm_motor）需要 CAN 收发都开。
+ * 依赖：ICBSP_UART_PATROL_ENABLE 需要 ICBSP_SYS_TASK_ENABLE；DjiMotor 需要 CAN 收发都开，DmMotor 只需要接收路径（不满足时包含头文件直接 #error）。
+ * 每个开关关掉的后果写在它自己的注释里，汇总见 docs/接入指南.md 4.2。
  */
 
 /** @brief 系统维护任务 sys_task（10 ms）
  *  @note 关掉（0）会失去：CAN Bus-Off 自动恢复与发送卡死恢复、串口巡检、Online 掉线计时（is_online() 不再变化）、
- *        `sys_task_stats` 与 `system_set_report_hook()` 报告、DWT 绝对时间的回绕跟踪
+ *        默认状态树总线层的运行期记错（设备掉线照常记）、`sys_task_stats` 与 `system_set_report_hook()` 报告、DWT 绝对时间的回绕跟踪
  *        （此时宿主要每隔不到一圈（550 MHz 下 7.8 s）调一次 `bsp_dwt.get_cycles()`，见 bsp_dwt.hpp）。 */
 #define ICBSP_SYS_TASK_ENABLE 1
 /** @brief CAN 接收路径：can_rx_task（1 ms）+ CanRxNodeT
- *  @note 关掉会失去：按 ID 分发到接收节点（DjiMotor 等设备收不到反馈）；`BspCanT::receive()` 改为直接读原始接收缓冲。 */
+ *  @note 关掉会失去：can_rx_task 与按 ID 分发到接收节点；DjiMotor / DmMotor 不能用（包含头文件 #error）。
+ *        `BspCanT::receive()` 改为直接读原始接收缓冲（同一条总线只允许一个任务读）。 */
 #define ICBSP_CAN_RX_ENABLE 1
 /** @brief CAN 发送路径：can_tx_task + CanTxNodeT
- *  @note 关掉会失去：共帧发送节点（多个设备拼一帧、心跳、指令过期清零）；只剩 `BspCanT::send()` 直接发。 */
+ *  @note 关掉会失去：can_tx_task 与共帧发送节点（多个设备拼一帧、心跳、指令过期清零）；DjiMotor 不能用（#error），
+ *        DmMotor 不受影响（控制帧本来就不走发送节点）；只剩 `BspCanT::send()` / `send_latest()` 直接发。 */
 #define ICBSP_CAN_TX_ENABLE 1
 /** @brief sys_task 里的串口巡检
  *  @note 关掉会失去：串口接收 / 发送卡死后的自动恢复（DMA 出错、HAL 状态卡住时不再重建收发）。 */
@@ -98,8 +101,9 @@
 /* ==================== */
 /* ==================== UART ==================== */
 
-/** @brief BspUart::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置
- *  @note 默认关：开了以后 tx_recover() 中止发送会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）。
+/** @brief BspUartT::init() 打开 UART 硬件 FIFO（16 字节）；0 = 保持 CubeMX 的设置
+ *  @note 默认关：开了以后 tx_recover() 中止发送会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）；关着时没有别的损失
+ *        （收发都走 DMA / IDLE，不依赖硬件 FIFO）。
  *        要用就自己改成 1；F4 没有硬件 FIFO，本宏在 F4 上必须为 0（库里有 static_assert 拦）。 */
 #define ICBSP_UART_ENABLE_FIFO 0
 
