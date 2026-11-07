@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2026
  *
  * @note 只把语义参数编码成字节序列：不持有串口、不建任务、不读接收缓冲。
- *       帧格式、功能码表、MMCL 布局与扫描器行为见 `emmv5_protocol.md`。
+ *       帧格式、MMCL 布局与扫描器见 docs/code/device.md 的“帧编解码”一段；功能码表在 emmv5_protocol.cpp。
  */
 
 #ifndef __EMMV5_PROTOCOL_HPP__

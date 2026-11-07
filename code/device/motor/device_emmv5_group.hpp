@@ -9,7 +9,7 @@
  *
  * @note 一个实例 = 一路串口 + 若干个电机地址：按地址分发接收、把多条子命令攒成
  *       MMCL 总帧一次发出、汇总到位位图 / 位置 / 状态、维护每台电机的在线节点。
- *       扫描器与超时模型、MMCL 容量算术、线程与总线锁约束见 `device_emmv5_group.md`。
+ *       用法、扫描器与总线锁约束见 docs/code/device.md 的 DeviceEmmv5GroupT 一节；MMCL 容量见下面 UART_BUFFER_SIZE / 子命令上限的注释。
  *
  * @note **本类不创建任务**：字节搬运靠外部任务周期调 `update()`（建议 10 ms），
  *       与 `bsp_can` / `device_r9ds` / `dji_motor` 保持一致。

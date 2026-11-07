@@ -9,7 +9,7 @@
  *
  * @note CYCCNT 不占外设、不依赖中断，关中断期间仍可计时；分辨率 = 1 个 CPU 周期。
  *       CPU 频率由 init() 从 RCC 自动推算，不设 Config。
- *       回绕周期、精度对比与调用约束见 bsp_dwt.md。
+ *       回绕周期与调用约束见下面 get_cycles() / delay_*() 的注释，用法见 docs/code/bsp.md 的 BspDwt 一节。
  *
  * @warning get_delta_s() 的时间戳由调用方保存，同一个 last 不要跨任务共用。
  * @warning CPU 进入 sleep/stop 时停止计数；32 位计数器会周期性回绕。

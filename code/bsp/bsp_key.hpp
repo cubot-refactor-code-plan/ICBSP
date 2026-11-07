@@ -24,7 +24,7 @@
  *       2. init() 以当前电平作为初始稳定状态：上电时若按键已被按住，
  *          不会产生 PRESS（防误触发），直接从"已按下"状态开始计时。
  *       3. 未 init()（或 init() 失败）时，update() / read_raw() 安全返回，不会崩溃。
- *       状态机与用法见 bsp_key.md。
+ *       状态机见下面 update() 的注释，用法见 docs/code/bsp.md 的 BspGpio / BspKey / BspEncoder 一节。
  */
 
 #ifndef __BSP_KEY_HPP__
