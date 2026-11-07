@@ -46,6 +46,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from icbsp_tool import checks as ioc_checks  # noqa: E402
 from icbsp_tool import manifest as ioc_manifest  # noqa: E402
 from icbsp_tool import selection as ioc_selection  # noqa: E402
+from icbsp_tool import generate as ioc_generate  # noqa: E402
+from icbsp_tool import sync as ioc_sync  # noqa: E402
 from icbsp_tool.ioc import Ioc  # noqa: E402
 TEMPLATES = LIB_ROOT / "templates"
 BOARD_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp", "board_instances.hpp")
@@ -270,9 +272,37 @@ def check_prerequisites(host, rep):
     return ok
 
 
+IOC_OVERRIDE = None
+
+
 def find_ioc(host):
+    if IOC_OVERRIDE is not None:
+        return IOC_OVERRIDE
     found = sorted(host.glob("*.ioc"))
     return found[0] if len(found) == 1 else None
+
+
+def load_selection(host, rep, path):
+    """读 --apply 的选择文件，按 .ioc 补齐默认值并校验；返回 (ioc, 完整选择) 或 (None, None)"""
+    step = "选择"
+    ioc_path = find_ioc(host)
+    if ioc_path is None:
+        rep.error(step, "找不到唯一的 .ioc（用 --ioc 指定）：生成要按 .ioc 里的外设来")
+        return None, None
+    try:
+        user = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        rep.error(step, f"读不了选择文件 {path}：{e}")
+        return None, None
+    ioc = Ioc(ioc_path)
+    man = ioc_manifest.load()
+    sel = ioc_selection.merge(ioc, man, user)
+    for level, where, msg in ioc_selection.validate(ioc, man, sel):
+        (rep.error if level == "error" else rep.warn)(step, f"{where}：{msg}")
+    if not rep.has_error:
+        n = sum(1 for p in sel["peripherals"].values() if p["enabled"])
+        rep.ok(step, f"{n} 个外设、{len(sel['devices'])} 个设备")
+    return ioc, sel
 
 
 def check_ioc(host, rep, selection=None):
@@ -478,7 +508,7 @@ def default_task_option(host):
     return None
 
 
-def plan_freertos_c(host, plan, rep):
+def plan_freertos_c(host, plan, rep, app_dir="user/app"):
     step = "freertos.c"
     tf = TextFile(host / "Core/Src/freertos.c")
     tpl = read_template("freertos_user_code.c")
@@ -526,7 +556,12 @@ def plan_freertos_c(host, plan, rep):
         else:
             rep.skip(step, "没有 defaultTask（CubeMX 里删掉了），app_default_task() 不会被调用")
     elif "app_default_task(" not in current:
-        if compact(strip_comments(current)) in ("", "for(;;){osDelay(1);}"):
+        app_main = host / app_dir / "app_main.cpp"
+        provides = (not app_main.exists()) or "app_default_task(" in strip_comments(app_main.read_text(encoding="utf-8"))
+        if not provides:
+            # 已有的 app_main.cpp 是 N25 之前的版本：转调了也链接不上，先不改
+            rep.warn(step, f"{app_dir}/app_main.cpp 里没有 app_default_task()：StartDefaultTask 没有改动（按模板加上这个函数后重新运行）")
+        elif compact(strip_comments(current)) in ("", "for(;;){osDelay(1);}"):
             tf.text = replace_section(tf.text, "StartDefaultTask", section_text(tpl, "StartDefaultTask"))
             done.append("StartDefaultTask")
         else:
@@ -1363,6 +1398,9 @@ def main():
     ap.add_argument("--no-vscode", action="store_true", help="不处理 .vscode/settings.json、tasks.json、launch.json")
     ap.add_argument("--no-flash", action="store_true", help="不复制 Flash/ 烧录脚本")
     ap.add_argument("--no-clang", action="store_true", help="不生成 .clang-format / .clangd")
+    ap.add_argument("--ioc", type=Path, help="CubeMX 的 .ioc（默认：宿主根目录下唯一的 .ioc）")
+    ap.add_argument("--apply", metavar="选择.json", help="按选择生成 board_instances.hpp / board_cfg.* / hardware_config.h 的生成区（格式见 tools/icbsp_tool/selection.py）")
+    ap.add_argument("--overwrite-edited", action="store_true", help="生成区被手改过时也覆盖（默认停下）")
     args = ap.parse_args()
 
     host = (args.host or default_host()).resolve()
@@ -1370,14 +1408,18 @@ def main():
         sys.exit(f"{host} 不是宿主工程根目录：在宿主工程根目录运行，或用 --host 指定")
     print(f"宿主工程：{host}\n库：{LIB_ROOT}\n")
 
+    global IOC_OVERRIDE
+    if args.ioc:
+        IOC_OVERRIDE = (host / args.ioc).resolve() if not args.ioc.is_absolute() else args.ioc
     rep = Report()
     plan = Plan()
     ok = check_prerequisites(host, rep)
-    check_ioc(host, rep)
+    gen_ioc, gen_sel = load_selection(host, rep, args.apply) if args.apply else (None, None)
+    check_ioc(host, rep, gen_sel)
     if ok and not rep.has_error:
         plan_linker(host, plan, rep, args.linker_script, args.ram_region)
         plan_freertos_config(host, plan, rep)
-        plan_freertos_c(host, plan, rep)
+        plan_freertos_c(host, plan, rep, args.app_dir)
         plan_it_c(host, plan, rep)
         plan_app(host, plan, rep, args.board_dir, args.app_dir)
         if not args.no_hardware_config:
@@ -1391,6 +1433,9 @@ def main():
                 plan_flash(host, plan, rep, info)
             if not args.no_clang:
                 plan_clang(host, plan, rep, info)
+        if gen_sel is not None and not rep.has_error:
+            gen = ioc_generate.Generator(gen_ioc, ioc_manifest.load(), gen_sel)
+            ioc_sync.plan(host, args.board_dir, plan, rep, gen, TextFile, args.overwrite_edited)
     rep.print()
 
     if rep.has_error:
