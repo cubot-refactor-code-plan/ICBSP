@@ -125,6 +125,22 @@ class Plan:
     def empty(self):
         return not any(tf.text != tf.original for tf in self.edits.values()) and not self.new_files and not self.modes
 
+    def diffs(self, host):
+        """[{path, kind: edit / create, diff}]：给 --json 用"""
+        out = []
+        for path, tf in self.edits.items():
+            if tf.text == tf.original:
+                continue
+            rel = path.relative_to(host).as_posix()
+            d = "".join(difflib.unified_diff(tf.original.splitlines(keepends=True), tf.text.splitlines(keepends=True), f"a/{rel}", f"b/{rel}"))
+            out.append({"path": rel, "kind": "edit", "diff": d})
+        for path, text in self.new_files.items():
+            rel = path.relative_to(host).as_posix()
+            body = text if isinstance(text, str) else "（二进制或保留行尾的文件）"
+            d = "".join(difflib.unified_diff([], body.splitlines(keepends=True), "/dev/null", f"b/{rel}")) if isinstance(text, str) else ""
+            out.append({"path": rel, "kind": "create", "diff": d})
+        return out
+
     def show(self, host):
         for path, tf in self.edits.items():
             if tf.text == tf.original:
@@ -1384,6 +1400,61 @@ def default_host():
     return Path(out) if out else Path.cwd()
 
 
+LEVELS = {"完成": "ok", "跳过": "skip", "注意": "warn", "错误": "error"}
+
+
+def generated_status(host, board_dir):
+    """宿主现有板级文件里生成区的状态"""
+    from icbsp_tool import regions as R
+
+    out = {}
+    for fname, path in ioc_sync.target_files(host, board_dir).items():
+        st = {"path": path.relative_to(host).as_posix(), "exists": path.exists(), "regions": [], "edited": [], "problems": []}
+        if path.exists():
+            regs, bad = R.parse(path.read_text(encoding="utf-8").replace("\r\n", "\n"))
+            st["regions"] = sorted(regs)
+            st["edited"] = sorted(n for n, r in regs.items() if r["recorded"] != r["actual"])
+            st["problems"] = bad
+        out[fname] = st
+    return out
+
+
+def emit_json(host, args, rep, plan, ioc, ioc_results, sel):
+    """--json：一次输出全部信息；写盘与否同普通模式（--plan / --dry-run 不写）"""
+    out = {
+        "tool": "icbsp-integrate",
+        "schema": 1,
+        "host": str(host),
+        "library": str(LIB_ROOT),
+        "board_dir": args.board_dir,
+        "ioc": str(ioc.path) if ioc else None,
+        "mcu": ioc.mcu if ioc else None,
+        "series": ioc.series if ioc else None,
+        "report": [{"level": LEVELS.get(l, l), "step": st, "msg": m} for l, st, m in rep.items],
+        "ioc_checks": ioc_results,
+        "generated": generated_status(host, args.board_dir),
+        "applied": False,
+        "plan": [],
+    }
+    if ioc is not None and ioc.series:
+        man = ioc_manifest.load()
+        full = sel if sel is not None else ioc_selection.default_selection(ioc, man)
+        out["candidates"] = ioc_selection.candidates(ioc, man)
+        out["selection"] = full
+        out["devices"] = ioc_selection.device_catalog(ioc, man, full)
+        out["switches"] = man["switches"]
+        out["peripheral_kinds"] = {k: {"title": v["title"], "params": v["params"]} for k, v in man["peripherals"].items()}
+        out["gpio"] = {"out": ioc.gpio_outputs(), "exti": ioc.gpio_exti()}
+    out["ok"] = not rep.has_error
+    if out["ok"]:
+        out["plan"] = plan.diffs(host)
+        if not args.dry_run and not plan.empty():
+            plan.apply()
+            out["applied"] = True
+    print(json.dumps(out, ensure_ascii=False, indent=1, default=str))
+    return 0 if out["ok"] else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description="把 icbsp 接入 STM32H7 CubeMX（CMake）宿主工程（详见 docs/接入指南.md）")
     ap.add_argument("--host", type=Path, help="宿主工程根目录（默认：本库作为 submodule 所在的工程，否则当前目录）")
@@ -1401,12 +1472,21 @@ def main():
     ap.add_argument("--ioc", type=Path, help="CubeMX 的 .ioc（默认：宿主根目录下唯一的 .ioc）")
     ap.add_argument("--apply", metavar="选择.json", help="按选择生成 board_instances.hpp / board_cfg.* / hardware_config.h 的生成区（格式见 tools/icbsp_tool/selection.py）")
     ap.add_argument("--overwrite-edited", action="store_true", help="生成区被手改过时也覆盖（默认停下）")
+    ap.add_argument("--plan", action="store_true", help="同 --dry-run：只算修改、给出 diff，不写文件")
+    ap.add_argument("--json", action="store_true", help="机器接口：只在 stdout 输出一个 JSON（检查结果、外设、可挂设备、选择、生成区状态、diff），给 Web UI 用")
     args = ap.parse_args()
+    if args.plan:
+        args.dry_run = True
 
     host = (args.host or default_host()).resolve()
     if host == LIB_ROOT or not (host / "CMakeLists.txt").is_file():
-        sys.exit(f"{host} 不是宿主工程根目录：在宿主工程根目录运行，或用 --host 指定")
-    print(f"宿主工程：{host}\n库：{LIB_ROOT}\n")
+        msg = f"{host} 不是宿主工程根目录：在宿主工程根目录运行，或用 --host 指定"
+        if args.json:
+            print(json.dumps({"tool": "icbsp-integrate", "schema": 1, "ok": False, "fatal": msg}, ensure_ascii=False))
+            return 2
+        sys.exit(msg)
+    if not args.json:
+        print(f"宿主工程：{host}\n库：{LIB_ROOT}\n")
 
     global IOC_OVERRIDE
     if args.ioc:
@@ -1415,7 +1495,7 @@ def main():
     plan = Plan()
     ok = check_prerequisites(host, rep)
     gen_ioc, gen_sel = load_selection(host, rep, args.apply) if args.apply else (None, None)
-    check_ioc(host, rep, gen_sel)
+    ioc_obj, ioc_results = check_ioc(host, rep, gen_sel)
     if ok and not rep.has_error:
         plan_linker(host, plan, rep, args.linker_script, args.ram_region)
         plan_freertos_config(host, plan, rep)
@@ -1436,6 +1516,8 @@ def main():
         if gen_sel is not None and not rep.has_error:
             gen = ioc_generate.Generator(gen_ioc, ioc_manifest.load(), gen_sel)
             ioc_sync.plan(host, args.board_dir, plan, rep, gen, TextFile, args.overwrite_edited)
+    if args.json:
+        return emit_json(host, args, rep, plan, ioc_obj, ioc_results, gen_sel)
     rep.print()
 
     if rep.has_error:
