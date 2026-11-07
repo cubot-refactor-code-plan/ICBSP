@@ -204,14 +204,24 @@
 
 ## 阶段 5：web_ui 接入帮助（Node.js 前端 + `integrate.py` 引擎，Q14 = A）
 
-- [ ] `integrate.py` 合入 fork 扩展后加机器接口：`--json`（检查结果、外设、可挂设备）、`--plan` / `--dry-run`（diff）、`--apply <选择.json>`
-- [ ] 库侧清单 `tools/manifest.json`（Python 读取）：外设 → BSP 类、模板参数、必需的 CubeMX 设置；设备目录 → 依赖、参数、默认值、`init()` 顺序；校验规则
-- [ ] `.ioc` 校验：现有检查 + D1 缺的检查（`TICK_INT_PRIORITY < 5`、Message RAM 重叠、`StdFiltersNbr`、`MasterKeepIOState`、DMA 模式、D-Cache、NVIC、defaultTask As weak）
-- [ ] 生成 `board_instances.hpp` + `board_cfg.hpp` 实例（can1 / can2 → `bsp_can1` / `bsp_can2`，参数取自 `.ioc`，自动套 `.dma_buffer` 宏）+ `init()` + `hardware_config.h`（开关按勾选生成）
-- [ ] 可选设备：按外设列出可挂设备，勾选后生成实例、`init()`、回调转调；设备只在依赖的外设和开关都满足时出现；DR16 / ET08 标“计划中”
-- [ ] 与宿主同步：只写生成区 / USER CODE 段，可重复运行，写盘前给 diff 预览，遇到手改内容就停下
-- [ ] Node 前端只做展示和收集选择，不复制接入逻辑；找不到 Python 时明确提示
-- [ ] 生成快照测试：MC02_with_submodule 的 `.ioc` + 一个全新工程，生成的代码 0 warning 编译
+- [x] `integrate.py` 合入 fork 扩展后加机器接口：`--json`（检查结果、外设、可挂设备）、`--plan` / `--dry-run`（diff）、`--apply <选择.json>`
+  - 2026-11-08 `fe4fa01`：--json（report、ioc_checks、candidates、selection、devices、generated、plan 的 diff）、--plan；--apply 在 `18a5d46`
+- [x] 库侧清单 `tools/manifest.json`（Python 读取）：外设 → BSP 类、模板参数、必需的 CubeMX 设置；设备目录 → 依赖、参数、默认值、`init()` 顺序；校验规则
+  - 2026-11-08 `0fc979a`：外设 5 类、设备 8 种 + 计划中 2 种、开关、规则；manifest.py 自检占位符（CI）
+- [x] `.ioc` 校验：现有检查 + D1 缺的检查（`TICK_INT_PRIORITY < 5`、Message RAM 重叠、`StdFiltersNbr`、`MasterKeepIOState`、DMA 模式、D-Cache、NVIC、defaultTask As weak）
+  - 2026-11-08 `8fd535a`：全局 + 外设规则，缺省键按 CubeMX 数据库默认值；时基优先级不再要求 < 5（1.4 起 15 即可，原文这条过时），新增 can_fifo（CubeMX 默认 FIFO / TX 元素数为 0）
+- [x] `.ioc` 修改并重新生成功能: 当发现ioc校验未通过，可选择是否自动修改并重新生成工程
+  - 2026-11-08 `0893c05`：--fix-ioc（先备份）、--regenerate（CubeMX 命令行，DM-MC02 拷贝上实测 31 s，结果与原工程一致）
+- [x] 生成 `board_instances.hpp` + `board_cfg.hpp` 实例（can1 / can2 → `bsp_can1` / `bsp_can2`，参数取自 `.ioc`，自动套 `.dma_buffer` 宏）+ `init()` + `hardware_config.h`（开关按勾选生成）
+  - 2026-11-08 `432a085`：generate.py + 模板生成区（regions.py）
+- [x] 可选设备：按外设列出可挂设备，勾选后生成实例、`init()`、回调转调；设备只在依赖的外设和开关都满足时出现；DR16 / ET08 标“计划中”
+  - 2026-11-08 `40b4a1a`：设备目录、实例 / extern / init / EXTI 转调；资源独占与参数校验
+- [x] 与宿主同步：只写生成区 / USER CODE 段，可重复运行，写盘前给 diff 预览，遇到手改内容就停下
+  - 2026-11-08 `18a5d46`：只写生成区、哈希检测手改、区外冲突、diff 预览、可重复运行；选择存 icbsp_selection.json（`2f57793`）
+- [x] Node 前端只做展示和收集选择，不复制接入逻辑；找不到 Python 时明确提示
+  - 2026-11-08 `2f57793`：tools/web_ui（零依赖），找不到 Python 3.8+ 时提示；交互只在最小 DOM 里跑通，没在浏览器里实测
+- [x] 生成快照测试：MC02_with_submodule 的 `.ioc` + 一个全新工程，生成的代码 0 warning 编译
+  - 2026-11-08 `690f230`：tools/tests（CI 13 项）；compile_test.py 用 CubeMX 生成全新工程 + 从零接入 + 生成，两组用例 0 warning（另一个型号的全新工程留给阶段 6）
 
 ## 阶段 6：宿主接入回归测试
 
