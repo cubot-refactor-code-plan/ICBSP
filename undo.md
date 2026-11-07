@@ -166,13 +166,20 @@
 
 ## 阶段 3：功能全面测试
 
-- [ ] 主机侧单元测试：PID（F4、NaN）、四元数（F1、零模长）、Matrix、RLS，放进 CI
-- [ ] 编译矩阵：功能开关 / HAL 模块（FDCAN、UART、SPI、TIM）逐个关，各组合 0 warning；`CAN_RX_ENABLE = 0` 时实际跑一次 `receive()`（N28）
-- [ ] BSP 实板回归：`docs/bsp_test/` 的 UART / RS485 / CAN / SPI + BMI088 全部用例 + UART IT 模式，Debug 与 -O2 各一遍，加浸泡测试
+- [x] 主机侧单元测试：PID（F4、NaN）、四元数（F1、零模长）、Matrix、RLS，放进 CI
+  - 2026-11-06 `tests/host/`（45 条判据，主机编译器 `-Werror`）+ `.github/workflows/host-tests.yml`（同时跑 `check_layers.py`）
+- [x] 编译矩阵：功能开关 / HAL 模块（FDCAN、UART、SPI、TIM）逐个关，各组合 0 warning；`CAN_RX_ENABLE = 0` 时实际跑一次 `receive()`（N28）
+  - 2026-11-06 宿主 `tools/compile_matrix.sh`，13 种配置全部符合预期；2026-11-07 实板 C12：不建接收节点时 `receive()` 按序收全，溢出丢新帧并计 `rx_dropped`
+- [x] BSP 实板回归：`docs/bsp_test/` 的 UART / RS485 / CAN / SPI + BMI088 全部用例 + UART IT 模式，Debug 与 -O2 各一遍，加浸泡测试
+  - 2026-11-06 ~ 07 两轮（宿主 `docs/bsp_test/phase3_2026-11-06.md`）。修了 `DeviceBmi088::delay_ms()`：`vTaskDelay(1)` 可能几乎不等，软复位后重读芯片 ID 偶发失败（P04 200 次里 48 次）。SPI 压力用例的不合理帧都是板子被碰 / 振动，SPI 层 0 错误
 - [ ] DMA 循环模式专项测试（TIM8 = 15 不卡死）；F2 短帧压力测试
-- [ ] Service：EventState 树（81 条 + 默认树传播 + 不清 RUNNING）、Online 毫秒语义、N16 回归、N13 回归（漏写实例时 `init()` 返回 `BAD_ARG`）
-- [ ] 新功能实板：CAN TX-empty 动态开关（丢唤醒统计；先修 N27，再人为关一次中断，确认 `tx_stall_recover` 增加、总线恢复）、ErrorStatusCallback 计数、DWT（两个任务并发调 `get_time_s()`，跨 10 圈回绕不跳变）、编码器、N30 的转调钩子、R9DS / 舵机 / EmmV5 / dm_motor / DeviceMotor（没硬件的标“只编译验证”）
-- [ ] 全程不打开 BMI088 加热电阻（PB1 / TIM3_CH4）；结果按 `docs/bsp_test/` 的格式存档
+  - 2026-11-06 TIM8 = 15 部分完成：UART 组（含 U09~U12 故障注入、U14 浸泡）在 Debug / -O2 / IT 模式下都没有卡死。**F2 还没有专门的短帧压力用例**，只有间接覆盖（U02 全双工 8000 帧、U07 多写者、U14 30 万帧，序号校验 0 重复）；补用例需要 U7 ⇄ U10 跳线
+- [x] Service：EventState 树（81 条 + 默认树传播 + 不清 RUNNING）、Online 毫秒语义、N16 回归、N13 回归（漏写实例时 `init()` 返回 `BAD_ARG`）
+  - 2026-11-06 实板 E01~E14 / O01~O11 / T01~T04 全部通过（Debug 与 -O2）；N13 = 宿主 Y13（CAN / UART）+ S01（SPI）
+- [x] 新功能实板：CAN TX-empty 动态开关（丢唤醒统计；先修 N27，再人为关一次中断，确认 `tx_stall_recover` 增加、总线恢复）、ErrorStatusCallback 计数、DWT（两个任务并发调 `get_time_s()`，跨 10 圈回绕不跳变）、编码器、N30 的转调钩子、R9DS / 舵机 / EmmV5 / dm_motor / DeviceMotor（没硬件的标“只编译验证”）
+  - 2026-11-06 C11：关 TX FIFO 空中断后 `tx_stall_recover` +1、积压帧全部补发、链路恢复；错误状态回调计到警告 / 被动。DWT：Y08 两个任务并发 10 s、跨 1 次回绕 0 倒退 / 0 跳变，没有专门跑满 10 圈（每轮实板 40 分钟以上、300 圈以上无异常）。N30：Y05。电机实板：M3508、GM6020（电流模式）、DM-J4340P（MIT）转动通过，J4310 只做反馈 / 寄存器读（ID 与 6020 冲突，不使能）。**只编译验证**：编码器、R9DS、舵机、Emm_V5、DeviceMotor
+- [x] 全程不打开 BMI088 加热电阻（PB1 / TIM3_CH4）；结果按 `docs/bsp_test/` 的格式存档
+  - H00 / H99 与监视任务核对全部为 0；记录在宿主 `docs/bsp_test/phase3_2026-11-06.md` 与 `raw/2026-11-0[67]_phase3_*`
 
 ## 阶段 4：文档补全
 
