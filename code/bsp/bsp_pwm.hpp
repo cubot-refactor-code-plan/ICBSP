@@ -11,7 +11,7 @@
  *          定时器时钟、PSC、ARR 全部由使用方从 CubeMX 生成的配置里抄进 Config，
  *          驱动本身不写死任何硬件常量，换板子只改实例化处的参数。
  *
- * @note 换算式、计数单位与“同定时器共通道 ARR”的后果见 bsp_pwm.md。
+ * @note 换算式见 docs/code/bsp.md 的 BspPwm 一节；“同定时器的通道共用 ARR”的后果见下面的 @warning，计数单位见 get_period_cnt() 的注释。
  *
  * @warning 同一定时器的多个通道共用计数器与 ARR：set_freq() 会同时改变该定时器
  *          所有通道的频率。
