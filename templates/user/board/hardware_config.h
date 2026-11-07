@@ -82,9 +82,9 @@
 #define ICBSP_CAN_RX_RETURN_FRAMES 16
 /** @brief can_rx_task 每 1 ms 每条总线最多分发的帧数（1~64） */
 #define ICBSP_CAN_RX_DISPATCH_PER_TICK 16
-/** @brief 接收节点总数上限（全部总线合计，≤255） */
+/** @brief 接收节点数上限（1~255）：按 BspCanT 类型分别计数——模板参数相同的几条总线（如两路 BspCanT<16, 16>）合计，类型不同的各算各的 */
 #define ICBSP_CAN_RX_NODE_MAX 50
-/** @brief 发送节点总数上限（全部总线合计，≤255） */
+/** @brief 发送节点数上限（1~255）：计数方式同 ICBSP_CAN_RX_NODE_MAX */
 #define ICBSP_CAN_TX_NODE_MAX 50
 /** @brief 控制指令有效期 (ms)：发送槽位超过这么久没被 fill_data() 刷新就清零（必须大于心跳） */
 #define ICBSP_CAN_CMD_EXPIRE_MS 100

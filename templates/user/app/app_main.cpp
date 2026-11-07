@@ -92,7 +92,7 @@ extern "C" void app_init(void)
   //    优先级必须低于库任务（CAN / BMI088 / sys 默认是 configMAX_PRIORITIES - 2 / -3 / -4，见 hardware_config.h）：
   //    CubeMX 的 osPriorityNormal（24）、osPriorityHigh（40）都可以。
   //
-  //    monitor：每秒打印 heap / min / tasks / stack 四个值（实现见 task/demo_task.cpp）。
+  //    monitor：每 10 s 打印 heap / min / tasks / stack 四个值（实现见 task/demo_task.cpp）。
   //    默认不建；栈给 384 字（1.5 KB）而不是 256，因为里面要跑 vsnprintf。
   //  ICBSP_CHECK(xTaskCreate(monitor_task, "monitor", 384, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
 

@@ -141,8 +141,8 @@ static_assert(ICBSP_SYS_TASK_STACK >= 128 && ICBSP_CAN_TASK_STACK >= 128 && ICBS
               "hardware_config.h: 库任务栈深至少 128 字");
 static_assert(ICBSP_CAN_RX_RETURN_FRAMES >= 0, "hardware_config.h: ICBSP_CAN_RX_RETURN_FRAMES 不能为负（0 = 不建回退缓冲）");
 static_assert(ICBSP_CAN_RX_DISPATCH_PER_TICK >= 1 && ICBSP_CAN_RX_DISPATCH_PER_TICK <= 64, "hardware_config.h: ICBSP_CAN_RX_DISPATCH_PER_TICK 取 1~64");
-static_assert(ICBSP_CAN_RX_NODE_MAX >= 1 && ICBSP_CAN_RX_NODE_MAX <= 255, "hardware_config.h: ICBSP_CAN_RX_NODE_MAX 取 1~255（计数为 uint8_t）");
-static_assert(ICBSP_CAN_TX_NODE_MAX >= 1 && ICBSP_CAN_TX_NODE_MAX <= 255, "hardware_config.h: ICBSP_CAN_TX_NODE_MAX 取 1~255（计数为 uint8_t）");
+static_assert(ICBSP_CAN_RX_NODE_MAX >= 1 && ICBSP_CAN_RX_NODE_MAX <= 255, "hardware_config.h: ICBSP_CAN_RX_NODE_MAX 取 1~255");
+static_assert(ICBSP_CAN_TX_NODE_MAX >= 1 && ICBSP_CAN_TX_NODE_MAX <= 255, "hardware_config.h: ICBSP_CAN_TX_NODE_MAX 取 1~255");
 static_assert(ICBSP_CAN_TX_HEARTBEAT_MS >= 1, "hardware_config.h: ICBSP_CAN_TX_HEARTBEAT_MS 至少 1 ms");
 static_assert(ICBSP_CAN_CMD_EXPIRE_MS > ICBSP_CAN_TX_HEARTBEAT_MS, "hardware_config.h: 指令有效期必须长于保底心跳");
 static_assert(ICBSP_CAN_TX_GATHER_MS >= 1 && ICBSP_CAN_TX_GATHER_MS < ICBSP_CAN_TX_HEARTBEAT_MS,
