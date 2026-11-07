@@ -124,6 +124,6 @@ python3 third_party/icbsp/tools/integrate.py             # 执行
 
 MIT，见根目录 [`LICENSE`](LICENSE)。例外：
 
-- `code/algorithm/vqf.*`：VQF（MIT，版权见文件头的 SPDX 行）。
+- `code/algorithm/vqf.*`：第三方代码 VQF，MIT，版权 Daniel Laidig（文件头的 `SPDX-FileCopyrightText` / `SPDX-License-Identifier` 行，不要删）；保持上游原样（CMake 里单独关了 `-Wshadow`）。
 - `code/algorithm/matrix.*`：移植自 USTC-RoboWalker（yssickjgd/damiao_mc02_bsp）的代码，原作者许可在 RoboMaster 赛事范围内使用，**不适用本仓库的 MIT**；超出这个范围请自行征求原作者意见。文件头的出处说明要保留。
-- `docs/sheet/` 下的器件手册：版权归各厂商，不随本仓库的 MIT 许可分发，只为方便查阅。
+- `docs/sheet/` 下的器件手册：版权归各厂商，不属于本仓库的 MIT 许可，只为方便查阅；清单与官方渠道见 [docs/sheet/README.md](docs/sheet/README.md)。
