@@ -42,6 +42,11 @@ import sys
 from pathlib import Path
 
 LIB_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from icbsp_tool import checks as ioc_checks  # noqa: E402
+from icbsp_tool import manifest as ioc_manifest  # noqa: E402
+from icbsp_tool import selection as ioc_selection  # noqa: E402
+from icbsp_tool.ioc import Ioc  # noqa: E402
 TEMPLATES = LIB_ROOT / "templates"
 BOARD_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp", "board_instances.hpp")
 APP_TEMPLATES = ("app_main.h", "app_main.cpp", "app_task.hpp")
@@ -263,6 +268,41 @@ def check_prerequisites(host, rep):
     if ok:
         rep.ok(step, "CubeMX 配置满足 docs/接入指南.md 第 1 节的要求")
     return ok
+
+
+def find_ioc(host):
+    found = sorted(host.glob("*.ioc"))
+    return found[0] if len(found) == 1 else None
+
+
+def check_ioc(host, rep, selection=None):
+    """按 tools/manifest.json 的规则校验 .ioc（docs/接入指南.md 第 1、2 节）。
+    没给选择（经典接入）时：全局规则不满足算错误，外设规则只提醒（不一定每个外设都要用）；
+    给了选择（--apply）时：选中外设的规则也按清单里的级别处理。返回 (ioc, 结果列表)。"""
+    step = ".ioc"
+    path = find_ioc(host)
+    if path is None:
+        n = len(list(host.glob("*.ioc")))
+        rep.warn(step, "根目录没有 .ioc，跳过 CubeMX 配置校验" if n == 0 else f"根目录有 {n} 个 .ioc，跳过校验（用 --ioc 指定）")
+        return None, []
+    ioc = Ioc(path)
+    if ioc.series is None:
+        rep.error(step, f"{path.name}：Mcu.Family 不是 STM32H7 / STM32F4")
+        return ioc, []
+    man = ioc_manifest.load()
+    sel = selection if selection is not None else ioc_selection.default_selection(ioc, man)
+    results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel))
+    failed = [r for r in results if not r["ok"]]
+    for r in failed:
+        tgt = f"{r['target']}：" if r["target"] else ""
+        msg = f"{tgt}{r['title']}不满足（{r['detail']}）→ {r['fix']}" if r["detail"] else f"{tgt}{r['title']}不满足 → {r['fix']}"
+        if r["auto_fix"]:
+            msg += "（可自动修改）"
+        blocking = r["level"] == "error" and (selection is not None or not r["target"])
+        (rep.error if blocking else rep.warn)(step, msg)
+    if not failed:
+        rep.ok(step, f"{path.name}：{len(results)} 项检查全部通过")
+    return ioc, results
 
 
 # ==================== 2. 链接脚本 ====================
@@ -1332,7 +1372,9 @@ def main():
 
     rep = Report()
     plan = Plan()
-    if check_prerequisites(host, rep):
+    ok = check_prerequisites(host, rep)
+    check_ioc(host, rep)
+    if ok and not rep.has_error:
         plan_linker(host, plan, rep, args.linker_script, args.ram_region)
         plan_freertos_config(host, plan, rep)
         plan_freertos_c(host, plan, rep)
