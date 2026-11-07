@@ -38,7 +38,7 @@ ICBSP/
 │  └─ tasks/        sys_task、can_rx_task、can_tx_task
 ├─ templates/       宿主接入模板（user/board、user/app、链接脚本、FreeRTOS / 中断钩子、.vscode、Flash）
 ├─ tools/           integrate.py（自动接入与生成）、manifest.json（生成清单）、web_ui/（图形界面）、check_layers.py、draw_diagrams.py
-├─ tests/host/      algorithm/ 的主机侧单元测试（CI：.github/workflows/host-tests.yml）
+├─ tests/host/      algorithm/ 的主机侧单元测试（CI：.github/workflows/host-tests.yml）；接入引擎的测试在 tools/tests/
 ├─ docs/            接入指南、常用接口、编码规范、代码层说明、架构图、实板测试记录、器件手册
 └─ CMakeLists.txt
 ```
