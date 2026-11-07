@@ -133,22 +133,90 @@ class Generator:
             lines.append(f"#define {sid} {int(self.sel['switches'].get(sid, sw['default']))} ///< {sw['title']}")
         return "\n".join(lines)
 
-    # ---------- 设备（阶段 5.6 补全） ----------
+    # ---------- 设备 ----------
 
     def devices(self):
         return [d for d in self.sel.get("devices", []) if self.m["devices"].get(d.get("type"), {}).get("status") != "planned"]
 
+    def device_fmt(self, d):
+        spec = self.m["devices"][d["type"]]
+        f = {"name": d["name"]}
+        for prm in spec["params"]:
+            v = (d.get("params") or {}).get(prm["key"], prm.get("default"))
+            f[prm["key"]] = _lit(v, prm)
+        for need in spec["needs"]:
+            v = (d.get("needs") or {}).get(need["key"])
+            if need["kind"] in ("gpio_out", "gpio_exti"):
+                f[need["key"]] = v or ""
+            else:
+                f[need["key"]] = self.instance_of(v) if v else ""
+        return f
+
     def device_init(self):
-        return []
+        lines = []
+        for d in self.devices():
+            f = self.device_fmt(d)
+            lines += [l.format(**f) for l in self.m["devices"][d["type"]]["init"]]
+        return lines
 
     def device_externs(self):
-        return HEADER
+        lines = [HEADER]
+        for d in self.devices():
+            spec = self.m["devices"][d["type"]]
+            f = self.device_fmt(d)
+            lines.append(f"/// {d['name']}：{spec['title']}")
+            lines += [l.format(**f) for l in spec["extern"]]
+        return "\n".join(lines)
 
     def device_defines(self):
-        return HEADER
+        lines = [HEADER]
+        for d in self.devices():
+            spec = self.m["devices"][d["type"]]
+            f = self.device_fmt(d)
+            lines.append(f"/// {d['name']}：{spec['title']}")
+            lines += [l.format(**f) for l in spec["define"]]
+        return "\n".join(lines)
+
+    def exti_calls(self):
+        """[(引脚标签, 调用)]"""
+        out = []
+        for d in self.devices():
+            f = self.device_fmt(d)
+            for e in self.m["devices"][d["type"]].get("exti", []):
+                pin = f.get(e["pin"])
+                if pin:
+                    out.append((pin, e["call"].format(**f)))
+        return out
 
     def callbacks(self):
-        return HEADER
+        calls = self.exti_calls()
+        lines = [HEADER]
+        if not calls:
+            return "\n".join(lines)
+        lines += [
+            "/**",
+            " * @brief EXTI 回调：库不占用它，生成的设备的数据就绪中断由这里转给设备",
+            " * @note 宿主别处不要再定义 HAL_GPIO_EXTI_Callback（会重复定义）；还要处理别的 EXTI 时，把本区删掉、手写一份。",
+            " */",
+            'extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)',
+            "{",
+            "  BaseType_t woken = pdFALSE;",
+        ]
+        for k, (pin, call) in enumerate(calls):
+            lines += [f"  {'if' if k == 0 else 'else if'} (GPIO_Pin == {pin}_Pin)", "  {", f"    {call}", "  }"]
+        lines += ["  portYIELD_FROM_ISR(woken);", "}"]
+        return "\n".join(lines)
+
+    def notes(self):
+        """生成后要提醒用户的事（不进代码）"""
+        out = []
+        for d in self.devices():
+            spec = self.m["devices"][d["type"]]
+            f = self.device_fmt(d)
+            out += [f"{d['name']}：{n.format(**f)}" for n in spec.get("notes", [])]
+            if spec["status"] == "compile_only":
+                out.append(f"{d['name']}：{spec['title']} 只编译验证过，没有实板测试")
+        return out
 
     # ---------- 汇总 ----------
 

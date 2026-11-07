@@ -179,6 +179,19 @@ def validate(ioc, manifest, sel):
             prm = {**{p["key"]: p.get("default") for p in spec["params"]}, **(d.get("params") or {})}
             if prm.get("type") == "GM6020" and int(prm.get("id", 1)) > 7:
                 bad.append(("error", f"{where}.id", "GM6020 的 ID 只能是 1~7"))
+    # PWM 通道、编码器、GPIO 只能给一个设备用（总线可以多个设备共用）
+    owner = {}
+    for i, d in enumerate(sel["devices"]):
+        spec = devs.get(d.get("type"))
+        if not spec or spec["status"] == "planned":
+            continue
+        for need in spec["needs"]:
+            v = (d.get("needs") or {}).get(need["key"])
+            if v and need["kind"] in ("pwm", "encoder", "gpio_out", "gpio_exti"):
+                if v in owner:
+                    bad.append(("error", f"devices[{i}].{need['key']}", f"{v} 已经给 {owner[v]} 用了"))
+                else:
+                    owner[v] = f"{d.get('name')}.{need['key']}"
     for sid, v in sel["switches"].items():
         sw = manifest["switches"].get(sid)
         if sw is None:
@@ -229,3 +242,39 @@ def check_need(ioc, sel, need, v):
     if not p["enabled"]:
         return [f"{v} 没有选中"]
     return []
+
+
+def device_catalog(ioc, manifest, sel):
+    """可挂设备：[{type, title, status, status_note, available, reason, needs: [{key, kind, title, optional, options}], params}]
+    设备只在它依赖的外设（已选中）与功能开关都满足时 available；计划中的设备列出但不可选。"""
+    enabled = {}
+    cands = {c["ip"]: c for c in candidates(ioc, manifest)}
+    for ip, p in sel["peripherals"].items():
+        if p["enabled"] and ip in cands:
+            enabled.setdefault(p["kind"], []).append(ip)
+    out = []
+    for dtype, spec in manifest["devices"].items():
+        item = {"type": dtype, "title": spec["title"], "status": spec["status"], "status_note": spec.get("status_note", ""),
+                "params": spec.get("params", []), "needs": [], "available": True, "reason": ""}
+        why = []
+        for need in spec.get("needs", []):
+            kind = need["kind"]
+            if kind == "gpio_out":
+                opts = ioc.gpio_outputs()
+            elif kind == "gpio_exti":
+                opts = ioc.gpio_exti()
+            else:
+                opts = enabled.get(kind, [])
+            item["needs"].append({**need, "options": opts})
+            if not opts and not need.get("optional"):
+                why.append(f"没有可用的{need['title']}")
+        if spec["status"] == "planned":
+            why.insert(0, "计划中，还没实现")
+        for sw in spec.get("switches", []):
+            if not sel["switches"].get(sw):
+                why.append(f"需要 {sw} = 1")
+        if why:
+            item["available"] = False
+            item["reason"] = "；".join(why)
+        out.append(item)
+    return out
