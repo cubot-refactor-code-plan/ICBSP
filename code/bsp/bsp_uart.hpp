@@ -626,7 +626,10 @@ public:
     uint32_t drop_bytes;        ///< 入队失败（缓冲区满或超时）丢掉的字节数
     uint32_t start_fail_cnt;    ///< 启动发送失败的次数
     uint32_t isr_skip_cnt;      ///< 中断里发现通道不空闲，跳过续传的次数
-    uint32_t stall_recover_cnt; ///< 巡检发现卡死并恢复成功的次数
+    uint32_t stall_recover_cnt; ///< 巡检发现卡死并恢复成功的次数（含下面的 idle_kick_cnt）
+    uint32_t idle_kick_cnt;     ///< 其中“通道空闲、却有数据没人启动”、由巡检补发的次数（漏唤醒；正常应为 0）
+    uint32_t idle_kick_uart_err; ///< 最近一次发现“空闲却有数据”时 huart->ErrorCode 的快照（定位漏唤醒的来源）
+    uint32_t idle_kick_dma_err;  ///< 同上，hdmatx->ErrorCode 的快照（中断收发为 0）
     uint32_t error_cnt;         ///< TX 触发错误回调的次数（最终由 tx_recover() 恢复）
     uint32_t dma_repair_cnt;    ///< tx_recover() 发现 TX DMA 句柄卡在非 READY 并复位的次数
   };
@@ -805,6 +808,9 @@ private:
   volatile uint32_t _tx_stall_rec_cnt  = 0U;
   volatile uint32_t _tx_error_cnt      = 0U;
   volatile uint32_t _tx_dma_repair_cnt = 0U;
+  volatile uint32_t _tx_idle_kick_cnt  = 0U;
+  uint32_t          _tx_idle_kick_uart_err = 0U; ///< 只有 tx_recover() 写
+  uint32_t          _tx_idle_kick_dma_err  = 0U; ///< 只有 tx_recover() 写
 
   volatile TickType_t _tx_last_activity_tick = 0U; ///< 最近一次发送有推进（启动 / 剩余计数变化 / 串口在移位）的时刻
   size_t              _tx_last_remaining     = 0U; ///< tx_recover() 上次看到的剩余计数（只有 tx_recover() 读写）
@@ -815,7 +821,8 @@ private:
   volatile size_t _tx_chunk_len    = 0U;    ///< 这一段的长度；0 = 没有未发完的数据
   volatile bool   _tx_chunk_active = false; ///< true = 这一段已交给 Transport 在传；false = 启动失败、等待重发
 
-  bool _tx_idle_pending_seen = false; ///< 上次 tx_recover() 是否已看到「通道空闲但有数据」（只有 tx_recover() 读写）
+  bool       _tx_idle_pending_seen = false; ///< 上次 tx_recover() 是否已看到「通道空闲但有数据」（只有 tx_recover() 读写）
+  TickType_t _tx_idle_seen_activity = 0U;   ///< 那次看到时的 _tx_last_activity_tick：之后有过启动就不算“没人启动”（只有 tx_recover() 读写）
 
   /* ==================== */
   /* ==================== 内部实现 ==================== */
@@ -1093,8 +1100,10 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
   bool restarted = false;
   if (_huart->gState == HAL_UART_STATE_READY)
   {
-    // ① 通道空闲却有数据：第一次只记下，下一次仍是这样才重新启动
-    if (_tx_idle_pending_seen)
+    // ① 通道空闲却有数据：第一次只记下，下一次仍是这样、并且这期间没有任何一次启动，才重新启动。
+    //    只看“两次都空闲且有数据”会误报：写者在“写进流缓冲区 → 拿 _tx_lock 启动”之间被本巡检抢占时也是这个样子，
+    //    短段连续发送时相隔 10 ms 的两次巡检都可能落进这个窗口（阶段 3 U21 实测，数据都是写者自己随后发出的）
+    if (_tx_idle_pending_seen && _tx_last_activity_tick == _tx_idle_seen_activity)
     {
       if (Transport::repair_tx(_huart))
       {
@@ -1102,10 +1111,17 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
       }
       restarted             = start_chunk(false, nullptr);
       _tx_idle_pending_seen = false;
+      if (restarted)
+      {
+        _tx_idle_kick_cnt = _tx_idle_kick_cnt + 1U;
+      }
     }
     else
     {
-      _tx_idle_pending_seen = true;
+      _tx_idle_pending_seen  = true;
+      _tx_idle_seen_activity = _tx_last_activity_tick;
+      _tx_idle_kick_uart_err = _huart->ErrorCode;
+      _tx_idle_kick_dma_err  = (_huart->hdmatx != nullptr) ? _huart->hdmatx->ErrorCode : 0U;
     }
   }
   else
@@ -1345,6 +1361,9 @@ typename BspUartT<Transport, RX_SIZE, TX_SIZE>::TxDiag BspUartT<Transport, RX_SI
   d.start_fail_cnt    = _tx_start_fail_cnt;
   d.isr_skip_cnt      = _tx_isr_skip_cnt;
   d.stall_recover_cnt = _tx_stall_rec_cnt;
+  d.idle_kick_cnt      = _tx_idle_kick_cnt;
+  d.idle_kick_uart_err = _tx_idle_kick_uart_err;
+  d.idle_kick_dma_err  = _tx_idle_kick_dma_err;
   d.error_cnt         = _tx_error_cnt;
   d.dma_repair_cnt    = _tx_dma_repair_cnt;
   return d;
