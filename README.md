@@ -16,7 +16,7 @@
 > **当前状态（v1.0.0 之前）**：阶段 1~3 已完成——UART / CAN 回填、评审遗留问题、新功能（EventState 默认树、DmMotor 等），
 > 并在 DM-MC02（STM32H723）上做了 Debug 与 -O2 两轮全面实板回归（服务层、状态树、UART（DMA / IT）、RS485、CAN、SPI + BMI088、
 > DJI / 达妙电机转动，含 5 分钟浸泡），记录见 [docs/bsp_test/phase3_2026-11-06.md](docs/bsp_test/phase3_2026-11-06.md)。
-> 哪些模块实测过、哪些只编译验证，见 [docs/code/](docs/code/) 各层文档。路线与待办在 [undo.md](undo.md)。
+> 哪些模块实测过、哪些只编译验证，见 [docs/code/README.md 的实测状态表](docs/code/README.md#4-实测状态)。路线与待办在 [undo.md](undo.md)。
 
 ## 目录
 
