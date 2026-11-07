@@ -23,7 +23,7 @@
 | `actuator/device_servo.hpp/.cpp` | 舵机（脉宽控制） | `BspPwm` | `DeviceServo` |
 | `actuator/device_buzzer.hpp/.cpp` | 无源蜂鸣器 | `BspPwm` | `DeviceBuzzer` |
 
-设备实例在宿主 `board_cfg.hpp`（构造是 constexpr 的，写成 `inline`）或 `board_cfg.cpp`（如 `DeviceBmi088`）里定义，`init()` 在 `board_init()` 里逐个 `ICBSP_CHECK`。
+设备类的构造都不是 constexpr（构造时就要绑外设、查参数）：实例推荐定义在宿主 `board_cfg.cpp`、头文件里 `extern`；下面示例里写成 `inline` 的也能用（动态初始化，只初始化一次）。`init()` 在 `board_init()` 里逐个 `ICBSP_CHECK`。
 
 ---
 
