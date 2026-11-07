@@ -18,7 +18,7 @@ namespace
 /**
  * @brief 毫秒 → tick；portMAX_DELAY 原样保留（表示一直等）
  *
- * @note pdMS_TO_TICKS(portMAX_DELAY) 会按 32 位溢出，不再是“一直等”（见 bsp_uart.cpp 同名函数）。
+ * @note pdMS_TO_TICKS(portMAX_DELAY) 会按 32 位溢出，不再是“一直等”（与 bsp_uart.hpp 的 uart_detail::ms_to_ticks() 相同，N9）。
  */
 TickType_t ms_to_ticks(uint32_t ms)
 {

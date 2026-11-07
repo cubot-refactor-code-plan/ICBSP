@@ -19,7 +19,7 @@ struct UserMonitor
 };
 
 static volatile uint32_t    user_alive_count = 0U; ///< 心跳计数：每秒加一（GDB：print user_alive_count）
-static volatile UserMonitor user_monitor     = {}; ///< 运行监视结果，每秒刷新
+static volatile UserMonitor user_monitor     = {}; ///< 运行监视结果，每 10 s 刷新
 
 
 /* ==================== */
@@ -27,7 +27,7 @@ static volatile UserMonitor user_monitor     = {}; ///< 运行监视结果，每
 
 /**
  * @note 任务入口先等运行态：初始化失败时 sys_state.wait_running() 让任务自行退出，不会跑在半初始化的系统上。
- * @note 每秒一行，四个数分别是：
+ * @note heartbeat_task 每 1 s 加一次心跳计数；monitor_task 每 10 s 打印一行，四个数分别是：
  *       heap = 当前 FreeRTOS 堆剩余字节；min = 开机以来最低剩余；
  *       tasks = 当前任务数；stack = 本任务栈最低剩余（字，1 字 = 4 字节）。
  *       min 接近 0 → 加大 configTOTAL_HEAP_SIZE；stack 接近 0 → 加大本任务栈深。
