@@ -39,25 +39,30 @@
 /*
  * 取 0 或 1。CubeMX 没开对应外设（CAN / UART）时，库会把相关开关强制置 0，这里不用改。
  * 依赖：ICBSP_UART_PATROL_ENABLE 需要 ICBSP_SYS_TASK_ENABLE；DjiMotor 需要 CAN 收发都开，DmMotor 只需要接收路径（不满足时包含头文件直接 #error）。
- * 每个开关关掉的后果写在它自己的注释里，汇总见 docs/接入指南.md 4.2。
+ * 关掉的后果见下面的说明，汇总见 docs/接入指南.md 4.2。
  */
 
-/** @brief 系统维护任务 sys_task（10 ms）
- *  @note 关掉（0）会失去：CAN Bus-Off 自动恢复与发送卡死恢复、串口巡检、Online 掉线计时（is_online() 不再变化）、
- *        默认状态树总线层的运行期记错（设备掉线照常记）、`sys_task_stats` 与 `system_set_report_hook()` 报告、DWT 绝对时间的回绕跟踪
- *        （此时宿主要每隔不到一圈（550 MHz 下 7.8 s）调一次 `bsp_dwt.get_cycles()`，见 bsp_dwt.hpp）。 */
-#define ICBSP_SYS_TASK_ENABLE 1
-/** @brief CAN 接收路径：can_rx_task（1 ms）+ CanRxNodeT
- *  @note 关掉会失去：can_rx_task 与按 ID 分发到接收节点；DjiMotor / DmMotor 不能用（包含头文件 #error）。
- *        `BspCanT::receive()` 改为直接读原始接收缓冲（同一条总线只允许一个任务读）。 */
-#define ICBSP_CAN_RX_ENABLE 1
-/** @brief CAN 发送路径：can_tx_task + CanTxNodeT
- *  @note 关掉会失去：can_tx_task 与共帧发送节点（多个设备拼一帧、心跳、指令过期清零）；DjiMotor 不能用（#error），
- *        DmMotor 不受影响（控制帧本来就不走发送节点）；只剩 `BspCanT::send()` / `send_latest()` 直接发。 */
-#define ICBSP_CAN_TX_ENABLE 1
-/** @brief sys_task 里的串口巡检
- *  @note 关掉会失去：串口接收 / 发送卡死后的自动恢复（DMA 出错、HAL 状态卡住时不再重建收发）。 */
-#define ICBSP_UART_PATROL_ENABLE 1
+/*
+ * 各开关关掉（0）的后果：
+ *   ICBSP_SYS_TASK_ENABLE     系统维护任务 sys_task（10 ms）。会失去 CAN Bus-Off 自动恢复与发送卡死恢复、串口巡检、Online 掉线计时
+ *                             （is_online() 不再变化）、默认状态树总线层的运行期记错（设备掉线照常记）、`sys_task_stats` 与
+ *                             `system_set_report_hook()` 报告、DWT 绝对时间的回绕跟踪（此时宿主要每隔不到一圈（550 MHz 下 7.8 s）
+ *                             调一次 `bsp_dwt.get_cycles()`，见 bsp_dwt.hpp）
+ *   ICBSP_CAN_RX_ENABLE       CAN 接收路径：can_rx_task（1 ms）+ CanRxNodeT。会失去按 ID 分发到接收节点；DjiMotor / DmMotor 不能用
+ *                             （包含头文件 #error）；`BspCanT::receive()` 改为直接读原始接收缓冲（同一条总线只允许一个任务读）
+ *   ICBSP_CAN_TX_ENABLE       CAN 发送路径：can_tx_task + CanTxNodeT。会失去共帧发送节点（多个设备拼一帧、心跳、指令过期清零）；
+ *                             DjiMotor 不能用（#error），DmMotor 不受影响（控制帧本来就不走发送节点）；只剩 `send()` / `send_latest()` 直接发
+ *   ICBSP_UART_PATROL_ENABLE  sys_task 里的串口巡检。会失去串口接收 / 发送卡死后的自动恢复（DMA 出错、HAL 状态卡住时不再重建收发）
+ *
+ * 下面的生成区由 tools/integrate.py 按接入选择生成（手写工程直接改数值即可，但改了以后再用 integrate.py 生成会被拒绝，
+ * 要先把本区删掉或恢复）。
+ */
+// <ICBSP-GEN switches>
+#define ICBSP_SYS_TASK_ENABLE 1 ///< 系统维护任务 sys_task
+#define ICBSP_CAN_RX_ENABLE 1 ///< CAN 接收路径（can_rx_task + 接收节点）
+#define ICBSP_CAN_TX_ENABLE 1 ///< CAN 发送路径（can_tx_task + 发送节点）
+#define ICBSP_UART_PATROL_ENABLE 1 ///< sys_task 里的串口巡检
+// </ICBSP-GEN switches 340371e5>
 
 /* ==================== */
 /* ==================== 库任务（system_init() 创建） ==================== */

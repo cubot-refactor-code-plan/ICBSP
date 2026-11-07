@@ -33,20 +33,26 @@
 #include "FreeRTOS.h" // IWYU pragma: keep (configASSERT)
 
 
+/* ==================== 设备实例（构造不是 constexpr，定义在这里，board_cfg.hpp 里 extern） ==================== */
+// <ICBSP-GEN devices>
+// </ICBSP-GEN devices da39a3ee>
+
 void board_init(void)
 {
   // ① 计时基准 `bsp_dwt` 已由 `system_init()` 内部 init()，这里不再重复初始化。
 
-  // ② 总线与外设：失败会停在对应行号，fault_record 里能看到是哪一路。
+  // ② 总线与外设、生成的设备：失败会停在对应行号，fault_record 里能看到是哪一路。
+  // <ICBSP-GEN init>
 #if ICBSP_CAN_MODULE_ENABLED
   ICBSP_CHECK(bsp_can1.init() == Status::OK);
 #endif
   ICBSP_CHECK(bsp_uart1.init() == Status::OK);
   ICBSP_CHECK(bsp_pwm_buzzer.init() == Status::OK);
+  // </ICBSP-GEN init e74165f3>
 
-  // ③ 设备层：包装上面已 init 的外设。蜂鸣器只是包了一个 PWM 通道，没有额外 init()。
+  // ③ 手写的设备（不由 integrate.py 生成的）写在这里，生成区之外：包装上面已 init 的外设。蜂鸣器只是包了一个 PWM 通道，没有额外 init()。
   //
-  //    这里开始是设备的位置，例如（示例，按实际设备打开）：
+  //    例如（示例，按实际设备打开）：
   //      ICBSP_CHECK(chassis_lf.init() == Status::OK);   // DjiMotor<DjiMotorType::M3508, ...>（CAN）
   //      ICBSP_CHECK(yaw_motor.init() == Status::OK);    // DmMotor<...>（CAN，达妙）
   //      ICBSP_CHECK(servo_yaw.init() == Status::OK);    // DeviceServo（PWM 舵机）
@@ -56,3 +62,7 @@ void board_init(void)
   //    CAN 设备 init() 返回 FULL 通常意味着节点名额不够：
   //    去 hardware_config.h 加大 ICBSP_CAN_RX_NODE_MAX / ICBSP_CAN_TX_NODE_MAX。
 }
+
+/* ==================== 中断转调（生成的设备用到 EXTI 时在这里生成 HAL_GPIO_EXTI_Callback；宿主别处就不要再定义它） ==================== */
+// <ICBSP-GEN callbacks>
+// </ICBSP-GEN callbacks da39a3ee>
