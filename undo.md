@@ -185,14 +185,22 @@
 
 ## 阶段 4：文档补全
 
-- [ ] 采用 fork 的文档结构（Q16），以 ICBSP 名字和新目录重写；`docs/code/` 跟随代码子目录，架构图用 `tools/draw_diagrams.py` 重画
-- [ ] 修掉 D2 和 N26
-- [ ] 修掉复核补进 N26 的不一致：README“每 2 s 打印”（实际 5 s）、`board_cfg.cpp` 头注释与示例（DWT 已由库初始化、舵机不是 CAN 设备、Emm_V5 不是达妙）、monitor“每秒”（实际 10 s）、`bsp_spi.cpp` 引用不存在的 `ms_to_ticks()`、`bsp_spi.hpp` 示例段名、`integrate.py` 收尾提示、`CAN_RX_NODE_MAX` 注释
-- [ ] 接入指南补齐：C++20；宿主两个文件的职责；宿主不能定义的 HAL 回调清单（含 `HAL_FDCAN_ErrorStatusCallback`）及 `icbsp_unhandled_*()` 转调（N30）；编码器 ARR 要求（N37）；FDCAN `MessageRAMOffset` / `StdFiltersNbr`；时基优先级的两条理由；newlib 锁；BDMA 外设限制
-- [ ] 功能开关逐个写明关掉之后的后果
-- [ ] 编码规范：`get_` / `is_` 规则、包含路径规则、C++20 规则（volatile、聚合体 Config、平凡析构）、`.dma_buffer` 宏
-- [ ] 每个模块如实标注“已实测 / 只编译验证”；`docs/bsp_test/` 注明对应的代码版本
-- [ ] 许可证说明（matrix 授权来源、VQF SPDX、厂商 PDF 去留）
+- [x] 采用 fork 的文档结构（Q16），以 ICBSP 名字和新目录重写；`docs/code/` 跟随代码子目录，架构图用 `tools/draw_diagrams.py` 重画
+  - 2026-11-07 `3c8ca7e`：README、docs/code 五层（device 按 motor / sensor / remote / actuator，protocol.md 并入 device.md）、依赖矩阵按 check_layers.py；draw_diagrams.py 重画分层图与启动图
+- [x] 修掉 D2 和 N26
+  - 2026-11-07 `1492123`：7 处悬空文档引用、接入指南 CMSIS_V2 说法、编码规范旧分层与前缀；D2 其余条目已不存在
+- [x] 修掉复核补进 N26 的不一致：README“每 2 s 打印”（实际 5 s）、`board_cfg.cpp` 头注释与示例（DWT 已由库初始化、舵机不是 CAN 设备、Emm_V5 不是达妙）、monitor“每秒”（实际 10 s）、`bsp_spi.cpp` 引用不存在的 `ms_to_ticks()`、`bsp_spi.hpp` 示例段名、`integrate.py` 收尾提示、`CAN_RX_NODE_MAX` 注释
+  - 2026-11-07 `d61090b`：board_cfg.cpp 模板、monitor 每 10 s、bsp_spi 的 ms_to_ticks 引用、NODE_MAX 说明；README / bsp_spi.hpp / integrate.py 三条之前已修
+- [x] 接入指南补齐：C++20；宿主两个文件的职责；宿主不能定义的 HAL 回调清单（含 `HAL_FDCAN_ErrorStatusCallback`）及 `icbsp_unhandled_*()` 转调（N30）；编码器 ARR 要求（N37）；FDCAN `MessageRAMOffset` / `StdFiltersNbr`；时基优先级的两条理由；newlib 锁；BDMA 外设限制
+  - 2026-11-07 `c97bb88`：1.1 两个文件、1.2 回调清单与 icbsp_unhandled_*、2.3 时基两条理由与 HAL_Delay 注意事项、2.4 Message RAM / StdFiltersNbr、2.5 BDMA、2.7 编码器、2.10 newlib
+- [x] 功能开关逐个写明关掉之后的后果
+  - 2026-11-07 `f2e25a2`：模板注释 + 接入指南 4.2 汇总表
+- [x] 编码规范：`get_` / `is_` 规则、包含路径规则、C++20 规则（volatile、聚合体 Config、平凡析构）、`.dma_buffer` 宏
+  - 2026-11-07 `b4d61a2`：第 4 节按现状重写，新增第 9 节 C++20、第 10 节 .dma_buffer；get_ / is_ 与包含路径阶段 2 已写
+- [x] 每个模块如实标注“已实测 / 只编译验证”；`docs/bsp_test/` 注明对应的代码版本
+  - 2026-11-07 `ad098d4`：docs/code/README.md 实测状态表；bsp_test/README.md 记录 → 代码版本表，旧记录补版本说明
+- [x] 许可证说明（matrix 授权来源、VQF SPDX、厂商 PDF 去留）
+  - 2026-11-07：README 许可证一节（VQF SPDX、matrix 授权范围）、docs/sheet/README.md（厂商手册版权声明与官方渠道；按用户选择保留文件）
 
 ## 阶段 5：web_ui 接入帮助（Node.js 前端 + `integrate.py` 引擎，Q14 = A）
 
