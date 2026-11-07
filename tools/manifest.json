@@ -1,0 +1,282 @@
+{
+  "manifest_version": 1,
+  "library": "ICBSP",
+  "comment": "接入引擎 tools/integrate.py 读取本文件生成宿主的 board_instances.hpp / board_cfg.* / hardware_config.h 生成区。片段里的 {xxx} 由参数替换，{{ }} 是字面花括号。改了库的构造函数 / Config 就同步这里，tools/tests 的快照测试会编译生成结果。",
+
+  "peripherals": {
+    "can": {
+      "title": "CAN 总线",
+      "ioc_ip": { "h7": "FDCAN{n}", "f4": "CAN{n}" },
+      "instance": "bsp_can{n}",
+      "handle": { "h7": "hfdcan{n}", "f4": "hcan{n}" },
+      "include": "bsp/bsp_can.hpp",
+      "cubemx_header": { "h7": "fdcan.h", "f4": "can.h" },
+      "list_macro": "ICBSP_CAN_INSTANCES",
+      "params": [
+        { "key": "rx_depth", "title": "接收队列（帧）", "type": "int", "min": 1, "max": 256, "default": 16 },
+        { "key": "tx_depth", "title": "发送队列（帧）", "type": "int", "min": 1, "max": 256, "default": 16 }
+      ],
+      "declare": {
+        "h7": "inline BspCanT<{rx_depth}, {tx_depth}> {instance}({{.hfdcan = &{handle}, .name = \"{label}\"}});",
+        "f4": "inline BspCanT<{rx_depth}, {tx_depth}> {instance}({{.hcan = &{handle}, .name = \"{label}\"}});"
+      },
+      "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
+      "rules": ["can_classic", "can_nvic", "can_msgram", "can_std_filters"]
+    },
+    "uart": {
+      "title": "串口",
+      "ioc_ip": { "h7": "USART{n}|UART{n}|LPUART{n}", "f4": "USART{n}|UART{n}" },
+      "instance": "bsp_{kind}{n}",
+      "handle": { "h7": "h{kind}{n}", "f4": "h{kind}{n}" },
+      "include": "bsp/bsp_uart.hpp",
+      "cubemx_header": { "h7": "usart.h", "f4": "usart.h" },
+      "list_macro": "ICBSP_UART_INSTANCES",
+      "params": [
+        { "key": "mode", "title": "收发方式", "type": "enum", "values": ["dma", "it"], "default_from": "uart_mode" },
+        { "key": "dir", "title": "方向", "type": "enum", "values": ["TxRx", "RxOnly", "TxOnly"], "default": "TxRx" },
+        { "key": "rx_size", "title": "接收缓冲（字节）", "type": "int", "min": 16, "max": 4096, "default": 128 },
+        { "key": "tx_size", "title": "发送缓冲（字节）", "type": "int", "min": 16, "max": 4096, "default": 128 },
+        { "key": "baudrate", "title": "波特率（与 CubeMX 一致）", "type": "int", "min": 300, "max": 20000000, "default_from": "ioc_baudrate" }
+      ],
+      "declare": {
+        "h7": "inline {dma_attr}BspUartT<uart_mode::{mode}, {rx_size}, {tx_size}> {instance}({{.huart = &{handle}, .mode = UartDir::{dir}, .baudrate = {baudrate}U}});",
+        "f4": "inline {dma_attr}BspUartT<uart_mode::{mode}, {rx_size}, {tx_size}> {instance}({{.huart = &{handle}, .mode = UartDir::{dir}, .baudrate = {baudrate}U}});"
+      },
+      "dma_buffer_when": { "mode": "dma" },
+      "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
+      "rules": ["uart_nvic", "uart_dma", "uart_bdma"]
+    },
+    "spi": {
+      "title": "SPI 主机",
+      "ioc_ip": { "h7": "SPI{n}", "f4": "SPI{n}" },
+      "instance": "bsp_spi{n}",
+      "handle": { "h7": "hspi{n}", "f4": "hspi{n}" },
+      "include": "bsp/bsp_spi.hpp",
+      "cubemx_header": { "h7": "spi.h", "f4": "spi.h" },
+      "list_macro": "ICBSP_SPI_INSTANCES",
+      "params": [
+        { "key": "use_dma", "title": "长传输走 DMA", "type": "bool", "default_from": "spi_dma" },
+        { "key": "dma_threshold", "title": "走 DMA 的最小长度（字节）", "type": "int", "min": 1, "max": 1024, "default": 16 }
+      ],
+      "declare": {
+        "h7": "inline {dma_attr}BspSpi {instance}({{.hspi = &{handle}, .use_dma = {use_dma}, .dma_threshold = {dma_threshold}U}});",
+        "f4": "inline {dma_attr}BspSpi {instance}({{.hspi = &{handle}, .use_dma = {use_dma}, .dma_threshold = {dma_threshold}U}});"
+      },
+      "dma_buffer_when": { "use_dma": true },
+      "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
+      "rules": ["spi_master", "spi_keep_io", "spi_nvic"]
+    },
+    "pwm": {
+      "title": "PWM 通道",
+      "ioc_ip": { "h7": "TIM{n}", "f4": "TIM{n}" },
+      "instance": "bsp_pwm_tim{n}_ch{ch}",
+      "handle": { "h7": "htim{n}", "f4": "htim{n}" },
+      "include": "bsp/bsp_pwm.hpp",
+      "cubemx_header": { "h7": "tim.h", "f4": "tim.h" },
+      "list_macro": null,
+      "params": [
+        { "key": "timer_clk_hz", "title": "定时器输入时钟（Hz）", "type": "int", "min": 1, "max": 600000000, "default_from": "ioc_timer_clock" },
+        { "key": "prescaler", "title": "PSC（CubeMX 值）", "type": "int", "min": 0, "max": 65535, "default_from": "ioc_prescaler", "readonly": true },
+        { "key": "period", "title": "ARR（CubeMX 值）", "type": "int", "min": 0, "max": 4294967295, "default_from": "ioc_period", "readonly": true }
+      ],
+      "declare": {
+        "h7": "inline BspPwm {instance}({{.htim = &{handle}, .channel = TIM_CHANNEL_{ch}, .timer_clk_hz = {timer_clk_hz}UL, .prescaler = {prescaler}U, .period = {period}U}});",
+        "f4": "inline BspPwm {instance}({{.htim = &{handle}, .channel = TIM_CHANNEL_{ch}, .timer_clk_hz = {timer_clk_hz}UL, .prescaler = {prescaler}U, .period = {period}U}});"
+      },
+      "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
+      "rules": []
+    },
+    "encoder": {
+      "title": "编码器（定时器编码器模式）",
+      "ioc_ip": { "h7": "TIM{n}", "f4": "TIM{n}" },
+      "instance": "bsp_encoder_tim{n}",
+      "handle": { "h7": "htim{n}", "f4": "htim{n}" },
+      "include": "bsp/bsp_encoder.hpp",
+      "cubemx_header": { "h7": "tim.h", "f4": "tim.h" },
+      "list_macro": null,
+      "params": [
+        { "key": "invert", "title": "计数方向取反", "type": "bool", "default": false }
+      ],
+      "declare": {
+        "h7": "inline BspEncoder {instance}({{.htim = &{handle}, .invert = {invert}}});",
+        "f4": "inline BspEncoder {instance}({{.htim = &{handle}, .invert = {invert}}});"
+      },
+      "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
+      "rules": ["encoder_period"]
+    }
+  },
+
+  "devices": {
+    "dji_motor": {
+      "title": "DJI 电机（M3508 / M2006 / GM6020）",
+      "status": "tested",
+      "status_note": "M3508、GM6020 实测；M2006 没有实物",
+      "include": "device/motor/dji_motor.hpp",
+      "needs": [{ "key": "bus", "kind": "can", "title": "所在 CAN 总线" }],
+      "switches": ["ICBSP_CAN_RX_ENABLE", "ICBSP_CAN_TX_ENABLE"],
+      "params": [
+        { "key": "type", "title": "型号", "type": "enum", "values": ["M3508", "M2006", "GM6020"], "default": "M3508" },
+        { "key": "id", "title": "电调 ID（M3508 / M2006 1~8，GM6020 1~7）", "type": "int", "min": 1, "max": 8, "default": 1 },
+        { "key": "control", "title": "GM6020 控制模式（另两种型号忽略）", "type": "enum", "values": ["VOLTAGE", "CURRENT"], "default": "VOLTAGE" }
+      ],
+      "define": ["DjiMotor<DjiMotorType::{type}, decltype({bus})> {name}({bus}, {id}U, 0.0f, 0.0f, DjiMotorControlMode::{control});"],
+      "extern": ["extern DjiMotor<DjiMotorType::{type}, decltype({bus})> {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"]
+    },
+    "dm_motor": {
+      "title": "达妙电机（J4310 / J4340P / J8009P）",
+      "status": "tested",
+      "status_note": "J4340P 实测（MIT）；J4310 只读寄存器与反馈；J8009P 没有实物",
+      "include": "device/motor/dm_motor.hpp",
+      "needs": [{ "key": "bus", "kind": "can", "title": "所在 CAN 总线" }],
+      "switches": ["ICBSP_CAN_RX_ENABLE"],
+      "params": [
+        { "key": "model", "title": "型号", "type": "enum", "values": ["J4310", "J4340P", "J4340P_V11", "J8009P", "UNKNOWN"], "default": "J4340P" },
+        { "key": "can_id", "title": "CAN_ID（与 DJI 电机同总线时避开 0x01~0x0B、0xFE、0xFF、0x00）", "type": "int", "min": 1, "max": 255, "default": 16, "hex": true },
+        { "key": "master_id", "title": "MST_ID（反馈帧 ID，每台不同）", "type": "int", "min": 1, "max": 2046, "default": 32, "hex": true },
+        { "key": "mode", "title": "驱动器控制模式", "type": "enum", "values": ["MIT", "POS_VEL", "VEL"], "default": "MIT" }
+      ],
+      "define": ["DmMotor<decltype({bus})> {name}({bus}, {{.model = DmModel::{model}, .can_id = {can_id}U, .master_id = {master_id}U, .mode = DmMode::{mode}}});"],
+      "extern": ["extern DmMotor<decltype({bus})> {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"],
+      "notes": ["映射范围留 0：在任务里、system_start() 之后调 {name}.sync_ranges() 从驱动器读", "控制帧不走发送节点：控制任务要按周期持续调 set_*()"]
+    },
+    "bmi088": {
+      "title": "BMI088 IMU（含 VQF 姿态）",
+      "status": "tested",
+      "status_note": "DM-MC02 板载 BMI088 实测",
+      "include": "device/sensor/device_bmi088.hpp",
+      "needs": [
+        { "key": "bus", "kind": "spi", "title": "SPI 总线" },
+        { "key": "acc_cs", "kind": "gpio_out", "title": "加速度计片选（带标签的 GPIO 输出）" },
+        { "key": "gyro_cs", "kind": "gpio_out", "title": "陀螺仪片选" },
+        { "key": "acc_int", "kind": "gpio_exti", "title": "加速度计 INT1（EXTI，可不接）", "optional": true },
+        { "key": "gyro_int", "kind": "gpio_exti", "title": "陀螺仪 INT3（EXTI，姿态解算需要）", "optional": true }
+      ],
+      "switches": [],
+      "params": [
+        { "key": "acc_range", "title": "加速度计量程", "type": "enum", "values": ["G3", "G6", "G12", "G24"], "default": "G24" },
+        { "key": "gyro_range", "title": "陀螺仪量程", "type": "enum", "values": ["DPS2000", "DPS1000", "DPS500", "DPS250", "DPS125"], "default": "DPS2000" }
+      ],
+      "define": [
+        "BspSpiDevice {name}_acc_spi({bus}, {{{acc_cs}_GPIO_Port, {acc_cs}_Pin, 0x80U, 1U}});",
+        "BspSpiDevice {name}_gyro_spi({bus}, {{{gyro_cs}_GPIO_Port, {gyro_cs}_Pin, 0x80U, 0U}});",
+        "DeviceBmi088 {name}({name}_acc_spi, {name}_gyro_spi, {{.acc_range = DeviceBmi088::AccRange::{acc_range}, .gyro_range = DeviceBmi088::GyroRange::{gyro_range}}});"
+      ],
+      "extern": ["extern BspSpiDevice {name}_acc_spi;", "extern BspSpiDevice {name}_gyro_spi;", "extern DeviceBmi088 {name};"],
+      "init": [
+        "ICBSP_CHECK({name}_acc_spi.init() == Status::OK);",
+        "ICBSP_CHECK({name}_gyro_spi.init() == Status::OK);",
+        "ICBSP_CHECK({name}.init() == Status::OK);"
+      ],
+      "exti": [
+        { "pin": "acc_int", "call": "{name}.on_acc_drdy_isr(&woken);" },
+        { "pin": "gyro_int", "call": "{name}.on_gyro_drdy_isr(&woken);" }
+      ],
+      "notes": ["不要启动板载加热电阻的定时器（DM-MC02 的 PB1 / TIM3_CH4）"]
+    },
+    "r9ds": {
+      "title": "R9DS 遥控接收机（SBUS）",
+      "status": "compile_only",
+      "include": "device/remote/device_r9ds.hpp",
+      "needs": [{ "key": "bus", "kind": "uart", "title": "SBUS 串口（100000 bit/s、8E2、反相）" }],
+      "switches": [],
+      "params": [],
+      "define": ["DeviceR9dsT<decltype({bus})> {name}({bus});"],
+      "extern": ["extern DeviceR9dsT<decltype({bus})> {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"]
+    },
+    "emmv5_group": {
+      "title": "张大头 Emm_V5 步进闭环（一路串口多地址）",
+      "status": "compile_only",
+      "include": "device/motor/device_emmv5_group.hpp",
+      "needs": [{ "key": "bus", "kind": "uart", "title": "串口（RS485 / TTL）" }],
+      "switches": [],
+      "params": [
+        { "key": "addrs", "title": "电机地址（逗号分隔，1~255）", "type": "int_list", "min": 1, "max": 255, "default": [1] },
+        { "key": "checksum", "title": "校验方式（与驱动器菜单一致）", "type": "enum", "values": ["FIXED_6B", "XOR"], "default": "FIXED_6B" }
+      ],
+      "define": ["DeviceEmmv5GroupT<decltype({bus})> {name}({{.uart = {bus}, .addr = {{{addrs}}}, .checksum = emmv5::Checksum::{checksum}}});"],
+      "extern": ["extern DeviceEmmv5GroupT<decltype({bus})> {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"]
+    },
+    "servo": {
+      "title": "舵机（PWM 脉宽）",
+      "status": "compile_only",
+      "include": "device/actuator/device_servo.hpp",
+      "needs": [{ "key": "pwm", "kind": "pwm", "title": "PWM 通道（50 Hz / 20 ms）" }],
+      "switches": [],
+      "params": [
+        { "key": "range_deg", "title": "行程（度）", "type": "float", "min": 1, "max": 360, "default": 180 },
+        { "key": "pulse_min_us", "title": "0° 脉宽（µs）", "type": "float", "min": 100, "max": 3000, "default": 500 },
+        { "key": "pulse_max_us", "title": "满行程脉宽（µs）", "type": "float", "min": 100, "max": 3000, "default": 2500 }
+      ],
+      "define": ["DeviceServo {name}({{.pwm = &{pwm}, .pulse_min_us = {pulse_min_us}f, .pulse_max_us = {pulse_max_us}f, .range_deg = {range_deg}f}});"],
+      "extern": ["extern DeviceServo {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"]
+    },
+    "buzzer": {
+      "title": "无源蜂鸣器",
+      "status": "board_use",
+      "status_note": "开机提示音，没有专门用例",
+      "include": "device/actuator/device_buzzer.hpp",
+      "needs": [{ "key": "pwm", "kind": "pwm", "title": "PWM 通道" }],
+      "switches": [],
+      "params": [],
+      "define": ["DeviceBuzzer {name}({pwm});"],
+      "extern": ["extern DeviceBuzzer {name};"],
+      "init": []
+    },
+    "device_motor": {
+      "title": "直流减速电机（H 桥两路 PWM + 编码器）",
+      "status": "compile_only",
+      "include": "device/motor/device_motor.hpp",
+      "needs": [
+        { "key": "pwm_a", "kind": "pwm", "title": "H 桥 IN1" },
+        { "key": "pwm_b", "kind": "pwm", "title": "H 桥 IN2" },
+        { "key": "encoder", "kind": "encoder", "title": "同轴编码器" }
+      ],
+      "switches": [],
+      "params": [
+        { "key": "encoder_lines", "title": "编码器线数", "type": "float", "min": 1, "max": 100000, "default": 500 },
+        { "key": "gear_ratio", "title": "减速比", "type": "float", "min": 1, "max": 10000, "default": 30 },
+        { "key": "wheel_diameter_cm", "title": "轮径（cm）", "type": "float", "min": 0.1, "max": 1000, "default": 6.5 }
+      ],
+      "define": ["DeviceMotor {name}({{.pwm_a = &{pwm_a}, .pwm_b = &{pwm_b}, .encoder = &{encoder}, .encoder_lines = {encoder_lines}f, .gear_ratio = {gear_ratio}f, .wheel_diameter_cm = {wheel_diameter_cm}f}});"],
+      "extern": ["extern DeviceMotor {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"],
+      "notes": ["PID 参数默认全 0，要按实机标定后写进 Config.pid"]
+    },
+    "dr16": { "title": "DR16 接收机（DT7 遥控器）", "status": "planned", "needs": [{ "key": "bus", "kind": "uart", "title": "DBUS 串口" }] },
+    "et08": { "title": "ET08 接收机", "status": "planned", "needs": [{ "key": "bus", "kind": "uart", "title": "串口" }] }
+  },
+
+  "switches": {
+    "ICBSP_SYS_TASK_ENABLE": { "title": "系统维护任务 sys_task", "default": 1, "needs_ip": null },
+    "ICBSP_CAN_RX_ENABLE": { "title": "CAN 接收路径（can_rx_task + 接收节点）", "default": 1, "needs_ip": "can" },
+    "ICBSP_CAN_TX_ENABLE": { "title": "CAN 发送路径（can_tx_task + 发送节点）", "default": 1, "needs_ip": "can" },
+    "ICBSP_UART_PATROL_ENABLE": { "title": "sys_task 里的串口巡检", "default": 1, "needs_ip": "uart", "requires": ["ICBSP_SYS_TASK_ENABLE"] }
+  },
+
+  "rules": {
+    "rtos_cmsis_v2":   { "level": "error", "title": "FreeRTOS 接口是 CMSIS_V2", "fix": "Middleware → FREERTOS → Interface 选 CMSIS_V2", "auto_fix": false },
+    "rtos_tick":       { "level": "error", "title": "FreeRTOS tick 1 kHz", "fix": "FREERTOS → Config parameters → TICK_RATE_HZ = 1000", "auto_fix": true },
+    "rtos_stack_check":{ "level": "error", "title": "栈溢出检查 Option2", "fix": "FREERTOS → CHECK_FOR_STACK_OVERFLOW = Option2", "auto_fix": true },
+    "rtos_malloc_hook":{ "level": "error", "title": "分配失败钩子", "fix": "FREERTOS → USE_MALLOC_FAILED_HOOK = Enabled", "auto_fix": true },
+    "rtos_default_task":{ "level": "warn", "title": "defaultTask 是 As weak", "fix": "FREERTOS → Tasks and Queues → defaultTask 的 Code Generation Option = As weak（As external 时要自己定义 StartDefaultTask 并转调 app_default_task）", "auto_fix": true },
+    "toolchain_cmake": { "level": "error", "title": "工具链 CMake", "fix": "Project Manager → Toolchain / IDE = CMake", "auto_fix": true },
+    "timebase_tim":    { "level": "warn", "title": "HAL 时基不是 SysTick", "fix": "SYS → Timebase Source 选一个空闲 TIM（优先级不要求，默认 15 即可）", "auto_fix": false },
+    "dcache_off":      { "level": "error", "title": "D-Cache 关闭（H7）", "fix": "CORTEX_M7 → CPU DCache = Disabled（库不做 Cache 维护）", "auto_fix": true },
+    "can_classic":     { "level": "error", "title": "FDCAN 用经典 CAN 帧格式", "fix": "FDCANx → Frame Format = Classic mode", "auto_fix": true },
+    "can_nvic":        { "level": "error", "title": "FDCAN 中断线 0 打开", "fix": "NVIC → FDCANx interrupt 0 勾上", "auto_fix": true },
+    "can_msgram":      { "level": "error", "title": "几路 FDCAN 的 Message RAM 不重叠", "fix": "FDCANx → Message RAM Offset 依次错开（按各路占用字数累加）", "auto_fix": true },
+    "can_std_filters": { "level": "warn", "title": "FDCAN 标准过滤器数 ≥ 1", "fix": "FDCANx → Std Filters Nbr = 1（填 0 也能收，靠全局过滤器）", "auto_fix": true },
+    "uart_nvic":       { "level": "error", "title": "串口全局中断打开", "fix": "NVIC → USARTx global interrupt 勾上（IDLE 断帧依赖它）", "auto_fix": true },
+    "uart_dma":        { "level": "warn", "title": "DMA 模式的串口 RX / TX 都配了 DMA、字节对齐", "fix": "USARTx → DMA Settings 加 RX、TX 两条，Data Width = Byte（RX 配 Normal 即可，库会改成循环）", "auto_fix": false },
+    "uart_bdma":       { "level": "error", "title": "BDMA 外设（LPUART1 等）不能用 DMA 模式", "fix": "收发方式选 it（中断）", "auto_fix": false },
+    "spi_master":      { "level": "error", "title": "SPI 全双工主机、软件 NSS", "fix": "SPIx → Mode = Full-Duplex Master，Hardware NSS Signal = Disable", "auto_fix": false },
+    "spi_keep_io":     { "level": "error", "title": "SPI Master Keep IO State = Enable（H7）", "fix": "SPIx → Advanced Parameters → Master Keep IO State = Enabled", "auto_fix": true },
+    "spi_nvic":        { "level": "warn", "title": "SPI 用 DMA 时开 SPI 全局中断", "fix": "NVIC → SPIx global interrupt 勾上", "auto_fix": true },
+    "encoder_period":  { "level": "error", "title": "编码器定时器的 Period 是计数器最大值", "fix": "TIMx → Counter Period = 0xFFFF（32 位定时器 0xFFFFFFFF）", "auto_fix": true }
+  }
+}

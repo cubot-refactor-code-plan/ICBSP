@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: 分层检查（下层不包含上层）
         run: python3 tools/check_layers.py
+      - name: 接入清单自检（tools/manifest.json 的片段占位符、规则引用）
+        run: cd tools && python3 -m icbsp_tool.manifest
       - name: 构建主机单元测试
         run: |
           cmake -S tests/host -B build/host
