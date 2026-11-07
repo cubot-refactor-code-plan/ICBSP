@@ -15,6 +15,10 @@
  *       - uart_mode::dma：RX DMA 工作在**循环模式**（init() 自动把 hdmarx 改成 Circular + 直接模式）。
  *         HAL 的 IDLE / 半满（HT）/ 写满（TC）事件都不停 DMA，库按“上次读到的位置 → DMA 当前写到的位置”
  *         把新字节投进流缓冲区（处理回绕）。IDLE 路径从不调用阻塞版 HAL_DMA_Abort()，没有重新挂接收的空窗。
+ *         **前提：串口 / RX DMA 中断被挡住（临界区、更高优先级中断）的时间不超过收满半个 RX_SIZE 的时间**
+ *         （RX_SIZE / 2 × 10 / 波特率，例如 128 字节、921600 下约 0.69 ms）。超过时 DMA 可能写满一圈、覆盖还没投递的数据，
+ *         这种丢失库的诊断计数察觉不到（阶段 3 实测 U19：屏蔽 0.45 圈无损，0.75 / 1.5 圈丢帧且计数为 0）。
+ *         高波特率或长临界区的场合加大 RX_SIZE。
  *       - uart_mode::it：HAL 的 ReceiveToIdle_IT，每次 IDLE / 写满投递一包后立即重新挂接收。
  *       - 接收流缓冲区容量是 2 × RX_SIZE（给“写满投递 + 紧接着的 IDLE 投递”留余量）。
  *       - 线路错误（ORE / FE / NE / PE）时 HAL 在 DMA 模式下会中止接收；sys_task 每 10 ms 调 rx_recover() 重建。
