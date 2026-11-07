@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from icbsp_tool import checks as ioc_checks  # noqa: E402
 from icbsp_tool import manifest as ioc_manifest  # noqa: E402
 from icbsp_tool import selection as ioc_selection  # noqa: E402
+from icbsp_tool import cubemx as ioc_cubemx  # noqa: E402
 from icbsp_tool import generate as ioc_generate  # noqa: E402
 from icbsp_tool import sync as ioc_sync  # noqa: E402
 from icbsp_tool.ioc import Ioc  # noqa: E402
@@ -1455,6 +1456,58 @@ def emit_json(host, args, rep, plan, ioc, ioc_results, sel):
     return 0 if out["ok"] else 1
 
 
+def run_fix_ioc(host, args):
+    """--fix-ioc / --regenerate：改 .ioc、（可选）CubeMX 重新生成，然后结束"""
+    step = ".ioc 修改"
+    rep = Report()
+    out = {"tool": "icbsp-integrate", "schema": 1, "mode": "fix-ioc", "fixed": [], "ioc_diff": "", "regenerated": False, "cubemx_output": ""}
+    path = find_ioc(host)
+    if path is None:
+        rep.error(step, "找不到唯一的 .ioc（用 --ioc 指定）")
+    else:
+        man = ioc_manifest.load()
+        ioc = Ioc(path)
+        if args.apply:
+            _, sel = load_selection(host, rep, args.apply)
+        else:
+            sel = ioc_selection.default_selection(ioc, man)
+        if sel is not None and not rep.has_error:
+            ids = "all" if (args.fix_ioc or "all") == "all" else set(args.fix_ioc.split(","))
+            if args.fix_ioc:
+                results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel))
+                done = ioc_cubemx.apply_fixes(ioc, results, ids)
+                out["fixed"] = [{"id": i, "target": t, "key": k, "old": o, "new": n} for i, t, k, o, n in done]
+                manual = [r for r in results if not r["ok"] and not r["auto_fix"] and (ids == "all" or r["id"] in ids)]
+                for r in manual:
+                    rep.warn(step, f"{r['target'] + '：' if r['target'] else ''}{r['title']}不能自动修改 → {r['fix']}")
+                if done:
+                    rel = path.name
+                    out["ioc_diff"] = "".join(difflib.unified_diff(
+                        [l + "\n" for l in ioc.original], [l + "\n" for l in ioc.lines], f"a/{rel}", f"b/{rel}"))
+                    if args.dry_run:
+                        rep.ok(step, f"将修改 {len(done)} 个键（--plan，未写入）")
+                    else:
+                        bak = ioc_cubemx.backup(path)
+                        path.write_bytes(ioc.to_bytes())
+                        rep.ok(step, f"修改了 {len(done)} 个键，原文件备份为 {bak.name}")
+                else:
+                    rep.skip(step, "没有能自动修改的失败项")
+            if args.regenerate and not args.dry_run and not rep.has_error:
+                ok, msg, tail = ioc_cubemx.regenerate(path, args.cubemx)
+                out["regenerated"] = ok
+                out["cubemx_output"] = tail
+                (rep.ok if ok else rep.error)("CubeMX", msg)
+    out["report"] = [{"level": LEVELS.get(l, l), "step": st, "msg": m} for l, st, m in rep.items]
+    out["ok"] = not rep.has_error
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+    else:
+        rep.print()
+        if out["ioc_diff"] and args.dry_run:
+            print("\n" + out["ioc_diff"])
+    return 0 if out["ok"] else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description="把 icbsp 接入 STM32H7 CubeMX（CMake）宿主工程（详见 docs/接入指南.md）")
     ap.add_argument("--host", type=Path, help="宿主工程根目录（默认：本库作为 submodule 所在的工程，否则当前目录）")
@@ -1472,6 +1525,9 @@ def main():
     ap.add_argument("--ioc", type=Path, help="CubeMX 的 .ioc（默认：宿主根目录下唯一的 .ioc）")
     ap.add_argument("--apply", metavar="选择.json", help="按选择生成 board_instances.hpp / board_cfg.* / hardware_config.h 的生成区（格式见 tools/icbsp_tool/selection.py）")
     ap.add_argument("--overwrite-edited", action="store_true", help="生成区被手改过时也覆盖（默认停下）")
+    ap.add_argument("--fix-ioc", metavar="all|规则id,…", help="把 .ioc 校验里能自动修改的失败项写进 .ioc（先备份成 .ioc.bak-时间）；只做这一件事")
+    ap.add_argument("--regenerate", action="store_true", help="（配合 --fix-ioc，或单独用）用 STM32CubeMX 命令行无界面重新生成工程")
+    ap.add_argument("--cubemx", help="STM32CubeMX 安装目录（默认环境变量 ICBSP_CUBEMX，再找 ~/STM32CubeMX 等）")
     ap.add_argument("--plan", action="store_true", help="同 --dry-run：只算修改、给出 diff，不写文件")
     ap.add_argument("--json", action="store_true", help="机器接口：只在 stdout 输出一个 JSON（检查结果、外设、可挂设备、选择、生成区状态、diff），给 Web UI 用")
     args = ap.parse_args()
@@ -1491,6 +1547,8 @@ def main():
     global IOC_OVERRIDE
     if args.ioc:
         IOC_OVERRIDE = (host / args.ioc).resolve() if not args.ioc.is_absolute() else args.ioc
+    if args.fix_ioc or args.regenerate:
+        return run_fix_ioc(host, args)
     rep = Report()
     plan = Plan()
     ok = check_prerequisites(host, rep)
