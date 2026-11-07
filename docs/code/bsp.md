@@ -11,14 +11,17 @@
 
 | 文件 | 职责 | 关键符号 |
 | --- | --- | --- |
-| `bsp_can.hpp/.cpp` | 经典 CAN：收发队列、Bus-Off 恢复、错误中断 | `BspCanT<RX, TX>`、`CanRxMsg`、`CanTxMsg` |
+| `bsp_can.hpp/.cpp` | CAN 入口：H7 转给 `bsp_fdcan`；F4 在这里实现 bxCAN（回调在 `bsp_can.cpp`） | `BspCanT<RX, TX>`、`CanRxMsg`、`CanTxMsg` |
+| `bsp_fdcan.hpp/.cpp` | H7 的 FDCAN（经典 CAN 模式）：收发缓冲、Bus-Off 恢复、错误状态、诊断计数；回调在 `.cpp` | 同上 |
 | `bsp_uart.hpp/.cpp` | 串口：IDLE 断帧 + DMA/中断收发 + FreeRTOS 流缓冲 | `BspUartT<Tp, RX, TX>`、`UartDir`、`uart_mode::dma/it` |
 | `bsp_spi.hpp/.cpp` | SPI 主机 + 片选设备封装 | `BspSpi`、`BspSpiDevice` |
 | `bsp_pwm.hpp/.cpp` | PWM 输出（占空比 / 脉宽 / 频率） | `BspPwm` |
 | `bsp_gpio.hpp` | GPIO 读写（纯头文件，`constexpr` 构造） | `BspGpio` |
 | `bsp_key.hpp/.cpp` | 按键消抖 + 中断 | `BspKey` |
 | `bsp_encoder.hpp/.cpp` | 编码器（定时器编码器模式）增量读取 | `BspEncoder` |
-| `bsp_dwt.hpp/.cpp` | DWT 计时：微秒/纳秒延时、周期耗时统计 | `BspDwt` |
+| `bsp_dwt.hpp/.cpp` | DWT 计时：64 位时间轴、微秒 / 纳秒延时、周期耗时统计 | `BspDwt`、`bsp_dwt` |
+| `bsp_series.hpp` | 库内唯一包含 HAL 的地方：按系列选 `stm32h7xx_hal.h` / `stm32f4xx_hal.h`，把 H7 / F4 的命名差异收成宏 | `ICBSP_SERIES_H7` / `ICBSP_SERIES_F4` |
+| `bsp_dma_buffer.hpp` | `.dma_buffer` 段宏与 DMA 可达性判断 | `ICBSP_DMA_BUFFER(name)`、`icbsp_dma_reachable()` |
 
 ---
 
@@ -26,8 +29,9 @@
 
 ### 2.1 实例放哪
 
-实例**不在库里**，都在宿主的 `user/board/board_cfg.hpp` 里用 `inline` 定义（C++20 inline 变量），
-库里通过 `board_instances.hpp` 的 X-macro 拿到名字。这样库不含任何板级信息，换板只改宿主。
+实例**不在库里**。构造是 constexpr 的（`BspCanT`、`BspUartT`、`BspSpi`、`BspPwm`、`BspGpio`）在宿主 `board_cfg.hpp` 里写成 `inline` 全局变量（C++20），
+不是 constexpr 的（`BspSpiDevice` 等）定义在 `board_cfg.cpp`、头文件里 `extern`。库通过 `board_instances.hpp` 的 X-macro 拿到 CAN / UART / SPI 实例的名字。
+这样库不含任何板级信息，换板只改宿主。
 
 ### 2.2 `init()` 一律返回 `Status`
 
@@ -35,8 +39,8 @@
 ICBSP_CHECK(bsp_can1.init() == Status::OK);
 ```
 
-失败不要在库里 `printf` 后继续，直接在 `board_init()` 里 `configASSERT` 停机：
-`fault_record` 会记下调用行号，比静默半初始化好查得多。
+失败不要打印后继续：`board_init()` 里每个 `init()` 单独一行 `ICBSP_CHECK`（`service/system/fault_record.hpp`，总会求值），
+失败时把文件 / 行号写进 `fault_record` 再停机，比静默半初始化好查得多。不要写成 `configASSERT(x.init() == …)`：断言可能被定义成空，`init()` 就不调了。
 
 ### 2.3 `.dma_buffer` 段
 
@@ -71,7 +75,7 @@ inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
 | `Status service_recovery()` / `bool tx_recover()` | `sys_task` 每 10 ms 调用：Bus-Off 恢复 / 发送兜底 |
 
 - `CanRxMsg` = `FDCAN_RxHeaderTypeDef header` + `uint8_t data[8]`（DLC 之后的字节为 0）；`CanTxMsg` = `id` + `id_type` + `dlc` + `data[8]`。
-- 只有头文件；`bsp_can.cpp` 只放 HAL 回调。库占用 `HAL_FDCAN_RxFifo0Callback`、`HAL_FDCAN_TxFifoEmptyCallback`、`HAL_FDCAN_ErrorStatusCallback`，宿主不能再定义；
+- 只有头文件。H7 的实现在 `bsp_fdcan.hpp`、HAL 回调在 `bsp_fdcan.cpp`；F4（bxCAN）的实现在 `bsp_can.hpp` 的 `#elif` 分支、回调在 `bsp_can.cpp`，Config 的句柄字段是 `hcan`（F4 分支只编译验证过）。H7 下库占用 `HAL_FDCAN_RxFifo0Callback`、`HAL_FDCAN_TxFifoEmptyCallback`、`HAL_FDCAN_ErrorStatusCallback`，宿主不能再定义；
   不在 `ICBSP_CAN_INSTANCES` 里的 FDCAN 的这三个回调转到弱函数 `icbsp_unhandled_fdcan_*()`，宿主定义同名函数即可接收（见下文“清单外外设的回调”）。
 - 远程帧由硬件拒收；DLC > 8 的帧丢弃并计入 `diagnostics.rx_len_drop`。
 - TX 队列模式（CubeMX `TxFifoQueueMode = Queue`）下，同一 ID 的帧保证按发送顺序上线（硬件里已有同 ID 的帧时，下一帧先在软件里等）。
@@ -109,6 +113,8 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 - `receive()` **单读者**：同一个串口只能由一个任务读（FreeRTOS 流缓冲区的限制）；`send()` / `printf()` 多写者安全。
 - `RxDiag` 里 `pe_cnt` / `fe_cnt` / `ne_cnt` / `ore_cnt` 分别计数线路错误：DMA 模式下 FE / NE / PE 不会中止接收，坏字节照常进流缓冲区，只能靠它们发现（评审 F7）。
 - `printf()`：取锁超时返回 `TIMEOUT`，空串返回 `OK`；`tx_recover()` 在 `Config::baudrate = 0` 时按 CubeMX 的波特率估算卡死阈值。
+- **循环接收的前提**：串口 / RX DMA 中断被挡住（临界区、更高优先级中断）的时间要短于收满半个 `RX_SIZE` 的时间（`RX_SIZE / 2 × 10 / 波特率`，128 字节、921600 下约 0.69 ms）。超过时 DMA 可能写满一圈、覆盖还没投递的数据，库的计数察觉不到（阶段 3 U19 实测）。高波特率或有长临界区时加大 `RX_SIZE`。
+- `TxDiag`：`stall_recover_cnt` 是巡检恢复发送的总次数；其中 `idle_kick_cnt` 是“通道空闲、却有数据没人启动”由巡检补发的次数（漏唤醒，正常应为 0），`idle_kick_uart_err` / `idle_kick_dma_err` 是当时 HAL ErrorCode 的快照。
 - DMA 可达性按 DMA 控制器判断（`icbsp_dma_reachable()`，`bsp_dma_buffer.hpp`）：DMA1 / DMA2 访问不到 ITCM / DTCM；
   BDMA（LPUART1、SPI6 等）只能访问 SRAM4，`.dma_buffer` 在 AXI SRAM，这些外设的实例 `init()` 会返回 `BAD_ARG`（评审 A4）。
 
@@ -118,8 +124,9 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 inline ICBSP_DMA_BUFFER(bsp_spi2) BspSpi bsp_spi2(
     {.hspi = &hspi2, .use_dma = true, .dma_threshold = 16U});
 
-inline BspSpiDevice bmi088_acc_spi(bsp_spi2,
-    {.cs_port = GYRO_ACC_CS_GPIO_Port, .cs_pin = GYRO_ACC_CS_Pin, .read_flag = 0x80U, .read_dummy = 1U});
+// board_cfg.cpp（BspSpiDevice 的构造不是 constexpr）
+BspSpiDevice bmi088_acc_spi(bsp_spi2,
+    {.cs_port = ACC_CS_GPIO_Port, .cs_pin = ACC_CS_Pin, .read_flag = 0x80U, .read_dummy = 1U});
 ```
 
 - `BspSpi` 管总线：`lock()/unlock()` 互斥、`transfer_locked()` 传输；引脚 NSS 必须是**软件**模式
@@ -131,7 +138,7 @@ inline BspSpiDevice bmi088_acc_spi(bsp_spi2,
 
 ### 清单外外设的回调
 
-库占用了 UART / SPI / FDCAN 的若干 HAL 回调（宿主不能再定义它们）。宿主自己用 HAL 管、不在 `BSP_*_INSTANCES` 清单里的外设，
+库占用了 UART / SPI / FDCAN 的若干 HAL 回调（宿主不能再定义它们）。宿主自己用 HAL 管、不在 `ICBSP_*_INSTANCES` 清单里的外设，
 这些回调转到下面的弱函数（默认什么也不做），宿主定义同名强函数即可：
 
 | 库占用的回调 | 清单外转到 |
@@ -197,10 +204,11 @@ CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个
 #define ICBSP_SPI_INSTANCES(X) /* 无 */
 ```
 
-`code/bsp/bsp_can.cpp` 里三段 `ICBSP_CAN_INSTANCES(X)` 分别展开成「中断分发」「发送节拍」「恢复」。
+展开的地方：`bsp_fdcan.cpp` / `bsp_uart.cpp` / `bsp_spi.cpp` 的 HAL 回调分发与“是否在清单里”的核对，`can_rx_task` / `can_tx_task` 逐总线处理，
+`sys_task` 的 Bus-Off 恢复与串口巡检，`state_tree` 给每个实例建总线节点。
 
-**漏写不会报错**：编译通过、运行也正常，只是那个实例的中断不会被分发、`sys_task` 也不巡检它。
-表现为「数据收不到」。所以加实例时 `board_cfg.hpp` 与 `board_instances.hpp` 必须一起改。
+**漏写会被 `init()` 拒绝**：实例不在清单里、或清单里两个实例绑同一句柄时，`init()` 返回 `BAD_ARG`（`board_init()` 的 `ICBSP_CHECK` 停机）。
+加实例时 `board_cfg.hpp`、`board_instances.hpp`、`board_cfg.cpp`（`init()`）三处一起改。
 
 ---
 
@@ -210,7 +218,8 @@ CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个
 | --- | --- |
 | 串口参数上电变随机值 | `.dma_buffer` 写成 `NOLOAD`，或漏了 `AT> FLASH` |
 | 串口 `init()` 返回 `BAD_ARG` | 实例没写进 `ICBSP_UART_INSTANCES` / 两个实例绑同一句柄 / DMA 模式没配 DMA / 实例不在 `.dma_buffer` |
-| CAN 收不到帧 | FDCAN 中断没开 / 过滤器没放行 / 实例没写进 `ICBSP_CAN_INSTANCES` |
+| CAN 收不到帧 | FDCAN 中断没开 / 过滤器没放行 / 没有接收节点认领（进了回退缓冲，`diagnostics.rx_unclaimed` 在涨） |
+| `init()` 返回 `BAD_ARG` | 实例没写进 `ICBSP_*_INSTANCES`，或清单里两个实例绑同一句柄 |
 | 多个 SPI 设备互相踩数据 | 没用 `lock()` 包住整笔事务 |
 | 浮点打印空或乱码 | 宿主 CMake 少了 `-u _printf_float`（nano.specs） |
 | `get_delta_s()` 返回值离谱 | 两个任务共用了同一个 `last` |
