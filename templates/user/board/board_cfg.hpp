@@ -62,7 +62,10 @@
 #ifndef __BOARD_CFG_HPP__
 #define __BOARD_CFG_HPP__
 
+// 下面三个生成区（includes / peripherals / devices）由 tools/integrate.py 按 .ioc 与接入选择生成，区外的内容不动。
+// 手写工程直接改；改过的生成区再用 integrate.py 生成会被拒绝（先删掉或恢复）。
 // CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
+// <ICBSP-GEN includes>
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（ICBSP_SERIES_F4）
 #include "main.h"         // IWYU pragma: keep
 #include "tim.h"
@@ -83,6 +86,7 @@
 #include "bsp/bsp_pwm.hpp"
 #include "bsp/bsp_uart.hpp"
 #include "device/actuator/device_buzzer.hpp"
+// </ICBSP-GEN includes 2c89c80c>
 
 /** @brief 板级初始化：各实例 init()，实现在 board_cfg.cpp */
 void board_init(void);
@@ -95,6 +99,7 @@ void board_init(void);
 // 否则每个包含本头文件的 .cpp 都会生成一份构造代码，还会注册 atexit。
 // 需要释放资源时显式调 `deinit()`，不要写析构函数。
 
+// <ICBSP-GEN peripherals>
 /**
  * CAN1：一条总线的收发（`BspCanT<收队列帧数, 发队列帧数>`）
  *
@@ -148,6 +153,7 @@ inline BspPwm bsp_pwm_buzzer(
    .timer_clk_hz = 275000000UL,
    .prescaler    = 23U,
    .period       = 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
+// </ICBSP-GEN peripherals 573e4330>
 
 
 /* ==================== */
@@ -155,11 +161,13 @@ inline BspPwm bsp_pwm_buzzer(
 // 设备层：包装外设，提供“按物理量”的接口；不拥有下面的外设实例。
 // 顺序要求：设备必须在本文件里外设实例之后定义，并且在 board_init() 里外设 init() 之后 init()。
 
+// <ICBSP-GEN devices>
 /**
  * 无源蜂鸣器：包装上面的 PWM 通道
  *
  */
 inline DeviceBuzzer buzzer(bsp_pwm_buzzer);
+// </ICBSP-GEN devices 2f179c51>
 
 /* ==================== */
 
