@@ -21,7 +21,7 @@
         "f4": "inline BspCanT<{rx_depth}, {tx_depth}> {instance}({{.hcan = &{handle}, .name = \"{label}\"}});"
       },
       "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
-      "rules": ["can_classic", "can_nvic", "can_msgram", "can_std_filters"]
+      "rules": ["can_classic", "can_fifo", "can_nvic", "can_msgram", "can_std_filters"]
     },
     "uart": {
       "title": "串口",
@@ -265,9 +265,10 @@
     "rtos_malloc_hook":{ "level": "error", "title": "分配失败钩子", "fix": "FREERTOS → USE_MALLOC_FAILED_HOOK = Enabled", "auto_fix": true },
     "rtos_default_task":{ "level": "warn", "title": "defaultTask 是 As weak", "fix": "FREERTOS → Tasks and Queues → defaultTask 的 Code Generation Option = As weak（As external 时要自己定义 StartDefaultTask 并转调 app_default_task）", "auto_fix": true },
     "toolchain_cmake": { "level": "error", "title": "工具链 CMake", "fix": "Project Manager → Toolchain / IDE = CMake", "auto_fix": true },
-    "timebase_tim":    { "level": "warn", "title": "HAL 时基不是 SysTick", "fix": "SYS → Timebase Source 选一个空闲 TIM（优先级不要求，默认 15 即可）", "auto_fix": false },
+    "timebase_tim":    { "level": "warn", "title": "HAL 时基不是 SysTick", "fix": "SYS → Timebase Source 选一个空闲 TIM。时基优先级不再要求高于串口 / CAN（1.4 起默认 15 即可，原来的 TICK_INT_PRIORITY < 5 已不需要）", "auto_fix": false },
     "dcache_off":      { "level": "error", "title": "D-Cache 关闭（H7）", "fix": "CORTEX_M7 → CPU DCache = Disabled（库不做 Cache 维护）", "auto_fix": true },
     "can_classic":     { "level": "error", "title": "FDCAN 用经典 CAN 帧格式", "fix": "FDCANx → Frame Format = Classic mode", "auto_fix": true },
+    "can_fifo":        { "level": "error", "title": "FDCAN 的 RX FIFO0 与 TX 元素数不为 0", "fix": "FDCANx → Rx Fifo0 Elmts Nbr、Tx Fifo Queue Elmts Nbr 填 16（CubeMX 默认都是 0：收不到也发不出）", "auto_fix": true },
     "can_nvic":        { "level": "error", "title": "FDCAN 中断线 0 打开", "fix": "NVIC → FDCANx interrupt 0 勾上", "auto_fix": true },
     "can_msgram":      { "level": "error", "title": "几路 FDCAN 的 Message RAM 不重叠", "fix": "FDCANx → Message RAM Offset 依次错开（按各路占用字数累加）", "auto_fix": true },
     "can_std_filters": { "level": "warn", "title": "FDCAN 标准过滤器数 ≥ 1", "fix": "FDCANx → Std Filters Nbr = 1（填 0 也能收，靠全局过滤器）", "auto_fix": true },
