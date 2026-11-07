@@ -11,7 +11,7 @@
 
 | 文件 | 职责 | 关键符号 |
 | --- | --- | --- |
-| `system/system.hpp/.cpp` | 库入口 + 三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`sys_state` |
+| `system/system.hpp/.cpp` | 库入口、`sys_state` / `bsp_dwt` 实例、sys_task 统计与报告回调、三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`system_set_report_hook()`、`sys_task_stats` |
 | `system/config_check.hpp` | 库读宿主配置的唯一入口：缺宏 / 范围 / 依赖检查 | 包含 `hardware_config.h` |
 | `system/status_code.hpp` | 状态码（纯定义，不依赖 RTOS，评审 A6） | `Status`、`status_bit()` |
 | `system/status.hpp/.cpp` | 事件状态（包含 `status_code.hpp`） | `EventState` |
@@ -29,14 +29,19 @@
 ## 2. 入口与生命周期
 
 ```cpp
-void system_init(void);   // 建 sys_state，创建 sys_task / can_rx_task（调度器未启动，任务不会跑）
+void system_init(void);   // bsp_dwt、sys_state、默认树总线节点，创建 sys_task / can_rx_task（调度器未启动，任务不会跑）
 void system_start(void);  // 有发送节点才建 can_tx_task；检查初始化错误；置运行位
 extern EventState sys_state;
+extern BspDwt     bsp_dwt;   // 库定义、system_init() 里 init()，宿主不要再定义
+
+void system_set_report_hook(SystemReportHook hook, uint32_t period_ms);  // 周期报告回调（默认没有，库不打印）
+extern volatile SysTaskStats sys_task_stats;                            // cycles / last_us / max_us / avg_us（µs）
 ```
 
 调用顺序见 [启动顺序](README.md#3-启动顺序)。要点：
 
-- `system_init()` 里所有失败都用 `configASSERT` 停机，不会「半初始化继续跑」
+- `system_init()` 里每一步都用 `ICBSP_CHECK` 检查，失败写 `fault_record` 停机，不会「半初始化继续跑」
+- sys_task 的耗时统计写在全局 `sys_task_stats`，调试器里直接读；要打印就用 `system_set_report_hook()` 接一个回调（跑在 sys_task 的栈上，回调里 `printf` 要留够 `ICBSP_SYS_TASK_STACK`）
 - `system_start()` 里 `sys_state.complete_init()` 会把 `board_init()` 阶段登记的 `init_error` 一次性检查
 - `system.cpp` 里还有 `.dma_buffer` 的早期搬运（`constructor(101)`），必须在全局构造之前完成
 

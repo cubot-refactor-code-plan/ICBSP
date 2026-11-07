@@ -44,7 +44,7 @@
 <line x1="557.0" y1="340.0" x2="560.0" y2="340.0" stroke="#C8B96B" stroke-width="1.2"/>
 <polygon points="560,340.0 550,334.5 550,345.5" fill="#C8B96B"/>
 <rect x="560" y="416" width="770" height="88" rx="10" ry="10" fill="#FFFDF0" stroke="#C8B96B" stroke-width="1.0"/>
-<text x="584" y="460.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">任何一路 init() 返回非 OK 就 configASSERT 停机，fault_record 记下调用行号，print_uart 能打出来</text>
+<text x="584" y="460.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">每个 init() 一行 ICBSP_CHECK(x.init() == Status::OK)：失败写 fault_record（.noinit）后停机，复位后 print fault_record 看</text>
 <line x1="480.0" y1="460.0" x2="484.2" y2="460.0" stroke="#C8B96B" stroke-width="1.2"/>
 <line x1="487.0" y1="460.0" x2="491.2" y2="460.0" stroke="#C8B96B" stroke-width="1.2"/>
 <line x1="494.0" y1="460.0" x2="498.2" y2="460.0" stroke="#C8B96B" stroke-width="1.2"/>
@@ -75,9 +75,9 @@
 <polygon points="560,580.0 550,574.5 550,585.5" fill="#C8B96B"/>
 <rect x="100" y="872" width="380" height="116" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.3"/>
 <text x="290.0" y="898.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">sys_task</text>
-<text x="290.0" y="928.4" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">10 ms 周期 · DWT 计时</text>
+<text x="290.0" y="928.4" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">10 ms 周期 · Online::update() · 状态树巡检</text>
 <text x="290.0" y="946.0" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">CAN Bus-Off 恢复 · UART 巡检</text>
-<text x="290.0" y="963.6" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Online::update() · 每 2 s 打印</text>
+<text x="290.0" y="963.6" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">耗时统计 · 报告回调（库不打印）</text>
 <rect x="520" y="872" width="380" height="116" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.3"/>
 <text x="710.0" y="898.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_rx_task</text>
 <text x="710.0" y="928.4" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">1 ms 周期</text>
@@ -85,8 +85,8 @@
 <text x="710.0" y="963.6" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">未认领的进回退缓冲</text>
 <rect x="940" y="872" width="380" height="116" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.3"/>
 <text x="1130.0" y="898.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_tx_task</text>
-<text x="1130.0" y="928.4" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">槽位聚合 · 保底心跳</text>
-<text x="1130.0" y="946.0" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">100 ms 指令有效期</text>
+<text x="1130.0" y="928.4" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">槽位聚合 · 保底心跳 5 ms</text>
+<text x="1130.0" y="946.0" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">指令有效期 100 ms</text>
 <text x="1130.0" y="963.6" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">没有发送节点就不创建</text>
 <line x1="520.0" y1="340.0" x2="520.0" y2="344.2" stroke="#3F74C9" stroke-width="1.4"/>
 <line x1="520.0" y1="347.0" x2="520.0" y2="351.2" stroke="#3F74C9" stroke-width="1.4"/>
@@ -348,5 +348,7 @@
 <line x1="1035.0" y1="866.0" x2="1035.0" y2="870.2" stroke="#3F74C9" stroke-width="1.4"/>
 <polygon points="1035,872 1029.5,862 1040.5,862" fill="#3F74C9"/>
 <text x="700" y="846" font-family="Noto Sans CJK SC" font-size="11" fill="#3F74C9" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">③ system_start 有节点才创建 can_tx_task</text>
-<text x="100" y="852" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">优先级 / 栈深在宿主 hardware_config.h：CAN_TASK_PRIORITY 最高</text>
+<rect x="560" y="656" width="770" height="88" rx="10" ry="10" fill="#FFFDF0" stroke="#C8B96B" stroke-width="1.0"/>
+<text x="584" y="686" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">库任务优先级在宿主 hardware_config.h，按 configMAX_PRIORITIES 取：</text>
+<text x="584" y="716" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">CAN −2 &gt; BMI088 −3 &gt; sys −4；业务任务要低于它们（osPriorityNormal 即可）</text>
 </svg>
