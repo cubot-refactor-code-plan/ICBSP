@@ -31,6 +31,11 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 code, pre { font-family: ui-monospace, "JetBrains Mono", Consolas, monospace; font-size: 12.5px; }
 .ok { color: var(--ok); } .warn-t { color: var(--warn); } .err { color: var(--err); }
 .banner { margin: 0 24px 16px; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--err); color: var(--err); background: var(--panel); }
+.banner.info { border-color: var(--accent); color: var(--ink); }
+.banner.info b { color: var(--accent); }
+.banner.info button { margin: 6px 8px 0 0; }
+.opt-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; align-items: center; margin-top: 8px; }
+.layouts label { display: block; margin: 4px 0; }
 .hidden { display: none; }
 .diff { white-space: pre; overflow-x: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 420px; }
 .diff .a { background: var(--add); display: block; } .diff .d { background: var(--del); display: block; } .diff .h { color: var(--muted); display: block; }

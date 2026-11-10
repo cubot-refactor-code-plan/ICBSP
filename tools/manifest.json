@@ -258,6 +258,24 @@
     "ICBSP_UART_PATROL_ENABLE": { "title": "sys_task 里的串口巡检", "default": 1, "needs_ip": "uart", "requires": ["ICBSP_SYS_TASK_ENABLE"] }
   },
 
+  "flash_chips": [
+    { "name": "W25Q64",  "size": 8388608,  "addr_bytes": 3, "jedec_manufacturer": 239, "jedec_capacity": 23, "max_mhz": 133, "status": "compile_only" },
+    { "name": "W25Q128", "size": 16777216, "addr_bytes": 3, "jedec_manufacturer": 239, "jedec_capacity": 24, "max_mhz": 133, "status": "tested" },
+    { "name": "W25Q256", "size": 33554432, "addr_bytes": 4, "jedec_manufacturer": 239, "jedec_capacity": 25, "max_mhz": 133, "status": "compile_only" }
+  ],
+
+  "options": {
+    "flash_layouts": {
+      "INTERNAL": "片内 Flash（CubeMX 链接脚本）",
+      "QSPI_RAM": "方案 A：程序存 QSPI，bootloader 拷进 AXI SRAM 运行（推荐：全速、软件断点可用、时序与片内 Flash 接近）",
+      "QSPI_XIP": "方案 B：程序在 QSPI 上就地执行（容量大；cache 未命中时慢，只能打硬件断点）"
+    },
+    "qspi_prescaler_default": 2,
+    "build_types": ["Debug", "RelWithDebInfo", "Release"],
+    "opt_levels": ["-O0", "-Og", "-O1", "-O2", "-O3", "-Os"],
+    "opt_defaults": { "Debug": "-O0", "RelWithDebInfo": "-O2", "Release": "-Os" }
+  },
+
   "rules": {
     "rtos_cmsis_v2":   { "level": "error", "title": "FreeRTOS 接口是 CMSIS_V2", "fix": "Middleware → FREERTOS → Interface 选 CMSIS_V2", "auto_fix": false },
     "rtos_tick":       { "level": "error", "title": "FreeRTOS tick 1 kHz", "fix": "FREERTOS → Config parameters → TICK_RATE_HZ = 1000", "auto_fix": true },
@@ -278,6 +296,7 @@
     "spi_master":      { "level": "error", "title": "SPI 全双工主机、软件 NSS", "fix": "SPIx → Mode = Full-Duplex Master，Hardware NSS Signal = Disable", "auto_fix": false },
     "spi_keep_io":     { "level": "error", "title": "SPI Master Keep IO State = Enable（H7）", "fix": "SPIx → Advanced Parameters → Master Keep IO State = Enabled", "auto_fix": true },
     "spi_nvic":        { "level": "warn", "title": "SPI 用 DMA 时开 SPI 全局中断", "fix": "NVIC → SPIx global interrupt 勾上", "auto_fix": true },
-    "encoder_period":  { "level": "error", "title": "编码器定时器的 Period 是计数器最大值", "fix": "TIMx → Counter Period = 0xFFFF（32 位定时器 0xFFFFFFFF）", "auto_fix": true }
+    "encoder_period":  { "level": "error", "title": "编码器定时器的 Period 是计数器最大值", "fix": "TIMx → Counter Period = 0xFFFF（32 位定时器 0xFFFFFFFF）", "auto_fix": true },
+    "qspi_params":     { "level": "warn", "title": "QUADSPI 参数与外置 Flash 芯片一致", "fix": "QUADSPI → Flash Size、Clock Prescaler、Sample Shifting = Half Cycle、Chip Select High Time，QSPI 引脚速度 Very High（只影响应用自己用 QSPI；bootloader 不读这些）", "auto_fix": true }
   }
 }

@@ -25,6 +25,11 @@ icbsp 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX（CMake）�
      （templates/clang：CompilationDatabase 指向该预设的构建目录；--query-driver 是 clangd 命令行参数，
      写进 .clangd 会被当成编译器参数报错，所以只留给 .vscode/settings.json）。
      两者都已存在时不覆盖，只校对内容是否还对得上
+ 12. 外置 QSPI Flash（--external-flash 或选择里的 external_flash）：根 CMakeLists.txt 的 icbsp-options 生成区、
+     CMakePresets.json 的 *-Internal / *-QspiRam / *-QspiXip、icbsp_flash_config.h、Flash/daplink_qspi.cfg、
+     quadspi.c 的方案 B 提前返回、launch.json 的两个调试配置；.ioc 有 QUADSPI 且片内 Flash 小 / 占用高时提示启用
+ 13. 编译优化（--opt Debug=-Og …、--vendor-os，或选择里的 optimization）：同一个生成区里的 icbsp_optimization(...)
+ 14. 示例 .gitignore（templates/gitignore；已有时只追加缺的行，--no-gitignore 跳过）
 
 所有片段都从 templates/ 读取，与模板保持一致。只改内容仍是 CubeMX 默认的 USER CODE 段；遇到已有自定义内容
 就报错并说明要手动合并的位置。任何一步报错都不写任何文件。保持各文件原有的行尾（CRLF / LF）。
@@ -49,6 +54,8 @@ from icbsp_tool import selection as ioc_selection  # noqa: E402
 from icbsp_tool import cubemx as ioc_cubemx  # noqa: E402
 from icbsp_tool import generate as ioc_generate  # noqa: E402
 from icbsp_tool import sync as ioc_sync  # noqa: E402
+from icbsp_tool import flash as ioc_flash  # noqa: E402
+from icbsp_tool import host_options  # noqa: E402
 from icbsp_tool.ioc import Ioc  # noqa: E402
 TEMPLATES = LIB_ROOT / "templates"
 BOARD_TEMPLATES = ("board_cfg.hpp", "board_cfg.cpp", "board_instances.hpp")
@@ -322,7 +329,7 @@ def load_selection(host, rep, path):
     return ioc, sel
 
 
-def check_ioc(host, rep, selection=None):
+def check_ioc(host, rep, selection=None, options=None):
     """按 tools/manifest.json 的规则校验 .ioc（docs/接入指南.md 第 1、2 节）。
     没给选择（经典接入）时：全局规则不满足算错误，外设规则只提醒（不一定每个外设都要用）；
     给了选择（--apply）时：选中外设的规则也按清单里的级别处理。返回 (ioc, 结果列表)。"""
@@ -338,7 +345,8 @@ def check_ioc(host, rep, selection=None):
         return ioc, []
     man = ioc_manifest.load()
     sel = selection if selection is not None else ioc_selection.default_selection(ioc, man)
-    results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel))
+    ef = (options or sel).get("external_flash")
+    results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel), ef)
     failed = [r for r in results if not r["ok"]]
     for r in failed:
         tgt = f"{r['target']}：" if r["target"] else ""
@@ -402,6 +410,15 @@ def plan_linker(host, plan, rep, explicit, region):
         return
     tf = TextFile(path)
     rel = path.relative_to(host).as_posix()
+    # 旧模板的 __dma_buffer_load = LOADADDR(.dma_buffer)：段内 ALIGN(32) 让 __dma_buffer_start 后移时，拷贝的源和目标错开，
+    # 实例初值错位（.dma_buffer 正好在 RAM 区开头时没事，所以一直没暴露）。等价改写，对齐时结果不变
+    old_load = re.search(r"^([ \t]*)__dma_buffer_load\s*=\s*LOADADDR\(\s*\.dma_buffer\s*\)\s*;[^\n]*$", tf.text, re.M)
+    if old_load:
+        tf.text = (tf.text[: old_load.start()] + old_load.group(1)
+                   + "__dma_buffer_load = LOADADDR(.dma_buffer) + (__dma_buffer_start - ADDR(.dma_buffer)); "
+                   "/* 段内 ALIGN(32) 会让起点后移，加载地址同样偏移 */" + tf.text[old_load.end() :])
+        plan.edit(tf)
+        rep.ok("链接脚本", f"{rel}：__dma_buffer_load 改成按 __dma_buffer_start 偏移（.dma_buffer 不在 RAM 区开头时初值才不会错位）")
     series = detect_series(host) or "h7"
     cfg = SERIES_LINKER[series]
     need_dma = cfg["need_dma_buffer"]
@@ -1268,6 +1285,119 @@ def plan_vscode(host, plan, rep, info):
         rep.warn(step, "tasks.json 里还有旧的 *_linux / *_win 烧录任务：新的 OpenOCD_flash / JLink_flash 会按平台自动选 .sh 或 .bat，旧任务可以删掉")
 
 
+def plan_launch_qspi(host, plan, rep, info):
+    """外置 Flash：把 QSPI_RAM / QSPI_XIP 两个调试配置合并进 .vscode/launch.json（已有同名配置就不动）"""
+    step = ".vscode"
+    template = render_template(VSCODE / "launch_qspi.json", info)
+    if not info["SVD"]:
+        template = drop_svd(template)
+    want = json.loads(strip_jsonc(template)).get("configurations", [])
+    dst = host / ".vscode" / "launch.json"
+    if dst in plan.new_files and isinstance(plan.new_files[dst], str):
+        text = plan.new_files[dst]
+    elif dst in plan.edits:
+        text = plan.edits[dst].text
+    elif dst.exists():
+        text = TextFile(dst).text
+    else:
+        plan.create(dst, template)
+        rep.ok(step, "新建 .vscode/launch.json（外置 Flash 的两个调试配置）")
+        return
+    try:
+        json.loads(strip_jsonc(text))
+    except ValueError:
+        rep.warn(step, ".vscode/launch.json 不是能识别的 JSONC：请手动对照 templates/vscode/launch_qspi.json 合并")
+        return
+    added = []
+    new = text
+    for _ in range(10):
+        result = merge_one_nested(new, "configurations", "name", want)
+        if result is None:
+            break
+        new, msg = result
+        added.append(msg)
+    new, tail = merge_array_tail(new, "configurations", "name", want)
+    added += tail
+    if new == text:
+        rep.skip(step, "launch.json 已有外置 Flash 的调试配置")
+        return
+    try:
+        json.loads(strip_jsonc(new))
+    except ValueError:
+        rep.warn(step, "launch.json 合并外置 Flash 配置后不是合法 JSON，已跳过；请手动对照 templates/vscode/launch_qspi.json 合并")
+        return
+    if dst in plan.new_files:
+        plan.new_files[dst] = new
+    else:
+        tf = plan.edits.get(dst) or TextFile(dst)
+        tf.text = new
+        plan.edit(tf)
+    rep.ok(step, "launch.json：" + "；".join(added))
+
+
+def resolve_options(host, rep, args, gen_sel):
+    """外置 Flash / 编译优化 / .gitignore 的选项：--apply 时取自选择，否则取宿主保存的选择（没有就用默认值）；
+    命令行 --external-flash 等覆盖在上面。普通模式下命令行改了选项就把它们存回 icbsp_selection.json。
+    返回 (ioc, 选择, 要写回的选择文本或 None)"""
+    path = find_ioc(host)
+    if path is None:
+        return None, None, None
+    ioc = Ioc(path)
+    if ioc.series is None:
+        return ioc, None, None
+    man = ioc_manifest.load()
+    saved = ioc_sync.saved_selection(host, args.board_dir)
+    if gen_sel is not None:
+        sel = gen_sel
+    else:
+        sel = ioc_selection.merge(ioc, man, saved or {})
+    try:
+        changed = host_options.cli_overrides(args, sel, man)
+    except ValueError as e:
+        rep.error("选项", str(e))
+        return ioc, sel, None
+    for level, where, msg in ioc_selection.validate_options(ioc, man, sel):
+        (rep.error if level == "error" else rep.warn)("选项", f"{where}：{msg}")
+    persist = None
+    if changed and gen_sel is None:
+        raw = dict(saved or {})
+        for k in ioc_selection.OPTION_KEYS:
+            raw[k] = sel[k]
+        persist = json.dumps(raw, ensure_ascii=False, indent=2) + "\n"
+    return ioc, sel, persist
+
+
+def plan_options(host, plan, rep, args, ioc, sel, persist, info):
+    """外置 Flash / 编译优化 / .gitignore 的计划步骤"""
+    man = ioc_manifest.load()
+    lib_rel = Path(os.path.relpath(LIB_ROOT, host)).as_posix()
+    board_rel = Path(os.path.relpath(host / args.board_dir, host)).as_posix()
+    a = ioc_flash.analyze(ioc, host, man)
+    ef = sel.get("external_flash") or {}
+    if a["suggest"] and not ef.get("enabled"):
+        rep.warn("外置 Flash", "建议启用外置 Flash（" + "；".join(a["reasons"]) + "）：命令行加 --external-flash QSPI_RAM"
+                 "（方案 A，推荐）或 QSPI_XIP（方案 B），或在 Web UI 里打开；芯片用 --flash-chip 指定")
+    elif a["note"] and (ef.get("enabled") or a["reasons"]):
+        rep.warn("外置 Flash", a["note"])
+    host_options.plan_cmake_region(host, plan, rep, TextFile, sel, lib_rel, board_rel, man, args.overwrite_edited)
+    host_options.plan_presets(host, plan, rep, TextFile, sel, man)
+    if ef.get("enabled"):
+        host_options.plan_external_flash(host, plan, rep, TextFile, ioc, man, sel, args.board_dir, info, render_template)
+        if not args.no_vscode:
+            plan_launch_qspi(host, plan, rep, info)
+    if sel.get("gitignore", True) and not args.no_gitignore:
+        host_options.plan_gitignore(host, plan, rep, TextFile)
+    if persist is not None:
+        path = host / args.board_dir / ioc_sync.SELECTION_FILE
+        if path.exists():
+            tf = TextFile(path)
+            tf.text = persist
+            plan.edit(tf)
+        else:
+            plan.create(path, persist)
+        rep.ok("选项", f"选项存进 {board_rel}/{ioc_sync.SELECTION_FILE}（下次运行 / Web UI 沿用）")
+
+
 def plan_flash(host, plan, rep, info):
     """复制烧录脚本（已存在的不覆盖）；脚本运行时自己递归找 build/ 下的 .elf"""
     step = "Flash"
@@ -1452,6 +1582,9 @@ def emit_json(host, args, rep, plan, ioc, ioc_results, sel):
         out["switches"] = man["switches"]
         out["peripheral_kinds"] = {k: {"title": v["title"], "params": v["params"]} for k, v in man["peripherals"].items()}
         out["gpio"] = {"out": ioc.gpio_outputs(), "exti": ioc.gpio_exti()}
+        out["external_flash"] = ioc_flash.analyze(ioc, host, man)
+        out["options_meta"] = {"options": man.get("options", {}), "flash_chips": man.get("flash_chips", [])}
+        out["gitignore_exists"] = (host / ".gitignore").exists()
     out["ok"] = not rep.has_error
     if out["ok"]:
         out["plan"] = plan.diffs(host)
@@ -1476,11 +1609,12 @@ def run_fix_ioc(host, args):
         if args.apply:
             _, sel = load_selection(host, rep, args.apply)
         else:
-            sel = ioc_selection.default_selection(ioc, man)
+            # 宿主保存的选择（外设、外置 Flash 等选项）决定要检查哪些规则；没有就用默认值
+            sel = ioc_selection.merge(ioc, man, ioc_sync.saved_selection(host, args.board_dir) or {})
         if sel is not None and not rep.has_error:
             ids = "all" if (args.fix_ioc or "all") == "all" else set(args.fix_ioc.split(","))
             if args.fix_ioc:
-                results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel))
+                results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel), sel.get("external_flash"))
                 done = ioc_cubemx.apply_fixes(ioc, results, ids)
                 out["fixed"] = [{"id": i, "target": t, "key": k, "old": o, "new": n} for i, t, k, o, n in done]
                 manual = [r for r in results if not r["ok"] and not r["auto_fix"] and (ids == "all" or r["id"] in ids)]
@@ -1536,6 +1670,14 @@ def main():
     ap.add_argument("--cubemx", help="STM32CubeMX 安装目录（默认环境变量 ICBSP_CUBEMX，再找 ~/STM32CubeMX 等）")
     ap.add_argument("--plan", action="store_true", help="同 --dry-run：只算修改、给出 diff，不写文件")
     ap.add_argument("--json", action="store_true", help="机器接口：只在 stdout 输出一个 JSON（检查结果、外设、可挂设备、选择、生成区状态、diff），给 Web UI 用")
+    ap.add_argument("--external-flash", choices=("QSPI_RAM", "QSPI_XIP", "INTERNAL", "off"),
+                    help="外置 QSPI Flash：启用并设默认存放方式（QSPI_RAM = 方案 A，QSPI_XIP = 方案 B，INTERNAL = 生成支持文件但默认仍用片内）；off 关闭")
+    ap.add_argument("--flash-chip", help="外置 Flash 芯片（manifest.json 的 flash_chips：W25Q64 / W25Q128 / W25Q256）")
+    ap.add_argument("--qspi-prescaler", type=int, help="QUADSPI 预分频：应用运行时 QSPI 时钟 = 240 MHz / (n + 1)，默认 2（80 MHz）")
+    ap.add_argument("--opt", action="append", metavar="类型=等级", help="编译优化，如 Debug=-Og 或 Debug=-Og,Release=-O2（可重复）")
+    ap.add_argument("--vendor-os", action="store_true", help="CubeMX 生成的源码（HAL / FreeRTOS / USB）固定 -Os")
+    ap.add_argument("--no-opt", action="store_true", help="关闭编译优化生成（恢复工具链文件的默认）")
+    ap.add_argument("--no-gitignore", action="store_true", help="不复制 / 合并示例 .gitignore")
     args = ap.parse_args()
     if args.plan:
         args.dry_run = True
@@ -1559,7 +1701,8 @@ def main():
     plan = Plan()
     ok = check_prerequisites(host, rep)
     gen_ioc, gen_sel = load_selection(host, rep, args.apply) if args.apply else (None, None)
-    ioc_obj, ioc_results = check_ioc(host, rep, gen_sel)
+    opt_ioc, opt_sel, opt_persist = resolve_options(host, rep, args, gen_sel)
+    ioc_obj, ioc_results = check_ioc(host, rep, gen_sel, opt_sel)
     if ok and not rep.has_error:
         plan_linker(host, plan, rep, args.linker_script, args.ram_region)
         plan_freertos_config(host, plan, rep)
@@ -1569,14 +1712,15 @@ def main():
         if not args.no_hardware_config:
             plan_hardware_config(host, plan, rep, args.board_dir)
         plan_cmake(host, plan, rep, args.board_dir, args.app_dir, args.user_dir)
-        if not args.no_vscode or not args.no_flash or not args.no_clang:
-            info = detect_project(host, rep, args.preset)
-            if not args.no_vscode:
-                plan_vscode(host, plan, rep, info)
-            if not args.no_flash:
-                plan_flash(host, plan, rep, info)
-            if not args.no_clang:
-                plan_clang(host, plan, rep, info)
+        info = detect_project(host, rep, args.preset)
+        if not args.no_vscode:
+            plan_vscode(host, plan, rep, info)
+        if not args.no_flash:
+            plan_flash(host, plan, rep, info)
+        if not args.no_clang:
+            plan_clang(host, plan, rep, info)
+        if opt_sel is not None and not rep.has_error:
+            plan_options(host, plan, rep, args, opt_ioc, opt_sel, opt_persist, info)
         if gen_sel is not None and not rep.has_error:
             gen = ioc_generate.Generator(gen_ioc, ioc_manifest.load(), gen_sel)
             ioc_sync.plan(host, args.board_dir, plan, rep, gen, TextFile, args.overwrite_edited)

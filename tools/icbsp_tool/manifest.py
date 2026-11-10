@@ -100,6 +100,41 @@ def validate(m):
         for sw in d.get("switches", []):
             if sw not in switches:
                 bad.append(f"{where}.switches: {sw} 不是已知开关")
+    bad += _check_flash(m)
+    return bad
+
+
+def _check_flash(m):
+    """flash_chips / options（外置 Flash 与编译优化）"""
+    bad = []
+    names = set()
+    for i, c in enumerate(m.get("flash_chips", [])):
+        where = f"flash_chips[{i}]"
+        for k in ("name", "size", "addr_bytes", "jedec_manufacturer", "jedec_capacity", "max_mhz", "status"):
+            if k not in c:
+                bad.append(f"{where}: 缺 {k}")
+        size = c.get("size", 0)
+        if not isinstance(size, int) or size <= 0 or size & (size - 1):
+            bad.append(f"{where}: size 必须是 2 的幂（字节）")
+        elif c.get("addr_bytes") == 3 and size > 16 << 20:
+            bad.append(f"{where}: 超过 16 MB 要用 4 字节地址")
+        if c.get("addr_bytes") not in (3, 4):
+            bad.append(f"{where}: addr_bytes 只能是 3 或 4")
+        if c.get("status") not in DEVICE_STATUS:
+            bad.append(f"{where}: status 只能是 {sorted(DEVICE_STATUS)}")
+        if c.get("name") in names:
+            bad.append(f"{where}: 名字 {c.get('name')} 重复")
+        names.add(c.get("name"))
+    opt = m.get("options")
+    if opt is not None:
+        for k in ("flash_layouts", "build_types", "opt_levels", "opt_defaults", "qspi_prescaler_default"):
+            if k not in opt:
+                bad.append(f"options: 缺 {k}")
+        if set(opt.get("flash_layouts", {})) != {"INTERNAL", "QSPI_RAM", "QSPI_XIP"}:
+            bad.append("options.flash_layouts 必须正好是 INTERNAL / QSPI_RAM / QSPI_XIP")
+        for bt, lv in opt.get("opt_defaults", {}).items():
+            if bt not in opt.get("build_types", []) or lv not in opt.get("opt_levels", []):
+                bad.append(f"options.opt_defaults.{bt}: 构建类型或等级不在列表里")
     return bad
 
 
