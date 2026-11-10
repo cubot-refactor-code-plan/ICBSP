@@ -346,7 +346,7 @@ def check_ioc(host, rep, selection=None, options=None):
     man = ioc_manifest.load()
     sel = selection if selection is not None else ioc_selection.default_selection(ioc, man)
     ef = (options or sel).get("external_flash")
-    results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel), ef)
+    results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel), ef, (options or sel).get("devices"))
     failed = [r for r in results if not r["ok"]]
     for r in failed:
         tgt = f"{r['target']}：" if r["target"] else ""
@@ -1614,7 +1614,7 @@ def run_fix_ioc(host, args):
         if sel is not None and not rep.has_error:
             ids = "all" if (args.fix_ioc or "all") == "all" else set(args.fix_ioc.split(","))
             if args.fix_ioc:
-                results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel), sel.get("external_flash"))
+                results = ioc_checks.run(ioc, man, ioc_selection.by_kind(sel), sel.get("external_flash"), sel.get("devices"))
                 done = ioc_cubemx.apply_fixes(ioc, results, ids)
                 out["fixed"] = [{"id": i, "target": t, "key": k, "old": o, "new": n} for i, t, k, o, n in done]
                 manual = [r for r in results if not r["ok"] and not r["auto_fix"] and (ids == "all" or r["id"] in ids)]

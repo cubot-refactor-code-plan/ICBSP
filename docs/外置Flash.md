@@ -134,6 +134,8 @@ CubeMX 生成的 `MPU_Config()` 只改它自己的区号（默认第 0 区：0x6
 - OpenOCD 校验 ELF 时会对比 ld 映射进 0x20000000 的“ELF 头段”，在方案 A 的 `--ram` 下误报不一致，脚本因此不做 `verify_image`。
 - AXI SRAM 带 ECC：调试器单独写一个 32 位字会留在 ECC 写缓冲里，复位后丢失——清 `fault_record` 时一次写 16 字节（`mww <地址> 0 4`）。
 - Windows 的 `.bat` 与 Linux 的 `.sh` 逻辑相同，但只在 Linux 上实测过。
+- 方案 A 在 AXI SRAM 里打软件断点绝大多数情况正常（实测 11 个同时命中），但偶尔 OpenOCD 报 `can't add breakpoint: unknown reason`、
+  GDB 报 `Cannot access memory`（`step` 的临时断点上遇到过两次）；遇到时改用 `hbreak`（硬件断点），原因待查。
 
 ## 6. 实测记录
 

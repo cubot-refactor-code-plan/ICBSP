@@ -134,6 +134,37 @@ class OptionsSelectionTest(unittest.TestCase):
         self.assertEqual([x for x in checks.run(ioc, MAN, {}, None) if x["id"] == "qspi_params"], [])
 
 
+class SpiRulesTest(unittest.TestCase):
+    """H750 回归宿主的 BMI088 卡死：SPI6 没写 DataSize（H7 的 CubeMX 默认 4 位帧）、/2 分频 = 60 MHz"""
+
+    BMI = [{"type": "bmi088", "name": "imu", "needs": {"bus": "SPI6"}}]
+
+    def test_h750_spi6(self):
+        ioc = load("h750_qspi.ioc")  # 夹具是改好之后的配置：8 位、/16
+        r = {(x["id"], x["target"]): x for x in checks.run(ioc, MAN, {"spi": {"SPI6": {}}}, None, self.BMI)}
+        self.assertTrue(r[("spi_8bit", "SPI6")]["ok"])
+        self.assertTrue(r[("spi_bmi088_speed", "SPI6")]["ok"], r[("spi_bmi088_speed", "SPI6")]["detail"])
+        # 还原成出问题时的样子：没写 DataSize、/2 分频
+        del ioc.values["SPI6.DataSize"]
+        ioc.values["SPI6.BaudRatePrescaler"] = "SPI_BAUDRATEPRESCALER_2"
+        s = {x["ip"]: x for x in ioc.spi_instances()}["SPI6"]
+        self.assertEqual((s["data_size"], s["prescaler"], s["kernel_hz"]), ("SPI_DATASIZE_4BIT", 2, 120000000))
+        r = {(x["id"], x["target"]): x for x in checks.run(ioc, MAN, {"spi": {"SPI6": {}}}, None, self.BMI)}
+        bit = r[("spi_8bit", "SPI6")]
+        self.assertFalse(bit["ok"])
+        self.assertIn({"key": "SPI6.DataSize", "old": None, "new": "SPI_DATASIZE_8BIT"}, bit["changes"])
+        spd = r[("spi_bmi088_speed", "SPI6")]
+        self.assertFalse(spd["ok"])
+        self.assertIn({"key": "SPI6.BaudRatePrescaler", "old": "SPI_BAUDRATEPRESCALER_2", "new": "SPI_BAUDRATEPRESCALER_16"}, spd["changes"])
+
+    def test_mc02_spi2_ok(self):
+        ioc = load("mc02_h723.ioc")
+        bmi = [{"type": "bmi088", "name": "imu", "needs": {"bus": "SPI2"}}]
+        r = {(x["id"], x["target"]): x for x in checks.run(ioc, MAN, {"spi": {"SPI2": {}}}, None, bmi)}
+        self.assertTrue(r[("spi_8bit", "SPI2")]["ok"])
+        self.assertTrue(r[("spi_bmi088_speed", "SPI2")]["ok"], r[("spi_bmi088_speed", "SPI2")]["detail"])
+
+
 class HashRegionTest(unittest.TestCase):
     def test_roundtrip(self):
         t = "a\n" + regions.block("x", "foo", "#") + "\nb"
