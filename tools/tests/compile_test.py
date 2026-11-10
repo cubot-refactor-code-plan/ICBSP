@@ -51,19 +51,23 @@ def run_case(case, work, cubemx_dir):
     sel = proj / "selection.json"
     sel.write_text(json.dumps(c["selection"], ensure_ascii=False), encoding="utf-8")
     code, out = sh([sys.executable, "third_party/icbsp/tools/integrate.py", "--host", str(proj), "--apply", str(sel),
-                    "--no-vscode", "--no-flash", "--no-clang"], proj)
+                    "--no-vscode", "--no-flash", "--no-clang", *c.get("args", [])], proj)
     if code != 0:
         return False, f"integrate.py 失败（{code}）：\n{out[-3000:]}"
     env = dict(os.environ, PATH="/opt/arm-none-eabi/bin:" + os.environ.get("PATH", ""))
-    code, out = sh(["cmake", "--preset", "Debug"], proj, env)
-    if code != 0:
-        return False, f"cmake 配置失败：\n{out[-3000:]}"
-    code, out = sh(["cmake", "--build", "--preset", "Debug"], proj, env)
-    warn = sorted({l for l in out.splitlines() if re.search(r"\b(warning|error):", l)})
-    if code != 0 or warn:
-        return False, f"编译{'失败' if code else '有警告'}：\n" + "\n".join(warn[:30]) + ("" if warn else out[-3000:])
-    flash = re.search(r"FLASH:\s+(\d+ B)", out)
-    return True, f"0 error / 0 warning，FLASH {flash.group(1) if flash else '?'}"
+    sizes = []
+    # presets：要编译的 CMake 预设（默认只编 Debug）；外置 Flash 用例会编 *-QspiRam / *-QspiXip / *-Internal
+    for preset in c.get("presets", ["Debug"]):
+        code, out = sh(["cmake", "--preset", preset], proj, env)
+        if code != 0:
+            return False, f"{preset}：cmake 配置失败：\n{out[-3000:]}"
+        code, out = sh(["cmake", "--build", "--preset", preset], proj, env)
+        warn = sorted({l for l in out.splitlines() if re.search(r"\b(warning|error):", l)})
+        if code != 0 or warn:
+            return False, f"{preset}：编译{'失败' if code else '有警告'}：\n" + "\n".join(warn[:30]) + ("" if warn else out[-3000:])
+        used = re.findall(r"^\s+(FLASH|RAM|QSPI):\s+(\d+ B)", out, re.M)
+        sizes.append(f"{preset}（" + "，".join(f"{r} {b}" for r, b in used if b != "0 B") + "）")
+    return True, "0 error / 0 warning：" + "；".join(sizes)
 
 
 def main():
