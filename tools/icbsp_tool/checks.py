@@ -9,6 +9,7 @@
     changes：[{"key", "old", "new"}]——修复要写进 .ioc 的键值（ioc_fix.py 应用；auto_fix 为 False 时为空）
 """
 
+from . import flash
 from .ioc import FDCAN_MSGRAM_WORDS, eval_int, fdcan_words
 
 NVIC_ON = "true:5:0:false:false:true:true:true:true:true"  # CubeMX 打开一个外设中断时写的值（优先级 5）
@@ -181,6 +182,45 @@ class Checker:
             self.add("encoder_period", ip, have == want, f"当前 {have}，要求 {want}", _ip_param(ioc, ip, "Period", str(want)))
 
 
+    def check_external_flash(self, ef, manifest):
+        """外置 Flash 启用时：QUADSPI 参数与芯片一致、引脚速度 Very High（只影响应用自己用 QSPI，bootloader 不读）"""
+        ioc = self.ioc
+        if not ef or not ef.get("enabled") or "QUADSPI" not in ioc.ips():
+            return
+        chip = flash.chip_for(manifest, ef.get("chip"))
+        if chip is None:
+            return
+        # 键不存在 = CubeMX 默认值（QUADSPI 的 IP xml）
+        want = {
+            "FlashSize": (str(chip["size"].bit_length() - 2), "1"),
+            "ClockPrescaler": (str(int(ef.get("prescaler", 2))), "255"),
+            "SampleShifting": ("QSPI_SAMPLE_SHIFTING_HALFCYCLE", "QSPI_SAMPLE_SHIFTING_NONE"),
+            "ChipSelectHighTime": ("QSPI_CS_HIGH_TIME_6_CYCLE", "QSPI_CS_HIGH_TIME_1_CYCLE"),
+        }
+        fix, diff = [], []
+        params = (ioc.get("QUADSPI.IPParameters") or "").split(",")
+        params = [x for x in params if x]
+        for k, (v, default) in want.items():
+            have = ioc.get(f"QUADSPI.{k}", default)
+            if have != v:
+                diff.append(f"{k} {have}→{v}")
+                fix.append((f"QUADSPI.{k}", v))
+                if k not in params:
+                    params.append(k)
+        if fix:
+            fix.append(("QUADSPI.IPParameters", ",".join(params)))
+        for p in flash.qspi_signals(ioc):
+            pin = p["pin"]
+            if ioc.get(f"{pin}.GPIO_Speed") == "GPIO_SPEED_FREQ_VERY_HIGH":
+                continue
+            diff.append(f"{pin} 速度")
+            fix.append((f"{pin}.GPIO_Speed", "GPIO_SPEED_FREQ_VERY_HIGH"))
+            names = [x for x in (ioc.get(f"{pin}.GPIOParameters") or "").split(",") if x]
+            if "GPIO_Speed" not in names:
+                fix.append((f"{pin}.GPIOParameters", ",".join(names + ["GPIO_Speed"])))
+        self.add("qspi_params", "QUADSPI", not diff, "；".join(diff), fix)
+
+
 def usable(ioc):
     """各外设实例能不能用作库的实例：{ip: (能用, 原因)}"""
     out = {}
@@ -200,9 +240,11 @@ def usable(ioc):
     return out
 
 
-def run(ioc, manifest, selection):
-    """selection：{"can": {ip: {...}}, "uart": {...}, "spi": {...}, "encoder": {...}}（只看键）"""
+def run(ioc, manifest, selection, external_flash=None):
+    """selection：{"can": {ip: {...}}, "uart": {...}, "spi": {...}, "encoder": {...}}（只看键）；
+    external_flash：完整选择里的 external_flash（启用时检查 QUADSPI 参数）"""
     c = Checker(ioc, manifest)
+    c.check_external_flash(external_flash, manifest)
     c.check_global()
     c.check_can(selection.get("can", {}))
     c.check_uart(selection.get("uart", {}))

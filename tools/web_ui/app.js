@@ -62,6 +62,9 @@ function render() {
   renderChecks(d);
   renderPeripherals(d);
   renderSwitches(d);
+  renderFlash(d);
+  renderOptim(d);
+  renderHostFiles(d);
   renderDevices(d);
   renderGenerated(d);
   renderReport(d);
@@ -141,6 +144,104 @@ function renderSwitches(d) {
   for (const el of document.querySelectorAll(".sw")) {
     el.addEventListener("change", () => { sel.switches[el.dataset.id] = el.checked ? 1 : 0; rescanSoon(); });
   }
+}
+
+// ---------- 外置 Flash / 编译优化 / 工程文件（选择里的 external_flash / optimization / gitignore） ----------
+
+function renderFlash(d) {
+  const sel = state.selection;
+  const a = d.external_flash;
+  const meta = d.options_meta || {};
+  const layouts = (meta.options || {}).flash_layouts || {};
+  const chips = meta.flash_chips || [];
+  if (!sel || !a || !sel.external_flash) {
+    $("flash").innerHTML = `<p class="muted">（integrate.py 没有返回外置 Flash 信息）</p>`;
+    $("suggest").classList.add("hidden");
+    return;
+  }
+  const ef = sel.external_flash;
+
+  // 建议横幅：.ioc 有 QUADSPI，且片内 Flash 小或最近一次构建占用高
+  const sug = $("suggest");
+  if (a.suggest && !ef.enabled) {
+    sug.innerHTML = `<b>建议启用外置 Flash</b>：${a.reasons.map(esc).join("；")}<br>
+      <button class="primary" data-layout="QSPI_RAM">启用方案 A（推荐）</button><button data-layout="QSPI_XIP">启用方案 B（XIP）</button>
+      <span class="muted">（启用后在“外置 Flash”一节选芯片，再预览、写入）</span>`;
+    sug.classList.remove("hidden");
+    for (const b of sug.querySelectorAll("button")) {
+      b.onclick = () => {
+        ef.enabled = true;
+        ef.layout = b.dataset.layout;
+        if (!ef.chip && chips.length) ef.chip = (chips.find((c) => c.status === "tested") || chips[0]).name;
+        rescanSoon();
+        $("flash-sec").scrollIntoView({ behavior: "smooth" });
+      };
+    }
+  } else {
+    sug.classList.add("hidden");
+  }
+
+  if (!a.supported) {
+    $("flash").innerHTML = `<p class="muted">${esc(a.note || ".ioc 没有启用 QUADSPI：外置 Flash 需要先在 CubeMX 里打开 QUADSPI（单 Flash，CLK + NCS + IO0~IO3）")}</p>` +
+      (ef.enabled ? `<p class="err">选择里启用了外置 Flash，但当前 .ioc 不支持 <button id="ef-off">关闭</button></p>` : "");
+    const off = $("ef-off");
+    if (off) off.onclick = () => { ef.enabled = false; rescanSoon(); };
+    return;
+  }
+
+  const mhz = (p) => Math.floor(240 / (Number(p) + 1));
+  const chip = chips.find((c) => c.name === ef.chip);
+  const pins = (a.pins || []).map((p) => `${esc(p.pin)}=${esc(p.bank ? "BK" + p.bank + "_" : "")}${esc(p.signal)}`).join("　");
+  const usage = a.usage ? `最近一次构建占片内 Flash ${(a.usage.ratio * 100).toFixed(0)}%（${Math.round(a.usage.bytes / 1024)} KB）` : "没找到最近的构建";
+  let html = `<div class="muted">${esc(a.peripheral)} Bank ${esc(a.bank ?? "?")}：${pins}<br>片内 Flash ${esc(a.internal_kb ?? "?")} KB；${esc(usage)}</div>
+    <label class="row"><input type="checkbox" id="ef-enabled" ${ef.enabled ? "checked" : ""}> 启用外置 Flash（生成 bootloader、链接脚本、预设与烧录配置）</label>`;
+  if (ef.enabled) {
+    html += `<div class="layouts"><b>默认程序存放方式</b>` + Object.entries(layouts).map(([k, t]) =>
+      `<label><input type="radio" name="ef-layout" value="${esc(k)}" ${ef.layout === k ? "checked" : ""}> <code>${esc(k)}</code>　${esc(t)}</label>`).join("") + `</div>
+      <div class="opt-grid">
+        <span>芯片</span><select id="ef-chip"><option value="">（选择芯片）</option>${chips.map((c) =>
+          `<option value="${esc(c.name)}" ${c.name === ef.chip ? "selected" : ""}>${esc(c.name)}（${c.size >> 20} MB，${esc(statusText(c.status))}）</option>`).join("")}</select>
+        <span>QSPI 预分频</span><span><input type="number" id="ef-pre" min="0" max="255" value="${esc(ef.prescaler)}" style="width:5em">
+          → 应用运行时 ${mhz(ef.prescaler)} MHz${chip ? `（${esc(chip.name)} 上限 ${chip.max_mhz} MHz）` : ""}</span>
+      </div>`;
+    if (a.chip_guess && a.chip_guess !== ef.chip) html += `<p class="muted">按 .ioc 的 QUADSPI Flash Size 推测是 ${esc(a.chip_guess)}</p>`;
+  }
+  $("flash").innerHTML = html;
+  $("ef-enabled").onchange = (e) => {
+    ef.enabled = e.target.checked;
+    if (ef.enabled && !ef.chip && chips.length) ef.chip = (chips.find((c) => c.status === "tested") || chips[0]).name;
+    rescanSoon();
+  };
+  for (const r of document.querySelectorAll('input[name="ef-layout"]')) r.onchange = () => { ef.layout = r.value; rescanSoon(); };
+  if ($("ef-chip")) $("ef-chip").onchange = (e) => { ef.chip = e.target.value || null; rescanSoon(); };
+  if ($("ef-pre")) $("ef-pre").onchange = (e) => { ef.prescaler = Number(e.target.value); rescanSoon(); };
+}
+
+function renderOptim(d) {
+  const sel = state.selection;
+  const opt = (d.options_meta || {}).options || {};
+  if (!sel || !sel.optimization) { $("optim").innerHTML = ""; return; }
+  const op = sel.optimization;
+  let html = `<label class="row"><input type="checkbox" id="op-enabled" ${op.enabled ? "checked" : ""}> 由 ICBSP 管理优化等级</label>`;
+  if (op.enabled) {
+    html += `<div class="opt-grid">` + (opt.build_types || []).map((bt) =>
+      `<span>${esc(bt)}</span><select class="op-level" data-bt="${esc(bt)}">${(opt.opt_levels || []).map((lv) =>
+        `<option ${op[bt] === lv ? "selected" : ""}>${esc(lv)}</option>`).join("")}</select>`).join("") + `</div>
+      <label class="row"><input type="checkbox" id="op-vendor" ${op.vendor_os ? "checked" : ""}> CubeMX 生成的源码（HAL / FreeRTOS / USB）固定 -Os：Debug 时自己的代码仍按上面的等级，可省二三十 KB</label>`;
+  }
+  $("optim").innerHTML = html;
+  $("op-enabled").onchange = (e) => { op.enabled = e.target.checked; rescanSoon(); };
+  for (const s of document.querySelectorAll(".op-level")) s.onchange = () => { op[s.dataset.bt] = s.value; rescanSoon(); };
+  if ($("op-vendor")) $("op-vendor").onchange = (e) => { op.vendor_os = e.target.checked; rescanSoon(); };
+}
+
+function renderHostFiles(d) {
+  const sel = state.selection;
+  if (!sel) return;
+  const exists = d.gitignore_exists;
+  $("hostfiles").innerHTML = `<label class="row"><input type="checkbox" id="gitignore" ${sel.gitignore !== false ? "checked" : ""}>
+    复制示例 .gitignore（<code>templates/gitignore</code>）：${exists ? "宿主已有 .gitignore，只把缺的条目追加到末尾" : "宿主还没有 .gitignore，整份复制"}</label>`;
+  $("gitignore").onchange = (e) => { sel.gitignore = e.target.checked; rescanSoon(); };
 }
 
 function renderDevices(d) {

@@ -13,6 +13,7 @@
 </header>
 
 <div id="banner" class="banner hidden"></div>
+<div id="suggest" class="banner info hidden"></div>
 
 <main>
   <section id="project">
@@ -53,6 +54,24 @@
   <section>
     <h2>功能开关</h2>
     <div id="switches"></div>
+  </section>
+
+  <section id="flash-sec">
+    <h2>外置 Flash</h2>
+    <p class="muted">片内 Flash 不够时把程序放到 QUADSPI 外置 Flash：方案 A 由 bootloader 拷进 AXI SRAM 运行，方案 B 在 QSPI 上就地执行（XIP）。
+      日常切换用 CMake 预设 <code>&lt;类型&gt;-Internal / -QspiRam / -QspiXip</code>，这里选的是默认方式。</p>
+    <div id="flash"></div>
+  </section>
+
+  <section>
+    <h2>编译优化</h2>
+    <p class="muted">生成 <code>icbsp_optimization(...)</code>：追加在工具链文件的优化等级之后（GCC 以最后一个 -O 为准），不改 CubeMX 生成的文件。</p>
+    <div id="optim"></div>
+  </section>
+
+  <section>
+    <h2>工程文件</h2>
+    <div id="hostfiles"></div>
   </section>
 
   <section>

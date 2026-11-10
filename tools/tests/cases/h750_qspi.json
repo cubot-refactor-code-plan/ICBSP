@@ -1,0 +1,8 @@
+{
+  "ioc": "h750_qspi.ioc",
+  "args": ["--external-flash", "QSPI_RAM", "--flash-chip", "W25Q128"],
+  "presets": ["Debug-QspiRam", "Debug-QspiXip", "RelWithDebInfo-Internal"],
+  "selection": {
+    "external_flash": { "enabled": true, "layout": "QSPI_RAM", "chip": "W25Q128", "prescaler": 2 }
+  }
+}

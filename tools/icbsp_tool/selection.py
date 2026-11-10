@@ -11,8 +11,16 @@
       },
       "devices": [ {"type": "dji_motor", "name": "chassis_lf", "needs": {"bus": "FDCAN1"}, "params": {"type": "M3508", "id": 1}} ],
       "switches": {"ICBSP_CAN_RX_ENABLE": 1, ...},
-      "debug_uart": "USART1"
+      "debug_uart": "USART1",
+      "external_flash": {"enabled": true, "layout": "QSPI_RAM", "chip": "W25Q128", "prescaler": 2},
+      "optimization": {"enabled": true, "Debug": "-Og", "RelWithDebInfo": "-O2", "Release": "-Os", "vendor_os": false},
+      "gitignore": true
     }
+
+external_flash：外置 QSPI Flash（tools/icbsp_tool/flash.py、cmake/icbsp_flash.cmake）。layout 是写进根 CMakeLists.txt 的
+默认程序存放方式（INTERNAL / QSPI_RAM / QSPI_XIP），日常切换用 CMakePresets 的 *-Internal / *-QspiRam / *-QspiXip。
+optimization：各构建类型的优化等级（cmake/icbsp_options.cmake）；vendor_os = CubeMX 生成的源码固定 -Os。
+gitignore：把 templates/gitignore 合并进宿主 .gitignore（只追加缺的行）。
 
 只出现部分键时按默认值补齐；PWM / 编码器默认不选（例如 DM-MC02 的 TIM3_CH4 是 BMI088 加热电阻，不能默认启动）。
 """
@@ -20,6 +28,7 @@
 import re
 
 from . import checks
+from . import flash
 
 
 def candidates(ioc, manifest):
@@ -81,6 +90,38 @@ def default_selection(ioc, manifest):
     uarts = [ip for ip, p in sel["peripherals"].items() if p["kind"] == "uart" and p["enabled"]]
     sel["debug_uart"] = "USART1" if "USART1" in uarts else (uarts[0] if uarts else None)
     sel["switches"] = default_switches(manifest, sel)
+    sel.update(default_options(ioc, manifest))
+    return sel
+
+
+def default_options(ioc, manifest):
+    """外置 Flash / 编译优化 / .gitignore 的默认值（默认都不改宿主的构建方式，.gitignore 默认合并）"""
+    opt = manifest.get("options", {})
+    guess = flash.analyze(ioc, None, manifest).get("chip_guess")
+    return {
+        "external_flash": {
+            "enabled": False,
+            "layout": "QSPI_RAM",
+            "chip": guess,
+            "prescaler": opt.get("qspi_prescaler_default", 2),
+        },
+        "optimization": {"enabled": False, **opt.get("opt_defaults", {}), "vendor_os": False},
+        "gitignore": True,
+    }
+
+
+OPTION_KEYS = ("external_flash", "optimization", "gitignore")
+
+
+def merge_options(sel, user):
+    """把 user 里的选项键合并进 sel（字典逐键覆盖）"""
+    for key in OPTION_KEYS:
+        if key not in user:
+            continue
+        if isinstance(sel.get(key), dict) and isinstance(user[key], dict):
+            sel[key].update(user[key])
+        else:
+            sel[key] = user[key]
     return sel
 
 
@@ -110,6 +151,7 @@ def merge(ioc, manifest, user):
         sel["debug_uart"] = user["debug_uart"]
     sel["switches"] = default_switches(manifest, sel)
     sel["switches"].update(user.get("switches") or {})
+    merge_options(sel, user)
     return sel
 
 
@@ -204,6 +246,41 @@ def validate(ioc, manifest, sel):
         for dep in sw.get("requires", []):
             if v and not sel["switches"].get(dep):
                 bad.append(("error", sid, f"需要 {dep} = 1"))
+    bad += validate_options(ioc, manifest, sel)
+    return bad
+
+
+def validate_options(ioc, manifest, sel):
+    bad = []
+    opt = manifest.get("options", {})
+    ef = sel.get("external_flash") or {}
+    if ef.get("layout") not in flash.LAYOUTS:
+        bad.append(("error", "external_flash.layout", f"只能是 {'/'.join(flash.LAYOUTS)}"))
+    if ef.get("enabled"):
+        a = flash.analyze(ioc, None, manifest)
+        if not a["supported"]:
+            bad.append(("error", "external_flash", a["note"] or ".ioc 没有启用 QUADSPI（外置 Flash 只支持 QUADSPI）"))
+        chip = flash.chip_for(manifest, ef.get("chip"))
+        if chip is None:
+            names = "、".join(c["name"] for c in manifest.get("flash_chips", []))
+            bad.append(("error", "external_flash.chip", f"选一个芯片：{names}"))
+        try:
+            pre = int(ef.get("prescaler"))
+        except (TypeError, ValueError):
+            pre = -1
+        if not 0 <= pre <= 255:
+            bad.append(("error", "external_flash.prescaler", "预分频 0~255"))
+        elif chip is not None and 240 / (pre + 1) > chip["max_mhz"]:
+            bad.append(("error", "external_flash.prescaler",
+                        f"QSPI 时钟 {240 / (pre + 1):.0f} MHz 超过 {chip['name']} 的 {chip['max_mhz']} MHz（按应用 HCLK3 = 240 MHz 算）"))
+        elif chip is not None and chip.get("status") != "tested":
+            bad.append(("warn", "external_flash.chip", f"{chip['name']} 只做过编译验证，没有上板实测"))
+    op = sel.get("optimization") or {}
+    for bt in opt.get("build_types", []):
+        if op.get(bt) not in opt.get("opt_levels", []):
+            bad.append(("error", f"optimization.{bt}", f"只能是 {' '.join(opt.get('opt_levels', []))}"))
+    if not isinstance(sel.get("gitignore", True), bool):
+        bad.append(("error", "gitignore", "只能是 true / false"))
     return bad
 
 
