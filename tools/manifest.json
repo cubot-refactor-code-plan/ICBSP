@@ -64,7 +64,7 @@
       },
       "dma_buffer_when": { "use_dma": true },
       "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
-      "rules": ["spi_master", "spi_keep_io", "spi_nvic"]
+      "rules": ["spi_master", "spi_8bit", "spi_keep_io", "spi_nvic"]
     },
     "pwm": {
       "title": "PWM 通道",
@@ -294,6 +294,8 @@
     "uart_dma":        { "level": "warn", "title": "DMA 模式的串口 RX / TX 都配了 DMA、字节对齐", "fix": "USARTx → DMA Settings 加 RX、TX 两条，Data Width = Byte（RX 配 Normal 即可，库会改成循环）", "auto_fix": false },
     "uart_bdma":       { "level": "error", "title": "BDMA 外设（LPUART1 等）不能用 DMA 模式", "fix": "收发方式选 it（中断）", "auto_fix": false },
     "spi_master":      { "level": "error", "title": "SPI 全双工主机、软件 NSS", "fix": "SPIx → Mode = Full-Duplex Master，Hardware NSS Signal = Disable", "auto_fix": false },
+    "spi_8bit":        { "level": "error", "title": "SPI 帧长 8 位", "fix": "SPIx → Data Size = 8 Bits（H7 的 CubeMX 默认是 4 Bits，传输会卡死）", "auto_fix": true },
+    "spi_bmi088_speed":{ "level": "error", "title": "BMI088 的 SPI 时钟 ≤ 10 MHz", "fix": "SPIx → Prescaler (for Baud Rate) 调大，使 SCK ≤ 10 MHz（BMI088 数据手册上限）", "auto_fix": true },
     "spi_keep_io":     { "level": "error", "title": "SPI Master Keep IO State = Enable（H7）", "fix": "SPIx → Advanced Parameters → Master Keep IO State = Enabled", "auto_fix": true },
     "spi_nvic":        { "level": "warn", "title": "SPI 用 DMA 时开 SPI 全局中断", "fix": "NVIC → SPIx global interrupt 勾上", "auto_fix": true },
     "encoder_period":  { "level": "error", "title": "编码器定时器的 Period 是计数器最大值", "fix": "TIMx → Counter Period = 0xFFFF（32 位定时器 0xFFFFFFFF）", "auto_fix": true },

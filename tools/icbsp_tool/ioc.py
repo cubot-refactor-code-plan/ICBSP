@@ -265,9 +265,26 @@ class Ioc:
                     "dma_tx": f"{ip}_TX" in reqs,
                     "nvic": self.nvic(f"{ip}_IRQn")[0],
                     "bdma": self.series == "h7" and n == 6,
+                    # CubeMX 不写默认值：H7 的 SPI 默认 4 位帧（!），F4 默认 8 位；预分频默认 /2
+                    "data_size": self.get(f"{ip}.DataSize", "SPI_DATASIZE_4BIT" if self.series == "h7" else "SPI_DATASIZE_8BIT"),
+                    "prescaler": self.spi_prescaler(ip),
+                    "kernel_hz": self.spi_kernel_hz(n),
                 }
             )
         return out
+
+    def spi_prescaler(self, ip):
+        m = re.search(r"(\d+)$", self.get(f"{ip}.BaudRatePrescaler", "SPI_BAUDRATEPRESCALER_2"))
+        return int(m.group(1)) if m else 2
+
+    def spi_kernel_hz(self, n):
+        """SPI n 的内核时钟（Hz），.ioc 里没有对应键时返回 None"""
+        if self.series == "h7":
+            key = "RCC.SPI123Freq_Value" if n <= 3 else ("RCC.SPI45Freq_Value" if n <= 5 else "RCC.SPI6Freq_Value")
+        else:
+            key = "RCC.APB1Freq_Value" if n in (2, 3) else "RCC.APB2Freq_Value"
+        v = self.get(key)
+        return int(float(v)) if v else None
 
     def timer_clock(self, n):
         """定时器 n 的输入时钟（Hz）；键缺省时用 CubeMX 默认值，第二项为 False 表示是猜的"""

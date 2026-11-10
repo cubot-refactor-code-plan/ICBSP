@@ -75,8 +75,11 @@
 - **D-Cache**：测试期间宿主打开过 D-Cache，与库“D-Cache 关闭”的约定冲突（`dcache_off` 规则报错）；按用户决定改回关闭（I-Cache 保持开）。
 - **`defaultTask` 栈**：CubeMX 把 `MX_USB_DEVICE_Init()` 放在 `defaultTask`，-O0 下 128 字栈溢出（tick 1 就进 `fault_on_stack_overflow`）；
   256 字时只剩 4 字余量，改成 512 字。以前 Debug 构建装不进片内 Flash，从没在板上跑过，所以没暴露。
-- **SPI6 / BMI088**：片内与方案 A 都卡在 `bmi088.init()` 的 SPI6 传输里（SPI6_SR = 0x10012：CSTART 已置、TXTF，收不到 RXP），调度器启动前
-  HAL 超时又依赖被屏蔽的 tick，所以永远等下去。测试时按用户决定先从选择里去掉 BMI088；SPI6 时钟 / 接线待查。
+- **SPI6 / BMI088**（已查明并修好）：片内与方案 A 都卡在 `bmi088.init()` 的 SPI6 传输里（SPI6_SR = 0x10012：CSTART 已置、TXTF，收不到 RXP；
+  CFG1 = 0x70003 即 DSIZE = 3 —— **4 位帧**）。`.ioc` 没写 `SPI6.DataSize`，H7 的 CubeMX 默认 4 位；预分频 /2 → 60 MHz，也超过 BMI088 的 10 MHz。
+  库加规则 `spi_8bit`、`spi_bmi088_speed`（可自动修改），用 `--fix-ioc` 改成 8 位、/16（7.5 MHz）。随后又暴露 FreeRTOS 堆不够（15 KB，
+  BMI088 工作任务分配 2056 B 失败，kind = 3），堆改 64 KB（与 MC02 回归宿主一致）。之后 BMI088 正常：加速度 (−2.47, 0.17, 9.46) m/s²（模 9.78）、
+  陀螺 ≈ 0、温度 29.25 °C，每秒刷新 100 次、失败 0；板上没把 BMI088 的 INT 接成 EXTI，所以走 10 ms 定时刷新、不做姿态解算（`_attitude_ready` = false）。
 - **USB 时钟**：`.ioc` 里 USB 取 PLL3Q，HSE 8 MHz / M 1 × N 120 / Q 16 = 60 MHz；USB FS 要 48 MHz。主机端枚举失败（error -71），片内方案同样。用户已改成 Q = 20（48 MHz），复测三种方案都能枚举。
 - **调试器单写 AXI SRAM**：ECC 的写缓冲让单个 32 位写在复位后丢失，清 `fault_record` 要一次写 16 字节。
 
