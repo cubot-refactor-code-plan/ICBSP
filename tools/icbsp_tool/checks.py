@@ -12,7 +12,8 @@
 from . import flash
 from .ioc import FDCAN_MSGRAM_WORDS, eval_int, fdcan_words
 
-NVIC_ON = "true:5:0:false:false:true:true:true:true:true"  # CubeMX 打开一个外设中断时写的值（优先级 5）
+NVIC_ON = "true:5:0:false:false:true:true:true:true:true"
+BMI088_SPI_MAX_HZ = 10_000_000  # BMI088 数据手册：SPI 最高 10 MHz  # CubeMX 打开一个外设中断时写的值（优先级 5）
 H7_TIM32 = {2, 5, 23, 24}
 F4_TIM32 = {2, 5}
 
@@ -164,6 +165,9 @@ class Checker:
                 continue
             ok = s["mode"] == "SPI_MODE_MASTER" and s["direction"] == "SPI_DIRECTION_2LINES" and "HARD" not in (s["nss"] + s["virtual_nss"])
             self.add("spi_master", ip, ok, f"Mode {s['mode']}，Direction {s['direction']}，NSS {s['nss']}")
+            # 库按字节收发；H7 的 CubeMX 默认是 4 位帧（.ioc 里不写 DataSize 时），传输会卡在 HAL 的收发循环里（H750 实测）
+            self.add("spi_8bit", ip, s["data_size"] == "SPI_DATASIZE_8BIT", f"当前 {s['data_size']}",
+                     _ip_param(ioc, ip, "DataSize", "SPI_DATASIZE_8BIT"))
             if ioc.series == "h7":
                 self.add("spi_keep_io", ip, s["keep_io"] == "SPI_MASTER_KEEP_IO_STATE_ENABLE", f"当前 {s['keep_io']}",
                          _ip_param(ioc, ip, "MasterKeepIOState", "SPI_MASTER_KEEP_IO_STATE_ENABLE"))
@@ -221,6 +225,29 @@ class Checker:
         self.add("qspi_params", "QUADSPI", not diff, "；".join(diff), fix)
 
 
+    def check_device_spi_speed(self, devices):
+        """BMI088 的 SPI 时钟不能超过 10 MHz（数据手册）：按 .ioc 的内核时钟 / 预分频算，超了就把预分频改到最小的够用值"""
+        ioc = self.ioc
+        spis = {s["ip"]: s for s in ioc.spi_instances()}
+        for d in devices or []:
+            if d.get("type") != "bmi088":
+                continue
+            ip = (d.get("needs") or {}).get("bus")
+            s = spis.get(ip)
+            if s is None:
+                continue
+            if not s["kernel_hz"]:
+                self.add("spi_bmi088_speed", ip, False, ".ioc 里没有这路 SPI 的内核时钟，算不出 SCK；请在 CubeMX 里确认 ≤ 10 MHz")
+                continue
+            sck = s["kernel_hz"] / s["prescaler"]
+            fix = []
+            if sck > BMI088_SPI_MAX_HZ:
+                want = next((p for p in (2, 4, 8, 16, 32, 64, 128, 256) if s["kernel_hz"] / p <= BMI088_SPI_MAX_HZ), 256)
+                fix = _ip_param(ioc, ip, "BaudRatePrescaler", f"SPI_BAUDRATEPRESCALER_{want}")
+            self.add("spi_bmi088_speed", ip, sck <= BMI088_SPI_MAX_HZ,
+                     f"内核 {s['kernel_hz'] / 1e6:g} MHz / {s['prescaler']} = {sck / 1e6:g} MHz（{d.get('name')}）", fix)
+
+
 def usable(ioc):
     """各外设实例能不能用作库的实例：{ip: (能用, 原因)}"""
     out = {}
@@ -240,10 +267,11 @@ def usable(ioc):
     return out
 
 
-def run(ioc, manifest, selection, external_flash=None):
+def run(ioc, manifest, selection, external_flash=None, devices=None):
     """selection：{"can": {ip: {...}}, "uart": {...}, "spi": {...}, "encoder": {...}}（只看键）；
-    external_flash：完整选择里的 external_flash（启用时检查 QUADSPI 参数）"""
+    external_flash：完整选择里的 external_flash（启用时检查 QUADSPI 参数）；devices：完整选择里的设备（BMI088 的 SPI 速度）"""
     c = Checker(ioc, manifest)
+    c.check_device_spi_speed(devices)
     c.check_external_flash(external_flash, manifest)
     c.check_global()
     c.check_can(selection.get("can", {}))
