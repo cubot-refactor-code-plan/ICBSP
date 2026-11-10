@@ -1,0 +1,35 @@
+{
+    // 烧录任务（integrate.py 在生成 Flash/ 时合并进宿主 .vscode/tasks.json）。
+    // 脚本自己递归找 build/ 下的 .elf，并按构建目录的 ICBSP_FLASH_LAYOUT 决定烧法，不需要 VS Code 传路径
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "OpenOCD_flash",
+            "detail": "OpenOCD + CMSIS-DAP 烧录",
+            "type": "process",
+            "command": "${workspaceFolder}/Flash/OpenOCD_flash.sh",
+            "windows": {
+                "command": "${workspaceFolder}\\Flash\\OpenOCD_flash.bat"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "JLink_flash",
+            "detail": "经 OpenOCD 的 jlink 适配器烧录",
+            "type": "process",
+            "command": "${workspaceFolder}/Flash/JLink_flash.sh",
+            "windows": {
+                "command": "${workspaceFolder}\\Flash\\JLink_flash.bat"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

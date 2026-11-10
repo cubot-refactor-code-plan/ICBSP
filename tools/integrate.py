@@ -840,7 +840,12 @@ FLASH_FILES = (
     "JLink_flash.bat",
     "README.md",
 )
-JSONC_ARRAYS = {"tasks": "label", "configurations": "name"}
+JSONC_ARRAYS = {"tasks": "label", "configurations": "name", "VsCodeTaskButtons.tasks": "task"}
+# 按选项追加进 .vscode/ 的模板片段：生成 Flash/ 时加烧录任务与 Task Buttons 按钮，再启用外置 Flash 时加 RAM 运行 / 重烧 boot
+VSCODE_EXTRAS = {
+    "flash": {"tasks.json": "tasks_flash.json", "settings.json": "settings_flash.json"},
+    "qspi": {"tasks.json": "tasks_qspi.json", "settings.json": "settings_qspi.json"},
+}
 # 本机可能已经装好的 SVD（CubeIDE / Keil DFP / cortex-debug 的第三方包），只在宿主没有时用来提醒
 SVD_SYSTEM_GLOBS = (
     "~/.vscode/extensions/*/data/*.svd",
@@ -1228,36 +1233,61 @@ def drop_svd(text):
     return "\n".join(l for l in text.split("\n") if not l.strip().startswith(("// SVD:", '"svdFile"')))
 
 
-def plan_vscode(host, plan, rep, info):
-    """宿主没有就生成；有就只补缺失的键 / 任务 / 调试配置，原有内容与注释都保留"""
+def merge_jsonc(text, want):
+    """把 want（模板解析后的对象）合并进 JSONC 文本：补根对象缺的键；JSONC_ARRAYS 里的数组按 id 补缺的项（数组整个缺就整个加）"""
+    text, added = merge_root_keys(text, want)
+    for key, id_key in JSONC_ARRAYS.items():
+        items = want.get(key)
+        if not items:
+            continue
+        if _find_member_span(text, key) is None:
+            span = _root_span(text)
+            if span is not None:
+                text = _append_members(text, span, [f"{json.dumps(key, ensure_ascii=False)}: {json.dumps(items, indent=4, ensure_ascii=False)}"])
+                added.append(f"补 {key}")
+            continue
+        for _ in range(50):
+            result = merge_one_nested(text, key, id_key, items)
+            if result is None:
+                break
+            text, msg = result
+            added.append(msg)
+        text, tail = merge_array_tail(text, key, id_key, items)
+        added += tail
+    return text, added
+
+
+def plan_vscode(host, plan, rep, info, extras=()):
+    """宿主没有就生成；有就只补缺失的键 / 任务 / 调试配置 / 按钮，原有内容与注释都保留。
+    extras：VSCODE_EXTRAS 的键（"flash"：烧录任务与按钮；"qspi"：外置 Flash 的 RAM 运行 / 重烧 boot），按顺序追加"""
     step = ".vscode"
     for name in ("settings.json", "tasks.json", "launch.json"):
         template = render_template(VSCODE / name, info)
         if not info["SVD"]:
             template = drop_svd(template)
+        wants = [json.loads(strip_jsonc(template))]
+        for key in extras:
+            extra = VSCODE_EXTRAS.get(key, {}).get(name)
+            if extra:
+                wants.append(json.loads(strip_jsonc(render_template(VSCODE / extra, info))))
         dst = host / ".vscode" / name
         if not dst.exists():
-            plan.create(dst, template)
+            text = template
+            for want in wants[1:]:
+                text, _ = merge_jsonc(text, want)
+            plan.create(dst, text)
             rep.ok(step, f"新建 .vscode/{name}")
             continue
         tf = TextFile(dst)
         try:
-            want = json.loads(strip_jsonc(template))
             json.loads(strip_jsonc(tf.text))
         except ValueError:
             rep.warn(step, f".vscode/{name} 不是能识别的 JSONC，跳过；请手动对照 templates/vscode/{name} 合并")
             continue
-        text = tf.text
-        text, added = merge_root_keys(text, want)
-        for key, id_key in JSONC_ARRAYS.items():
-            for _ in range(50):
-                result = merge_one_nested(text, key, id_key, want.get(key) or [])
-                if result is None:
-                    break
-                text, msg = result
-                added.append(msg)
-            text, tail = merge_array_tail(text, key, id_key, want.get(key) or [])
-            added += tail
+        text, added = tf.text, []
+        for want in wants:
+            text, more = merge_jsonc(text, want)
+            added += more
         if text == tf.text:
             rep.skip(step, f".vscode/{name} 已包含模板内容")
             continue
@@ -1269,6 +1299,10 @@ def plan_vscode(host, plan, rep, info):
         tf.text = text
         plan.edit(tf)
         rep.ok(step, f".vscode/{name}：{'；'.join(added)}")
+    if "flash" not in extras:
+        tasks = host / ".vscode" / "tasks.json"
+        if tasks.exists() and '"OpenOCD_flash"' in tasks.read_text(encoding="utf-8"):
+            rep.warn(step, "这次不生成 Flash/：宿主 tasks.json / settings.json 里已有的烧录任务与按钮不会删除，不要的话手动删")
 
     final = plan.new_files.get(host / ".vscode" / "settings.json")
     if final is None and (host / ".vscode" / "settings.json") in plan.edits:
@@ -1382,7 +1416,8 @@ def plan_options(host, plan, rep, args, ioc, sel, persist, info):
     host_options.plan_cmake_region(host, plan, rep, TextFile, sel, lib_rel, board_rel, man, args.overwrite_edited)
     host_options.plan_presets(host, plan, rep, TextFile, sel, man)
     if ef.get("enabled"):
-        host_options.plan_external_flash(host, plan, rep, TextFile, ioc, man, sel, args.board_dir, info, render_template)
+        flash_on = sel.get("flash_scripts", True) and not args.no_flash
+        host_options.plan_external_flash(host, plan, rep, TextFile, ioc, man, sel, args.board_dir, info, render_template, flash_on)
         if not args.no_vscode:
             plan_launch_qspi(host, plan, rep, info)
     if sel.get("gitignore", True) and not args.no_gitignore:
@@ -1660,7 +1695,8 @@ def main():
     ap.add_argument("--preset", default="Debug", help="用哪个 CMake 预设的编译数据库与构建目录（默认 Debug）")
     ap.add_argument("--no-hardware-config", action="store_true", help="不复制 hardware_config.h")
     ap.add_argument("--no-vscode", action="store_true", help="不处理 .vscode/settings.json、tasks.json、launch.json")
-    ap.add_argument("--no-flash", action="store_true", help="不复制 Flash/ 烧录脚本")
+    ap.add_argument("--no-flash", action="store_true", help="这一次不生成 Flash/ 烧录脚本（也不加 .vscode 的烧录任务与按钮）")
+    ap.add_argument("--flash-scripts", choices=("on", "off"), help="是否生成 Flash/ 烧录脚本与对应的 .vscode 烧录任务、Task Buttons 按钮（存进选择，下次沿用）")
     ap.add_argument("--no-clang", action="store_true", help="不生成 .clang-format / .clangd")
     ap.add_argument("--ioc", type=Path, help="CubeMX 的 .ioc（默认：宿主根目录下唯一的 .ioc）")
     ap.add_argument("--apply", metavar="选择.json", help="按选择生成 board_instances.hpp / board_cfg.* / hardware_config.h 的生成区（格式见 tools/icbsp_tool/selection.py）")
@@ -1713,10 +1749,16 @@ def main():
             plan_hardware_config(host, plan, rep, args.board_dir)
         plan_cmake(host, plan, rep, args.board_dir, args.app_dir, args.user_dir)
         info = detect_project(host, rep, args.preset)
+        # 生成 Flash/：选择里的 flash_scripts（默认是），这一次加了 --no-flash 就不生成；生成时 .vscode 同时加烧录任务与按钮
+        flash_on = (opt_sel or {}).get("flash_scripts", True) and not args.no_flash
+        ext_on = bool(((opt_sel or {}).get("external_flash") or {}).get("enabled"))
+        extras = (("flash",) if flash_on else ()) + (("qspi",) if flash_on and ext_on else ())
         if not args.no_vscode:
-            plan_vscode(host, plan, rep, info)
-        if not args.no_flash:
+            plan_vscode(host, plan, rep, info, extras)
+        if flash_on:
             plan_flash(host, plan, rep, info)
+        else:
+            rep.skip("Flash", "不生成 Flash/（" + ("--no-flash" if args.no_flash else "选择里 flash_scripts = false") + "）")
         if not args.no_clang:
             plan_clang(host, plan, rep, info)
         if opt_sel is not None and not rep.has_error:
