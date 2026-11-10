@@ -51,6 +51,16 @@ Keil 的 `STM32H7xx_DFP` 包，或 ST 官网下载，放到 `Flash/` 下即可�
 | --- | --- |
 | `daplink.cfg` | OpenOCD 的 CMSIS-DAP 配置（SWD + 目标芯片）。部分探针（Horco v0.2）bulk 端点不响应，要取消 `cmsis-dap backend hid` 的注释 |
 | `jlink.cfg` | OpenOCD 的 SEGGER J-Link 配置（`adapter driver jlink` + SWD 4 MHz） |
+| `daplink_qspi.cfg` | 外置 QSPI Flash 方案专用：`reset-init` / `gdb-attach` 时配好 QSPI 引脚与 QUADSPI，注册 `stmqspi` bank。占位符 `{{QSPI_INIT}}` 由 `integrate.py` 按 `.ioc` 生成 |
+
+## 外置 QSPI Flash（`ICBSP_FLASH_LAYOUT` = `QSPI_RAM` / `QSPI_XIP`）
+
+`OpenOCD_flash.*` 从构建目录的 `CMakeCache.txt` 读存放方式：外置方案时用 `daplink_qspi.cfg`，bootloader（`icbsp_boot/icbsp_boot.elf`）
+与板上不同才烧（`--boot` 强制），QSPI 写 `<工程名>_qspi.bin` 到 0x90000000；`--ram`（只用于 `QSPI_RAM`）直接下载进 AXI SRAM 运行、不写 Flash。
+J-Link 脚本只支持片内 Flash。详见 `docs/外置Flash.md`。
+
+上面“不要注册外置 Flash bank”的经验对 `daplink.cfg` 仍然成立：外置 bank 只放在 `daplink_qspi.cfg` 里，并且它在 `reset-init` 与 `gdb-attach`
+时先初始化 QSPI 再探测芯片，所以不会出现 MC02 上那种访问未初始化的外置 Flash 把调试口卡死的情况（H750 + W25Q128 实测）。
 
 ## 实测经验（DM-MC02 / STM32H723）
 

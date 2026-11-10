@@ -24,7 +24,7 @@ set "ELF_FILE=build\%BUILD_TYPE%\%PROJECT_NAME%.elf"
 if not exist "!ELF_FILE!" set "ELF_FILE=build\Debug\%PROJECT_NAME%.elf"
 if not exist "!ELF_FILE!" set "ELF_FILE=build\Release\%PROJECT_NAME%.elf"
 if not exist "!ELF_FILE!" (
-    for /f "delims=" %%f in ('dir /b /s build\*.elf 2^>nul') do (
+    for /f "delims=" %%f in ('dir /b /s build\*.elf 2^>nul ^| findstr /v /i "icbsp_boot"') do (
         set "ELF_FILE=%%f"
         goto :found
     )
@@ -33,6 +33,15 @@ if not exist "!ELF_FILE!" (
 
 if not exist "!ELF_FILE!" (
     echo Error: ELF not found under build\ - build first ^(task: Build^)
+    exit /b 1
+)
+for %%d in ("!ELF_FILE!") do set "BUILD_DIR=%%~dpd"
+set "LAYOUT=INTERNAL"
+if exist "!BUILD_DIR!CMakeCache.txt" (
+    for /f "tokens=2 delims==" %%l in ('findstr /b /c:"ICBSP_FLASH_LAYOUT:" "!BUILD_DIR!CMakeCache.txt"') do set "LAYOUT=%%l"
+)
+if /i not "!LAYOUT!"=="INTERNAL" (
+    echo Error: external flash layout !LAYOUT! - J-Link script supports internal flash only, use Flash\OpenOCD_flash.bat
     exit /b 1
 )
 

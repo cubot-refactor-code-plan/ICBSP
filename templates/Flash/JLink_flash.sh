@@ -28,7 +28,7 @@ find_elf() {
             return 0
         fi
     done
-    all="$(find build -type f -name '*.elf' 2>/dev/null | sort || true)"
+    all="$(find build -type f -name '*.elf' -not -path '*/icbsp_boot/*' 2>/dev/null | sort || true)"
     [ -n "$all" ] || return 1
     picked="$(printf '%s\n' "$all" | grep -F "/${PROJECT_NAME}.elf" | head -n 1 || true)"
     [ -n "$picked" ] || picked="$(printf '%s\n' "$all" | head -n 1)"
@@ -46,6 +46,11 @@ if [ -z "$ELF_FILE" ] || [ ! -f "$ELF_FILE" ]; then
     exit 1
 fi
 ELF_FILE="$(realpath "$ELF_FILE")"
+LAYOUT="$(sed -n 's/^ICBSP_FLASH_LAYOUT:[A-Z]*=//p' "$(dirname "$ELF_FILE")/CMakeCache.txt" 2>/dev/null | head -n 1 || true)"
+if [ -n "$LAYOUT" ] && [ "$LAYOUT" != "INTERNAL" ]; then
+    echo "❌ 当前构建是外置 Flash 方案（$LAYOUT）：J-Link 脚本只支持片内 Flash，请用 Flash/OpenOCD_flash.sh（CMSIS-DAP）"
+    exit 1
+fi
 
 # OpenOCD 建议 0.12 及以上（实测用的是 0.12；0.11 没验证过）。系统包管理器装的常常是 0.11，
 # 另装了新版时用环境变量指定：OPENOCD=/usr/local/bin/openocd bash Flash/OpenOCD_flash.sh

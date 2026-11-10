@@ -5,6 +5,8 @@
 | 文件 | 放到哪里 | 作用 |
 | --- | --- | --- |
 | `linker_sections.ld` | 宿主链接脚本 `SECTIONS { }` 里、`.data` 之前 | 可加载的 `.dma_buffer`（串口 / SPI 实例，DMA 可达的 AXI SRAM，`AT> FLASH`）与 `.noinit`（`fault_record`，复位保留） |
+| `flash_layout/h7_qspi_ram.ld.in`、`h7_qspi_xip.ld.in` | 不复制：`cmake/icbsp_flash.cmake` 构建时 `configure_file` 到构建目录 | 外置 QSPI Flash 方案 A（拷进 AXI SRAM 运行）/ 方案 B（XIP）的链接脚本，见 `docs/外置Flash.md` |
+| `gitignore` | 宿主根 `.gitignore` | 示例忽略项：宿主没有就整份复制，有就只追加缺的行（`# >>> icbsp` … `# <<< icbsp`） |
 | `FreeRTOSConfig_user_code.h` | `Core/Inc/FreeRTOSConfig.h` 的 USER CODE 1 段 | `configASSERT` → `fault_on_assert()` |
 | `freertos_user_code.c` | `Core/Src/freertos.c` 的 Includes / 4 / 5 / Init 段 | 栈溢出与分配失败钩子；`MX_FREERTOS_Init()` 调 `app_init()` |
 | `user/board/hardware_config.h` | `user/board/` | 必选：唯一配置源，所有宏、功能开关与范围检查都在这里 |
@@ -14,7 +16,9 @@
 | `user/app/app_task.hpp` | `user/app/` | 示例任务声明（heartbeat / monitor） |
 | `user/app/task/demo_task.cpp` | `user/app/task/` | 示例任务实现，不自动创建 |
 | `vscode/settings.json`、`vscode/tasks.json`、`vscode/launch.json` | 宿主 `.vscode/` | 编译 / 烧录任务与调试配置，宿主没有才生成；有就只补缺失项 |
-| `Flash/OpenOCD_flash.*`、`Flash/JLink_flash.*`、`Flash/*.cfg` | 宿主 `Flash/` | 烧录脚本，运行时按工程名在 `build/` 下递归找 `.elf`；`.sh` 自动加可执行权限 |
+| `vscode/launch_qspi.json` | 合并进宿主 `.vscode/launch.json` | 外置 Flash 启用时加的两个调试配置：`cmsis-dap-debug (QSPI_RAM)`、`cmsis-dap-debug (QSPI_XIP)` |
+| `Flash/OpenOCD_flash.*`、`Flash/JLink_flash.*`、`Flash/*.cfg` | 宿主 `Flash/` | 烧录脚本，运行时按工程名在 `build/` 下递归找 `.elf`，按构建目录的 `ICBSP_FLASH_LAYOUT` 决定烧法；`.sh` 自动加可执行权限 |
+| `Flash/daplink_qspi.cfg` | 宿主 `Flash/`（外置 Flash 启用时，按 `.ioc` 的 QSPI 引脚生成） | OpenOCD：QSPI 引脚 / QUADSPI 初始化 + `stmqspi` bank，写 QSPI 和调试方案 B 用 |
 | `clang/.clangd` | 宿主根 `.clangd` | clangd 配置：`CompilationDatabase` 指向该预设的构建目录。缺了它，CubeMX 的 Cortex-M 工程在 clangd 里会满屏假错误。**`--query-driver` 不能写这里**（会被当编译器参数，报 `drv_unknown_argument`），它属于 `.vscode/settings.json` 的 `clangd.arguments` |
 | `clang/compile_flags.yaml` | 同上，插入宿主已有的 `.clangd` 顶部 | 只含 `CompileFlags` 一段：宿主已手写 `.clangd`（有 InlayHints / Diagnostics 等）时用它合并，不动原有配置 |
 | `clang/ignore_templates.yaml` | 同上，追加到 `.clangd` **末尾**（自带 `---` 分隔） | 让库的 `templates/` 不用宿主编译数据库、不进后台索引、不报诊断：模板与宿主有同名文件（`board_cfg.hpp` 等），留着会干扰补全与跳转 |

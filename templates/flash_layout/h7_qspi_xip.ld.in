@@ -1,0 +1,229 @@
+/*
+ * icbsp：外置 QSPI Flash 方案 B（QSPI_XIP）—— 程序在 QSPI 上就地执行（内存映射，0x90000000）
+ *
+ * 由 cmake/icbsp_flash.cmake 从 templates/flash_layout/h7_qspi_xip.ld.in 生成到构建目录，不要手改生成结果。
+ * 适用：STM32H742/H743/H750/H753（QUADSPI 内存映射窗口 0x90000000）。
+ *
+ * 规则：
+ *   - 0x90000000 起 1 KB 是镜像头（.icbsp_image_header），由 tools/qspi_image.py 在构建后填入长度和 CRC；
+ *     程序（向量表在最前）从 0x90000400 开始。
+ *   - 代码 / 常量 / 初值都在 QSPI；.data / .bss / 堆栈放 DTCM，.dma_buffer、.noinit 放 AXI SRAM。
+ *   - 应用不能再初始化 QUADSPI（quadspi.c 的 USER CODE 里按 ICBSP_FLASH_LAYOUT_QSPI_XIP 提前返回），
+ *     MPU 必须放开 0x90000000 起的芯片容量（.ioc 的 MPU Region1，integrate.py --fix-ioc 处理）。
+ *   - RAM_D3 末尾 32 字节留给 bootloader 的状态字（ICBSP_BOOT_STATUS_ADDR）。
+ */
+
+ENTRY(Reset_Handler)
+
+MEMORY
+{
+  DTCMRAM (xrw) : ORIGIN = 0x20000000, LENGTH = 128K
+  RAM     (xrw) : ORIGIN = 0x24000000, LENGTH = @ICBSP_AXI_SRAM_SIZE@
+  RAM_D2  (xrw) : ORIGIN = 0x30000000, LENGTH = 288K
+  RAM_D3  (xrw) : ORIGIN = 0x38000000, LENGTH = 64K - 32
+  ITCMRAM (xrw) : ORIGIN = 0x00000000, LENGTH = 64K
+  QSPI    (rx)  : ORIGIN = 0x90000000, LENGTH = @ICBSP_QSPI_SIZE@
+}
+
+_estack = ORIGIN(DTCMRAM) + LENGTH(DTCMRAM);
+_sstack = _estack - _Min_Stack_Size;
+_Min_Heap_Size = @ICBSP_MIN_HEAP_SIZE@;
+_Min_Stack_Size = @ICBSP_MIN_STACK_SIZE@;
+
+SECTIONS
+{
+  /* 镜像头：内容占位，构建后由 tools/qspi_image.py 改写（长度、CRC） */
+  .icbsp_image_header :
+  {
+    LONG(0x49424349)            /* magic 'ICBI' */
+    LONG(1)                     /* version */
+    LONG(2)                     /* layout = QSPI_XIP */
+    LONG(ORIGIN(QSPI) + 0x400)  /* load_addr */
+    LONG(ORIGIN(QSPI) + 0x400)  /* vector_addr */
+    LONG(0xFFFFFFFF)            /* size（构建后填） */
+    LONG(0xFFFFFFFF)            /* payload_crc（构建后填） */
+    LONG(0xFFFFFFFF)            /* header_crc（构建后填） */
+    . = 0x400;
+  } >QSPI =0xFF
+
+  .isr_vector :
+  {
+    . = ALIGN(4);
+    KEEP(*(.isr_vector))
+    . = ALIGN(4);
+  } >QSPI
+
+  .text :
+  {
+    . = ALIGN(4);
+    *(.text)
+    *(.text*)
+    *(.glue_7)
+    *(.glue_7t)
+    *(.eh_frame)
+    KEEP (*(.init))
+    KEEP (*(.fini))
+    . = ALIGN(4);
+    _etext = .;
+  } >QSPI
+
+  .rodata :
+  {
+    . = ALIGN(4);
+    *(.rodata)
+    *(.rodata*)
+    . = ALIGN(4);
+  } >QSPI
+
+  .ARM.extab (READONLY) :
+  {
+    . = ALIGN(4);
+    *(.ARM.extab* .gnu.linkonce.armextab.*)
+    . = ALIGN(4);
+  } >QSPI
+
+  .ARM (READONLY) :
+  {
+    . = ALIGN(4);
+    __exidx_start = .;
+    *(.ARM.exidx*)
+    __exidx_end = .;
+    . = ALIGN(4);
+  } >QSPI
+
+  .preinit_array (READONLY) :
+  {
+    . = ALIGN(4);
+    PROVIDE_HIDDEN (__preinit_array_start = .);
+    KEEP (*(.preinit_array*))
+    PROVIDE_HIDDEN (__preinit_array_end = .);
+    . = ALIGN(4);
+  } >QSPI
+
+  .init_array (READONLY) :
+  {
+    . = ALIGN(4);
+    PROVIDE_HIDDEN (__init_array_start = .);
+    KEEP (*(SORT(.init_array.*)))
+    KEEP (*(.init_array*))
+    PROVIDE_HIDDEN (__init_array_end = .);
+    . = ALIGN(4);
+  } >QSPI
+
+  .fini_array (READONLY) :
+  {
+    . = ALIGN(4);
+    PROVIDE_HIDDEN (__fini_array_start = .);
+    KEEP (*(SORT(.fini_array.*)))
+    KEEP (*(.fini_array*))
+    PROVIDE_HIDDEN (__fini_array_end = .);
+    . = ALIGN(4);
+  } >QSPI
+
+  /* icbsp：见 templates/linker_sections.ld（运行在 AXI SRAM，初值放 QSPI） */
+  .dma_buffer :
+  {
+    . = ALIGN(32);
+    __dma_buffer_start = .;
+    *(.dma_buffer)
+    *(.dma_buffer*)
+    . = ALIGN(32);
+    __dma_buffer_end = .;
+  } >RAM AT> QSPI
+  __dma_buffer_load = LOADADDR(.dma_buffer) + (__dma_buffer_start - ADDR(.dma_buffer)); /* 段内 ALIGN(32) 会让起点后移，加载地址同样偏移 */
+
+  _sidata = LOADADDR(.data);
+
+  .data :
+  {
+    . = ALIGN(4);
+    _sdata = .;
+    *(.data)
+    *(.data*)
+    *(.RamFunc)        /* 与 CubeMX 默认一致：随 .data 拷进 RAM */
+    *(.RamFunc*)
+    . = ALIGN(4);
+  } >DTCMRAM AT> QSPI
+
+  .tdata : ALIGN(4)
+  {
+    *(.tdata .tdata.* .gnu.linkonce.td.*)
+    . = ALIGN(4);
+    _edata = .;
+    PROVIDE(__data_end = .);
+    PROVIDE(__tdata_end = .);
+  } >DTCMRAM AT> QSPI
+
+  /* 载荷到此为止：后面只能是 NOLOAD 段 */
+  __icbsp_image_end = LOADADDR(.tdata) + SIZEOF(.tdata);
+
+  PROVIDE( __tdata_start = ADDR(.tdata) );
+  PROVIDE( __tdata_size = __tdata_end - __tdata_start );
+  PROVIDE( __data_start = ADDR(.data) );
+  PROVIDE( __data_size = __data_end - __data_start );
+  PROVIDE( __tdata_source = LOADADDR(.tdata) );
+  PROVIDE( __tdata_source_end = LOADADDR(.tdata) + SIZEOF(.tdata) );
+  PROVIDE( __tdata_source_size = __tdata_source_end - __tdata_source );
+  PROVIDE( __data_source = LOADADDR(.data) );
+  PROVIDE( __data_source_end = __tdata_source_end );
+  PROVIDE( __data_source_size = __data_source_end - __data_source );
+
+  .noinit (NOLOAD) :
+  {
+    . = ALIGN(4);
+    *(.noinit)
+    *(.noinit*)
+    . = ALIGN(4);
+  } >RAM
+
+  .tbss (NOLOAD) : ALIGN(4)
+  {
+    _sbss = .;
+    __bss_start__ = _sbss;
+    *(.tbss .tbss.*)
+    . = ALIGN(4);
+    PROVIDE( __tbss_end = . );
+  } >DTCMRAM
+
+  PROVIDE( __tbss_start = ADDR(.tbss) );
+  PROVIDE( __tbss_size = __tbss_end - __tbss_start );
+  PROVIDE( __tbss_offset = ADDR(.tbss) - ADDR(.tdata) );
+  PROVIDE( __tls_base = __tdata_start );
+  PROVIDE( __tls_end = __tbss_end );
+  PROVIDE( __tls_size = __tls_end - __tls_base );
+  PROVIDE( __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss)) );
+  PROVIDE( __tls_size_align = (__tls_size + __tls_align - 1) & ~(__tls_align - 1) );
+  PROVIDE( __arm32_tls_tcb_offset = MAX(8, __tls_align) );
+  PROVIDE( __arm64_tls_tcb_offset = MAX(16, __tls_align) );
+
+  .bss (NOLOAD) : ALIGN(4)
+  {
+    *(.bss)
+    *(.bss*)
+    *(COMMON)
+    . = ALIGN(4);
+    _ebss = .;
+    __bss_end__ = _ebss;
+    PROVIDE( __bss_end = .);
+  } >DTCMRAM
+  PROVIDE( __non_tls_bss_start = ADDR(.bss) );
+  PROVIDE( __bss_start = __tbss_start );
+  PROVIDE( __bss_size = __bss_end - __bss_start );
+
+  ._user_heap_stack (NOLOAD) :
+  {
+    . = ALIGN(8);
+    PROVIDE ( end = . );
+    PROVIDE ( _end = . );
+    . = . + _Min_Heap_Size;
+    . = . + _Min_Stack_Size;
+    . = ALIGN(8);
+  } >DTCMRAM
+
+  /DISCARD/ :
+  {
+    libc.a:* ( * )
+    libm.a:* ( * )
+    libgcc.a:* ( * )
+  }
+}
