@@ -37,7 +37,7 @@
 | H8 | `fault_record` 复位保留 | 通过：A、B 下人为制造 MemManage 后复位，记录仍在（bootloader 拷贝不覆盖 `.noinit`），应用重新运行 |
 | H9 | 只用预设切换 | 通过：Internal → A → B → A(Debug) → B(Debug) 依次烧录都能启动；从 Internal 切回外置方案时脚本发现 bootloader 被覆盖，自动重烧 |
 | H10 | EmberProbe | `variables_read` 在 A / B 下都能读 RAM 变量，但按工作区配置的 ELF（`build/Debug/…`）解析地址，与板上实际的预设不一致时不报警（`firmwareConsistency: unknown`）——外置方案要把 EmberProbe 的 ELF 指到 `build/<预设>/`。`flash_program` 只接受 interface / target 脚本，不能用 `daplink_qspi.cfg`，写不了 QSPI（按接口判断，未实际执行） |
-| — | USB CDC 冒烟 | 未通过，与方案无关：主机报 `device not accepting address, error -71`，片内方案同样；原因是 `.ioc` 的 USB 时钟取 PLL3Q = 60 MHz（应为 48 MHz），见“宿主侧发现” |
+| — | USB CDC 冒烟 | 通过（复测）：第一次枚举失败（`device not accepting address, error -71`，片内方案同样），原因是 `.ioc` 的 USB 时钟 PLL3Q = 60 MHz；用户把 DIVQ3 改成 20（48 MHz）后，方案 A、方案 B、片内三种都枚举成 `0483:5740 STM32 Virtual ComPort`（`cdc_acm` → `/dev/ttyACM1`），应用 1000 tick/s、无故障 |
 
 ### H7 性能
 
@@ -77,7 +77,7 @@
   256 字时只剩 4 字余量，改成 512 字。以前 Debug 构建装不进片内 Flash，从没在板上跑过，所以没暴露。
 - **SPI6 / BMI088**：片内与方案 A 都卡在 `bmi088.init()` 的 SPI6 传输里（SPI6_SR = 0x10012：CSTART 已置、TXTF，收不到 RXP），调度器启动前
   HAL 超时又依赖被屏蔽的 tick，所以永远等下去。测试时按用户决定先从选择里去掉 BMI088；SPI6 时钟 / 接线待查。
-- **USB 时钟**：`.ioc` 里 USB 取 PLL3Q，HSE 8 MHz / M 1 × N 120 / Q 16 = 60 MHz；USB FS 要 48 MHz（Q = 20）。主机端枚举失败（error -71），片内方案同样。
+- **USB 时钟**：`.ioc` 里 USB 取 PLL3Q，HSE 8 MHz / M 1 × N 120 / Q 16 = 60 MHz；USB FS 要 48 MHz。主机端枚举失败（error -71），片内方案同样。用户已改成 Q = 20（48 MHz），复测三种方案都能枚举。
 - **调试器单写 AXI SRAM**：ECC 的写缓冲让单个 32 位写在复位后丢失，清 `fault_record` 要一次写 16 字节。
 
 ## 未做
