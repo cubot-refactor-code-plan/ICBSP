@@ -1,0 +1,15 @@
+{
+    // 外置 Flash 的按钮（Task Buttons 插件），integrate.py 在同时生成 Flash/、启用外置 Flash 时合并进 VsCodeTaskButtons.tasks
+    "VsCodeTaskButtons.tasks": [
+        {
+            "label": "[🧠 RAM运行]",
+            "task": "OpenOCD_ram_run",
+            "tooltip": "方案 A：编译 -QspiRam 预设并下载进 AXI SRAM 运行，不写 Flash"
+        },
+        {
+            "label": "[🥾 重烧boot]",
+            "task": "OpenOCD_flash_boot",
+            "tooltip": "强制重烧 bootloader，再写 QSPI 镜像"
+        }
+    ]
+}

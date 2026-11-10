@@ -14,13 +14,15 @@
       "debug_uart": "USART1",
       "external_flash": {"enabled": true, "layout": "QSPI_RAM", "chip": "W25Q128", "prescaler": 2},
       "optimization": {"enabled": true, "Debug": "-Og", "RelWithDebInfo": "-O2", "Release": "-Os", "vendor_os": false},
-      "gitignore": true
+      "gitignore": true,
+      "flash_scripts": true
     }
 
 external_flash：外置 QSPI Flash（tools/icbsp_tool/flash.py、cmake/icbsp_flash.cmake）。layout 是写进根 CMakeLists.txt 的
 默认程序存放方式（INTERNAL / QSPI_RAM / QSPI_XIP），日常切换用 CMakePresets 的 *-Internal / *-QspiRam / *-QspiXip。
 optimization：各构建类型的优化等级（cmake/icbsp_options.cmake）；vendor_os = CubeMX 生成的源码固定 -Os。
 gitignore：把 templates/gitignore 合并进宿主 .gitignore（只追加缺的行）。
+flash_scripts：生成 Flash/ 烧录脚本，同时给 .vscode 加烧录任务与 Task Buttons 状态栏按钮（外置 Flash 启用时再加 RAM 运行 / 重烧 boot）。
 
 只出现部分键时按默认值补齐；PWM / 编码器默认不选（例如 DM-MC02 的 TIM3_CH4 是 BMI088 加热电阻，不能默认启动）。
 """
@@ -107,10 +109,11 @@ def default_options(ioc, manifest):
         },
         "optimization": {"enabled": False, **opt.get("opt_defaults", {}), "vendor_os": False},
         "gitignore": True,
+        "flash_scripts": True,
     }
 
 
-OPTION_KEYS = ("external_flash", "optimization", "gitignore")
+OPTION_KEYS = ("external_flash", "optimization", "gitignore", "flash_scripts")
 
 
 def merge_options(sel, user):
@@ -279,8 +282,9 @@ def validate_options(ioc, manifest, sel):
     for bt in opt.get("build_types", []):
         if op.get(bt) not in opt.get("opt_levels", []):
             bad.append(("error", f"optimization.{bt}", f"只能是 {' '.join(opt.get('opt_levels', []))}"))
-    if not isinstance(sel.get("gitignore", True), bool):
-        bad.append(("error", "gitignore", "只能是 true / false"))
+    for key in ("gitignore", "flash_scripts"):
+        if not isinstance(sel.get(key, True), bool):
+            bad.append(("error", key, "只能是 true / false"))
     return bad
 
 
