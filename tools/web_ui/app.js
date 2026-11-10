@@ -17,7 +17,6 @@ function opts() {
     app_dir: $("app_dir").value.trim() || undefined,
     ioc: $("ioc").value.trim() || undefined,
     no_vscode: $("no_vscode").checked,
-    no_flash: $("no_flash").checked,
     no_clang: $("no_clang").checked,
   };
 }
@@ -239,8 +238,21 @@ function renderHostFiles(d) {
   const sel = state.selection;
   if (!sel) return;
   const exists = d.gitignore_exists;
-  $("hostfiles").innerHTML = `<label class="row"><input type="checkbox" id="gitignore" ${sel.gitignore !== false ? "checked" : ""}>
-    复制示例 .gitignore（<code>templates/gitignore</code>）：${exists ? "宿主已有 .gitignore，只把缺的条目追加到末尾" : "宿主还没有 .gitignore，整份复制"}</label>`;
+  const flashOn = sel.flash_scripts !== false;
+  const extOn = !!(sel.external_flash && sel.external_flash.enabled);
+  const noVscode = $("no_vscode").checked;
+  const buttons = ["[⚡ DAP烧录]", "[🔌 JLink烧录]"].concat(extOn ? ["[🧠 RAM运行]", "[🥾 重烧boot]"] : []);
+  $("hostfiles").innerHTML = `
+    <label class="row"><input type="checkbox" id="flash_scripts" ${flashOn ? "checked" : ""}>
+      生成 <code>Flash/</code> 烧录脚本（OpenOCD / J-Link，按构建目录的存放方式烧）</label>
+    <p class="muted" style="margin:2px 0 8px 26px">${flashOn
+      ? (noVscode
+        ? "上面勾了“不处理 .vscode”，所以不会加烧录任务与按钮。"
+        : `同时在 <code>.vscode/tasks.json</code> 加烧录任务，在 <code>settings.json</code> 的 <code>VsCodeTaskButtons.tasks</code>（Task Buttons 插件）加状态栏按钮：${buttons.map(esc).join(" ")}`)
+      : "不生成 Flash/，也不加烧录任务与按钮；宿主已有的不会删除。"}</p>
+    <label class="row"><input type="checkbox" id="gitignore" ${sel.gitignore !== false ? "checked" : ""}>
+      复制示例 .gitignore（<code>templates/gitignore</code>）：${exists ? "宿主已有 .gitignore，只把缺的条目追加到末尾" : "宿主还没有 .gitignore，整份复制"}</label>`;
+  $("flash_scripts").onchange = (e) => { sel.flash_scripts = e.target.checked; rescanSoon(); };
   $("gitignore").onchange = (e) => { sel.gitignore = e.target.checked; rescanSoon(); };
 }
 
@@ -366,7 +378,7 @@ async function init() {
   state.info = info;
   if (!info.python.ok) banner(info.python.error);
   else if (!info.hostOk) banner(`${info.host} 不是宿主工程根目录（没有 CMakeLists.txt）：用 --host 重新启动服务`);
-  for (const id of ["board_dir", "app_dir", "ioc", "no_vscode", "no_flash", "no_clang"]) $(id).addEventListener("change", rescanSoon);
+  for (const id of ["board_dir", "app_dir", "ioc", "no_vscode", "no_clang"]) $(id).addEventListener("change", rescanSoon);
   $("rescan").onclick = scan;
   $("fix-preview").onclick = () => fixIoc(true);
   $("fix-apply").onclick = () => fixIoc(false);

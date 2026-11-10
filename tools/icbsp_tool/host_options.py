@@ -172,7 +172,7 @@ def plan_presets(host, plan, rep, text_file_cls, sel, manifest):
 # ---------------------------------------------------------------- 外置 Flash 文件
 
 
-def plan_external_flash(host, plan, rep, text_file_cls, ioc, manifest, sel, board_dir, info, render):
+def plan_external_flash(host, plan, rep, text_file_cls, ioc, manifest, sel, board_dir, info, render, flash_scripts=True):
     """icbsp_flash_config.h、quadspi.c 的 USER CODE、Flash/daplink_qspi.cfg、旧版烧录脚本升级"""
     step = "外置 Flash"
     ef = sel.get("external_flash") or {}
@@ -222,8 +222,8 @@ def plan_external_flash(host, plan, rep, text_file_cls, ioc, manifest, sel, boar
                 plan.edit(tf)
                 rep.ok(step, "quadspi.c：方案 B 时 MX_QUADSPI_Init() 直接返回")
 
-    # 4. 旧版烧录脚本不认外置 Flash：换成新模板
-    for name in ("OpenOCD_flash.sh", "OpenOCD_flash.bat", "JLink_flash.sh", "JLink_flash.bat"):
+    # 4. 旧版烧录脚本不认外置 Flash：换成新模板（不生成 Flash/ 时不动）
+    for name in ("OpenOCD_flash.sh", "OpenOCD_flash.bat", "JLink_flash.sh", "JLink_flash.bat") if flash_scripts else ():
         dst = host / "Flash" / name
         if not dst.exists() or dst in plan.new_files:
             continue
@@ -299,7 +299,7 @@ def plan_gitignore(host, plan, rep, text_file_cls):
 
 
 def cli_overrides(args, sel, manifest):
-    """把 --external-flash / --flash-chip / --qspi-prescaler / --opt / --vendor-os / --no-opt 合进选择；返回是否有改动"""
+    """把 --external-flash / --flash-chip / --qspi-prescaler / --opt / --vendor-os / --no-opt / --flash-scripts 合进选择；返回是否有改动"""
     changed = False
     ef = sel["external_flash"]
     if args.external_flash:
@@ -336,4 +336,8 @@ def cli_overrides(args, sel, manifest):
     if args.no_opt:
         changed |= bool(op.get("enabled"))
         op["enabled"] = False
+    if args.flash_scripts:
+        want = args.flash_scripts == "on"
+        changed |= sel.get("flash_scripts", True) != want
+        sel["flash_scripts"] = want
     return changed

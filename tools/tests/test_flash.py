@@ -105,6 +105,7 @@ class OptionsSelectionTest(unittest.TestCase):
         self.assertEqual(s["external_flash"]["chip"], "W25Q128")
         self.assertFalse(s["optimization"]["enabled"])
         self.assertTrue(s["gitignore"])
+        self.assertTrue(s["flash_scripts"])
 
     def test_merge_and_validate(self):
         ioc = load("h750_qspi.ioc")
@@ -258,6 +259,67 @@ class HostOptionsTest(unittest.TestCase):
             plan, rep = integrate.Plan(), integrate.Report()
             host_options.plan_gitignore(host, plan, rep, integrate.TextFile)
             self.assertTrue(plan.empty())
+
+
+class VscodeExtrasTest(unittest.TestCase):
+    INFO = {"PRESET": "Debug", "PROJECT": "demo", "MCU": "STM32H750VBTx", "DEVICE": "STM32H750VB", "OPENOCD_TARGET": "stm32h7x.cfg",
+            "SVD": "", "COMPILE_COMMANDS_DIR": "build/Debug", "QUERY_DRIVER": "**/arm-none-eabi-*"}
+
+    def run_plan(self, host, extras):
+        plan, rep = integrate.Plan(), integrate.Report()
+        integrate.plan_vscode(host, plan, rep, self.INFO, extras)
+        self.assertFalse(rep.has_error, rep.items)
+        return plan, rep
+
+    @staticmethod
+    def text(plan, host, name):
+        p = host / ".vscode" / name
+        return plan.new_files[p] if p in plan.new_files else plan.edits[p].text
+
+    def parsed(self, plan, host, name):
+        return json.loads(integrate.strip_jsonc(self.text(plan, host, name)))
+
+    def test_new_host_without_flash(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Path(d)
+            plan, _ = self.run_plan(host, ())
+            tasks = [t["label"] for t in self.parsed(plan, host, "tasks.json")["tasks"]]
+            buttons = [b["task"] for b in self.parsed(plan, host, "settings.json")["VsCodeTaskButtons.tasks"]]
+            self.assertEqual(tasks, ["Build", "Clean_Rebuild", "Clean"])
+            self.assertEqual(buttons, ["Build", "Clean_Rebuild", "Clean"])
+
+    def test_new_host_with_flash_and_qspi(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Path(d)
+            plan, _ = self.run_plan(host, ("flash", "qspi"))
+            tasks = {t["label"]: t for t in self.parsed(plan, host, "tasks.json")["tasks"]}
+            buttons = [b["task"] for b in self.parsed(plan, host, "settings.json")["VsCodeTaskButtons.tasks"]]
+            self.assertEqual(buttons, ["Build", "Clean_Rebuild", "Clean", "OpenOCD_flash", "JLink_flash", "OpenOCD_ram_run", "OpenOCD_flash_boot"])
+            self.assertIn("Debug-QspiRam --ram", tasks["OpenOCD_ram_run"]["command"])
+            self.assertEqual(tasks["OpenOCD_flash_boot"]["args"], ["Debug", "--boot"])
+            self.assertTrue(set(buttons) <= set(tasks), "每个按钮都要有对应的任务")
+            self.assertIn("// 状态栏按钮", self.text(plan, host, "settings.json"), "新建时保留模板注释")
+
+    def test_existing_settings_get_buttons(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Path(d)
+            (host / ".vscode").mkdir()
+            (host / ".vscode" / "settings.json").write_text('{\n    // 宿主自己的设置\n    "editor.tabSize": 2\n}\n', encoding="utf-8")
+            plan, _ = self.run_plan(host, ("flash",))
+            text = self.text(plan, host, "settings.json")
+            self.assertIn("// 宿主自己的设置", text)
+            data = json.loads(integrate.strip_jsonc(text))
+            self.assertEqual(data["editor.tabSize"], 2)
+            self.assertEqual([b["task"] for b in data["VsCodeTaskButtons.tasks"]], ["Build", "Clean_Rebuild", "Clean", "OpenOCD_flash", "JLink_flash"])
+            # 写回后再跑一次：不重复添加
+            for name in ("settings.json", "tasks.json", "launch.json"):
+                (host / ".vscode" / name).write_text(self.text(plan, host, name), encoding="utf-8")
+            plan, _ = self.run_plan(host, ("flash",))
+            self.assertTrue(plan.empty())
+            # 之后关掉 Flash/：已有的烧录按钮不删，只提示
+            plan, rep = self.run_plan(host, ())
+            self.assertTrue(plan.empty())
+            self.assertTrue(any("不会删除" in m for _, _, m in rep.items))
 
 
 # ---------------------------------------------------------------- qspi_image

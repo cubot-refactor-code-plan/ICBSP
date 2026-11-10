@@ -1,0 +1,35 @@
+{
+    // 外置 Flash 的烧录任务（integrate.py 在同时生成 Flash/、启用外置 Flash 时合并进宿主 .vscode/tasks.json）
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "OpenOCD_ram_run",
+            "detail": "方案 A：编译 {{PRESET}}-QspiRam 并直接下载进 AXI SRAM 运行（不写 Flash，掉电即失）",
+            "type": "shell",
+            "command": "cmake --build --preset {{PRESET}}-QspiRam && bash Flash/OpenOCD_flash.sh {{PRESET}}-QspiRam --ram",
+            "windows": {
+                "command": "cmake --build --preset {{PRESET}}-QspiRam && Flash\\OpenOCD_flash.bat {{PRESET}}-QspiRam --ram"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "OpenOCD_flash_boot",
+            "detail": "强制重烧 bootloader，再写 QSPI 镜像（默认预设 {{PRESET}}）",
+            "type": "process",
+            "command": "${workspaceFolder}/Flash/OpenOCD_flash.sh",
+            "args": ["{{PRESET}}", "--boot"],
+            "windows": {
+                "command": "${workspaceFolder}\\Flash\\OpenOCD_flash.bat"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}
