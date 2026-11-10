@@ -70,7 +70,8 @@ void init_dma_buffer()
     return;
   }
   const size_t size = static_cast<size_t>(__dma_buffer_end - __dma_buffer_start);
-  if (size > 0U)
+  // 外置 Flash 方案 A（QSPI_RAM）：整个程序已由 bootloader 拷进 AXI SRAM，加载地址就是运行地址
+  if (size > 0U && static_cast<const void *>(__dma_buffer_load) != static_cast<const void *>(__dma_buffer_start))
   {
     memcpy(__dma_buffer_start, __dma_buffer_load, size);
   }
