@@ -226,6 +226,32 @@
 ## 阶段 6：宿主接入回归测试
 
 - [ ] 全新 CubeMX 工程：H723 + 至少一个其他型号（H743 / H750），分别用 `integrate.py` 和 Web UI 接入，0 warning（C++20），上板冒烟
+- [x] **小 Flash 型号的外置 Flash 支持**（2026-11-10，H750 回归宿主 `H750_FULL_TEST` 发现，阻塞上一条的 H750 部分）
+  - 2026-11-10 完成，三种存放方式 INTERNAL / QSPI_RAM（A）/ QSPI_XIP（B）用缓存变量 `ICBSP_FLASH_LAYOUT` 和预设 `*-Internal / *-QspiRam / *-QspiXip` 切换：
+    `cmake/icbsp_flash.cmake`、`templates/flash_layout/`、`boot/`（寄存器级 bootloader，A / B 共用）、`tools/qspi_image.py`、`Flash/daplink_qspi.cfg`、
+    烧录脚本按构建目录的存放方式烧；`integrate.py` 与 Web UI 加“外置 Flash”“编译优化”“工程文件（.gitignore）”。文档 `docs/外置Flash.md`，
+    实测 `docs/bsp_test/external_flash_2026-11-10.md`。
+  - 与原计划的出入：MPU 不改 `.ioc`（bootloader 用第 13~15 区，CubeMX 的 `MPU_Config()` 不碰）；`.ioc` 的 QUADSPI 参数改由规则 `qspi_params`
+    （warn，可自动修改）负责；实测发现内存映射读芯片最后一个字会挂死总线，加了第 15 区（芯片末尾 4 KB 禁止访问）。
+  - 顺带修掉：`templates/linker_sections.ld` 的 `__dma_buffer_load` 没算段内 `ALIGN(32)` 的偏移（`.dma_buffer` 不在 RAM 区开头时实例初值错位，
+    方案 A 首次上板暴露）；`integrate.py` 会把老宿主的这一行等价改写。
+  - 现象：H750 片内 Flash 只有 128 KB，接入 ICBSP 后 Debug（-O0）占 180.6 KB，链接失败（超 48.4 KB）。-Og 占 117.1 KB、-Os 占 106.1 KB，能装下，但只剩 11~22 KB 余量；回归要求 Debug 和 -O2 都能编过，靠压代码量解决不了。-O0 的大头：HAL 65.6 KB、库 43.4 KB（`vqf.cpp` 14.5 KB）、FreeRTOS 20.0 KB、newlib + libm 21.5 KB
+  - 方案：片内 Flash 只放 bootloader（预计 8~16 KB），应用放到 QSPI Flash。应用有两种运行方式，bootloader、QSPI 驱动和烧写流程两者通用：
+    - **QSPI 存储 + AXI SRAM 运行（回归宿主首选）**：bootloader 把镜像从 QSPI 拷进 AXI SRAM（512 KB）再跳转。调试时 OpenOCD 直接把 ELF 下进 RAM，不用每轮都写 QSPI；全速执行，软件断点可用，时序和 H723 在片内 Flash 上运行时接近，回归数据可以对比。应用上限约 400 KB（要扣掉 `.dma_buffer` 和堆）
+    - **QSPI XIP（内存映射后直接执行）**：容量看 Flash 芯片（MB 级），适合大应用。代价：cache 未命中时变慢（-O0 下更明显）；MPU 要把 0x90000000 起、超出芯片容量的地址设成不可访问，防止推测访问把总线卡死；只能打硬件断点，调试器还得注册外置 bank
+  - 芯片：**W25Q128**（16 MB），接在 Bank 2：PB2 CLK、PC11 NCS、PE7~PE10 IO0~IO3。参数：`FlashSize = 23`，3 字节地址；读用 `0xEB` Quad I/O，模式位加 dummy 共 6 个周期；目标频率 120 MHz（kernel 240 MHz 二分频，时钟上限 133 MHz，要实测，看情况开 `SampleShifting`）；上电先查 SR2.QE，没置位就写上。擦除时间：4 KB 扇区典型 45 ms、最长 400 ms，64 KB 块最长 2 s
+  - [x] `.ioc` 里 QUADSPI 的占位值改成上面的参数（现在是 `FlashSize = 1`、预分频 255）
+  - **哪些代码放外置 Flash 可以选**，但只有 XIP / 混合放置才用得上；RAM 运行方案里代码都在 RAM，不存在这个选择：
+    - 前提：复位后在 `SystemInit()` 阶段，用寄存器级代码（不经过 HAL）打开 QSPI 内存映射。这样之后各模块放哪里只影响速度，不影响能不能跑。固定放片内的只有：向量表、启动代码、内存映射初始化、HardFault 等异常处理和 `fault_record`（QSPI 出故障时也要能留下记录）
+    - 选择的粒度：按库 / 目标文件（`*libm.a:*`、HAL 的 `.c`）最简单；按函数用属性宏（`ICBSP_FAST_CODE` → 片内或 ITCM）。BSP 和设备是 header-only 模板（I1 / N23），代码实例化在宿主的 `board_cfg.cpp` 等文件里，按文件分不开，只能按修饰名匹配（`*(.text._ZN*BspUart*)`）或者用属性宏
+    - 硬约束：以后要往 W25Q128 写参数或日志，写 / 擦期间必须退出内存映射。这段时间里所有可能跑到的代码（包括**任意中断**）都不能在 QSPI 上，而一次擦除最长 2 s，不能靠关中断扛过去。混合放置会因此限制以后的存储功能；RAM 运行方案没有这个问题
+    - 结论：回归宿主用 RAM 运行，不做放置选择；放置选择作为 XIP 版的可选项，由 `manifest.json` 记录模块 → 段匹配规则，`integrate.py` 生成链接脚本片段，再加一个链接后检查（扫 map，确认固定放片内的符号确实在片内）
+  - [x] `templates/` 加 bootloader 模板：初始化 QSPI 并切到内存映射；校验镜像（魔数、长度、CRC）；跳转前 `HAL_RCC_DeInit()`、关中断、清掉挂起的中断（否则 PLL 还在用时，应用的 `SystemClock_Config()` 会失败）
+  - [x] 链接脚本模板出两版：RAM 运行版（代码和 `.data` 放 AXI SRAM，`.dma_buffer` 仍放在 DMA 能访问的区域）、XIP 版（FLASH 区起始 0x90000000）。应用侧通过 `USER_VECT_TAB_ADDRESS` 设置 `VTOR`
+  - [x] 应用不能再调 `MX_QUADSPI_Init()`（XIP 时会把正在执行的代码卡死），`integrate.py` 和 `.ioc` 校验里加这项检查
+  - [x] 烧写：写 QSPI 用 OpenOCD `stmqspi` 的**单独配置文件**，日常用的 cfg 照旧不注册外置 bank（和 `templates/Flash/README.md` 里 MC02 的经验一致）。另外确认 EmberProbe `flash_program` 能不能写外置 Flash
+  - [x] `integrate.py` 遇到片内 Flash ≤ 128 KB 的型号（H750 / H7B0 / H730）时给出提示，并按用户选的运行方式生成上面这些文件
+  - [x] 文档：接入指南加“小 Flash 型号”一节。本条做完之前，H750 回归先用 -Og 临时顶着
 - [ ] 通过回归的 H723 测试宿主工程作为新的示例工程（Q18）：整理后推到组织下，README 写上链接
 - [ ] CubeMX 重新生成后再接入一次，确认幂等
 - [ ] MC02_with_submodule 把 1.0 的分支合回 main，submodule 指向 ICBSP；更新宿主 `CLAUDE.md`（库路径 / 目录、回调清单加 ErrorStatusCallback、C++20、去掉 `examples/dm_mc02` 引用、烧录参照改 `templates/Flash`）；跑阶段 3 的回归；clangd `--check` 0 诊断
@@ -244,4 +270,7 @@
 - [ ] DR16 接收机（DT7 遥控器，DBUS）设备驱动（Q12：放进待排期，不进 v1.0.0）
 - [ ] ET08 接收机设备驱动（同上）
 - [ ] UART 循环 DMA 被套圈的检测（阶段 3 U19）：目前中断被挡住超过半圈时丢失无计数。可选做法：投递时用 DWT 记两次 `rx_drain()` 的间隔，超过 `RX_SIZE × 10 / 波特率` 记 `rx_lap_suspect`；或者开 TC 计数比对
+- [ ] 外置 Flash：OCTOSPI 后端（H723 / H730 / H7B0；可在 DM-MC02 的 OCTOSPI2 W25Q64 上实测），`flash.analyze` 现在只报“暂不支持”
+- [ ] 外置 Flash：XIP 版的“哪些模块放片内 / ITCM”可选放置（manifest 记录模块 → 段匹配规则，integrate.py 生成链接脚本片段，链接后扫 map 校验）
+- [ ] 外置 Flash：EmberProbe `flash_program` 只接受 interface / target 脚本，写不了 QSPI；需要它支持自定义 cfg（或 stmqspi bank）后才能用于外置方案
 - [ ] Emm_V5 的 CRC-8 校验：需要厂家给出多项式 / 初值 / 示例帧（或用上位机抓一帧反推）后再实现；XOR 模式上板实测
