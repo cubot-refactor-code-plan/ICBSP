@@ -166,6 +166,43 @@ class SpiRulesTest(unittest.TestCase):
         self.assertTrue(r[("spi_bmi088_speed", "SPI2")]["ok"], r[("spi_bmi088_speed", "SPI2")]["detail"])
 
 
+class CanRulesTest(unittest.TestCase):
+    """H750 回归宿主的 CAN 丢帧：.ioc 没写 AutoRetransmission（CubeMX 默认 Disable），
+    两路对发时仲裁输掉的帧不重发，ID 大的一路丢 45%，驱动的诊断计数全为 0"""
+
+    SEL = {"can": {"FDCAN1": {}, "FDCAN2": {}}}
+
+    def results(self, ioc):
+        return {(x["id"], x["target"]): x for x in checks.run(ioc, MAN, self.SEL)}
+
+    def test_h750_auto_retx(self):
+        ioc = load("h750_qspi.ioc")  # 夹具是改好之后的配置：两路都 ENABLE
+        r = self.results(ioc)
+        for ip in ("FDCAN1", "FDCAN2"):
+            self.assertTrue(r[("can_auto_retx", ip)]["ok"], r[("can_auto_retx", ip)]["detail"])
+        # 还原成出问题时的样子：不写 AutoRetransmission，IPParameters 里也没有它
+        for ip in ("FDCAN1", "FDCAN2"):
+            del ioc.values[f"{ip}.AutoRetransmission"]
+            names = [n for n in ioc.values[f"{ip}.IPParameters"].split(",") if n != "AutoRetransmission"]
+            ioc.values[f"{ip}.IPParameters"] = ",".join(names)
+        self.assertEqual([c["auto_retx"] for c in ioc.can_instances()], ["DISABLE", "DISABLE"])
+        r = self.results(ioc)
+        for ip in ("FDCAN1", "FDCAN2"):
+            x = r[("can_auto_retx", ip)]
+            self.assertFalse(x["ok"])
+            self.assertEqual(x["level"], "error")
+            self.assertTrue(x["auto_fix"])
+            self.assertIn({"key": f"{ip}.AutoRetransmission", "old": None, "new": "ENABLE"}, x["changes"])
+            ipp = next(c for c in x["changes"] if c["key"] == f"{ip}.IPParameters")
+            self.assertIn("AutoRetransmission", ipp["new"].split(","))
+
+    def test_mc02_auto_retx_ok(self):
+        ioc = load("mc02_h723.ioc")
+        r = {(x["id"], x["target"]): x for x in checks.run(ioc, MAN, {"can": {"FDCAN1": {}, "FDCAN2": {}, "FDCAN3": {}}})}
+        for ip in ("FDCAN1", "FDCAN2", "FDCAN3"):
+            self.assertTrue(r[("can_auto_retx", ip)]["ok"])
+
+
 class HashRegionTest(unittest.TestCase):
     def test_roundtrip(self):
         t = "a\n" + regions.block("x", "foo", "#") + "\nb"
