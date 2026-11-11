@@ -198,6 +198,7 @@ class Ioc:
                     "ip": ip,
                     "n": n,
                     "frame_format": g("FrameFormat", "FDCAN_FRAME_CLASSIC"),
+                    "auto_retx": g("AutoRetransmission", "DISABLE"),  # CubeMX 默认 Disable，.ioc 里不写就是关的
                     "msgram_offset": int(g("MessageRAMOffset", "0")),
                     "std_filters": int(g("StdFiltersNbr", "0")),
                     "ext_filters": int(g("ExtFiltersNbr", "0")),
