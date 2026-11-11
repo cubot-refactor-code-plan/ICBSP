@@ -111,6 +111,9 @@ class Checker:
             if c["tx_fifo_queue"] + c["tx_buffers"] == 0:
                 fix += _ip_param(ioc, ip, "TxFifoQueueElmtsNbr", "16")
             self.add("can_fifo", ip, not fix, f"RX FIFO0 = {c['rx_fifo0']}，TX = {c['tx_fifo_queue'] + c['tx_buffers']}", fix)
+            # 关着时仲裁输掉的帧不重发、直接丢（H750 回归宿主实测：两路对发，ID 大的一路丢 45%，驱动计数全为 0）
+            self.add("can_auto_retx", ip, c["auto_retx"] == "ENABLE", f"当前 {c['auto_retx']}",
+                     _ip_param(ioc, ip, "AutoRetransmission", "ENABLE"))
             self.add("can_nvic", ip, c["nvic_it0"], "", [(f"NVIC.{ip}_IT0_IRQn", _nvic_on(ioc, f"{ip}_IT0_IRQn"))])
             self.add("can_std_filters", ip, c["std_filters"] >= 1, f"当前 {c['std_filters']}", _ip_param(ioc, ip, "StdFiltersNbr", "1"))
         # Message RAM：所有 FDCAN（不只是选中的）都占 RAM；按“其他规则都修好之后”的元素数算

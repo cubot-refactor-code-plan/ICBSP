@@ -21,7 +21,7 @@
         "f4": "inline BspCanT<{rx_depth}, {tx_depth}> {instance}({{.hcan = &{handle}, .name = \"{label}\"}});"
       },
       "init": ["ICBSP_CHECK({instance}.init() == Status::OK);"],
-      "rules": ["can_classic", "can_fifo", "can_nvic", "can_msgram", "can_std_filters"]
+      "rules": ["can_classic", "can_fifo", "can_auto_retx", "can_nvic", "can_msgram", "can_std_filters"]
     },
     "uart": {
       "title": "串口",
@@ -287,6 +287,7 @@
     "dcache_off":      { "level": "error", "title": "D-Cache 关闭（H7）", "fix": "CORTEX_M7 → CPU DCache = Disabled（库不做 Cache 维护）", "auto_fix": true },
     "can_classic":     { "level": "error", "title": "FDCAN 用经典 CAN 帧格式", "fix": "FDCANx → Frame Format = Classic mode", "auto_fix": true },
     "can_fifo":        { "level": "error", "title": "FDCAN 的 RX FIFO0 与 TX 元素数不为 0", "fix": "FDCANx → Rx Fifo0 Elmts Nbr、Tx Fifo Queue Elmts Nbr 填 16（CubeMX 默认都是 0：收不到也发不出）", "auto_fix": true },
+    "can_auto_retx":   { "level": "error", "title": "FDCAN 自动重发打开", "fix": "FDCANx → Auto Retransmission = Enable（CubeMX 默认 Disable：两个节点同时发时，仲裁输掉的帧直接丢弃，驱动的诊断计数里看不出来）", "auto_fix": true },
     "can_nvic":        { "level": "error", "title": "FDCAN 中断线 0 打开", "fix": "NVIC → FDCANx interrupt 0 勾上", "auto_fix": true },
     "can_msgram":      { "level": "error", "title": "几路 FDCAN 的 Message RAM 不重叠", "fix": "FDCANx → Message RAM Offset 依次错开（按各路占用字数累加）", "auto_fix": true },
     "can_std_filters": { "level": "warn", "title": "FDCAN 标准过滤器数 ≥ 1", "fix": "FDCANx → Std Filters Nbr = 1（填 0 也能收，靠全局过滤器）", "auto_fix": true },
