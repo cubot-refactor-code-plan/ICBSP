@@ -1,8 +1,6 @@
 # ICBSP
 
-**ICBSP = INVC & CUBOT Board Support Package**，由 INVC 与 CUBOT 共同维护（前身 stm32-framework / STM32_BSP）。
-
-![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP)[![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP)  [![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  ![CopyRight](https://img.shields.io/badge/CopyRight-INVC%20&%20CUBOT-blue.svg)    
 ![](https://img.shields.io/badge/chip-STM32H7xx%20%7C%20STM32F4xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg)
 
 面向 **STM32H7 / STM32F4 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Algorithm、Tasks 分层，宿主工程通过 git submodule 接入。
@@ -43,8 +41,24 @@ ICBSP/
 └─ CMakeLists.txt
 ```
 
+## 克隆
+
+建议将本仓库作为`submodule`克隆到目标宿主工程，以获得更新支持  
+若目的仅为使用，建议浅克隆`main`分支
+```bash
+$ git submodule add --depth 1 git@github.com:cubot-refactor-code-plan/ICBSP.git Middlewares/Third_Party/ # 浅克隆最近一次主分支内的提交
+```
+
+若希望克隆特定分支
+```bash
+$ git submodule add -b <branch name> --depth <clone depth> git@github.com:cubot-refactor-code-plan/ICBSP.git <local path>
+```
+
+
 ## 快速接入
 
+### 直接使用python脚本
+![python_version](https://img.shields.io/badge/python-3.7-blue.svg)
 在宿主工程根目录：
 
 ```bash
@@ -56,6 +70,8 @@ python3 third_party/icbsp/tools/integrate.py             # 执行
 接 `FreeRTOSConfig.h`、`freertos.c`、`stm32h7xx_it.c` 的 USER CODE 段、复制 `user/board` 与 `user/app` 模板、
 改根 `CMakeLists.txt`、生成 `.vscode/*`、复制 `Flash/` 烧录脚本。
 
+### Nodejs图形化界面
+![](https://img.shields.io/badge/Node-v14.14.0-green.svg)
 按 CubeMX 的 `.ioc` 生成外设实例和设备、校验并修改 `.ioc`，可以用图形界面（零依赖，不用 `npm install`）：
 
 ```bash
@@ -68,7 +84,7 @@ node third_party/icbsp/tools/web_ui/server.mjs   # 浏览器打开 http://127.0.
 
 | 项目     | 要求                                                                                       |
 | -------- | ------------------------------------------------------------------------------------------ |
-| 芯片     | STM32H7（实测 H723）；STM32F4 只编译验证                                                    |
+| 芯片     | STM32H7；STM32F4 只编译验证                                                    |
 | 工具链   | CubeMX → Project Manager → Toolchain = **CMake**；C++20                                    |
 | RTOS     | FreeRTOS，**CMSIS_V2**，tick **1 kHz**，`configCHECK_FOR_STACK_OVERFLOW = 2`、`configUSE_MALLOC_FAILED_HOOK = 1` |
 | HAL 时基 | 不用 SysTick；优先级没有要求（CubeMX 默认 15 即可，1.4 起实测）                              |
