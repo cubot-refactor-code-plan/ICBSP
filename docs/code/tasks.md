@@ -62,6 +62,7 @@ system_set_report_hook(app_sys_report, 5000U);   // 每 5 s 在 sys_task 里调�
 ```
 
 回调跑在 `sys_task` 的栈上：打印要留够 vsnprintf 的栈，也不要阻塞太久（会推迟 CAN 恢复与串口巡检）。
+
 ---
 
 ## 3. can_rx_task：按 ID 分发（1 ms）

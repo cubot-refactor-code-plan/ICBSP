@@ -33,6 +33,7 @@ bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan)
 }
 
 
+/* ==================== */
 /* ==================== HAL 回调分发（bxCAN） ==================== */
 
 // 按句柄和 ICBSP_CAN_INSTANCES 清单逐个比对，清单外的 bxCAN 直接忽略。
@@ -157,5 +158,6 @@ extern "C"
     (void)error_code;
   }
 }
+/* ==================== */
 
 #endif // HAL_CAN_MODULE_ENABLED

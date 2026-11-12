@@ -77,7 +77,7 @@ MX_FREERTOS_Init()            freertos.c 的 USER CODE Init 段
 ## 4. 实测状态
 
 “实测”= 在 DM-MC02（STM32H723）上按用例跑过，结果有记录；“只编译验证”= 没有硬件或没写用例，只保证 Debug / -O2 0 warning
-（头文件模板由回归宿主的 `compile_probe.cpp` 显式实例化）。以阶段 3（ICBSP `phase2` 分支，2026-11-06 ~ 07）为准，用例编号见
+（头文件模板由回归宿主的 `compile_probe.cpp` 显式实例化）。以阶段 3（2026-11-06 ~ 07，当时在 `phase2` 分支上开发，已合入 `main`）为准，用例编号见
 [phase3_2026-11-06.md](../bsp_test/phase3_2026-11-06.md) 与宿主 `app/test/`。
 
 | 层 | 模块 | 状态 | 依据 |

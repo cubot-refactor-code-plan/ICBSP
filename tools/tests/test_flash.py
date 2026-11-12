@@ -279,12 +279,17 @@ class HostOptionsTest(unittest.TestCase):
             self.assertEqual(p, {"name": "Debug-QspiXip", "inherits": "Debug", "cacheVariables": {"ICBSP_FLASH_LAYOUT": "QSPI_XIP"}})
             self.assertEqual(sorted(names), sorted({p["configurePreset"] for p in data["buildPresets"]} | {"default"}))
 
+    # EmberProbe 扩展生成的 Agent Skills（宿主自己的 .agents/skills/<名字>/ 不在其中）
+    EMBERPROBE_SKILLS = (".agents/skills/_emberprobe/", ".agents/skills/mcu-*/")
+
     def test_gitignore(self):
         with tempfile.TemporaryDirectory() as d:
             host = Path(d)
             plan, rep = integrate.Plan(), integrate.Report()
             host_options.plan_gitignore(host, plan, rep, integrate.TextFile)
             self.assertIn("build/", plan.new_files[host / ".gitignore"])
+            for line in self.EMBERPROBE_SKILLS:
+                self.assertIn(line + "\n", plan.new_files[host / ".gitignore"])
             (host / ".gitignore").write_text("build/\n*.su\nmy_secret.txt\n", encoding="utf-8")
             plan, rep = integrate.Plan(), integrate.Report()
             host_options.plan_gitignore(host, plan, rep, integrate.TextFile)
@@ -292,6 +297,8 @@ class HostOptionsTest(unittest.TestCase):
             self.assertTrue(text.startswith("build/\n*.su\nmy_secret.txt\n"))
             self.assertIn(host_options.GITIGNORE_BEGIN, text)
             self.assertEqual(text.count("build/"), 1)
+            for line in self.EMBERPROBE_SKILLS:  # 已有 .gitignore 的老工程重跑时也要补上
+                self.assertEqual(text.count(line + "\n"), 1)
             (host / ".gitignore").write_text(text, encoding="utf-8")
             plan, rep = integrate.Plan(), integrate.Report()
             host_options.plan_gitignore(host, plan, rep, integrate.TextFile)

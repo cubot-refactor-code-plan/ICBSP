@@ -63,6 +63,8 @@ void board_init(void)
   //    去 hardware_config.h 加大 ICBSP_CAN_RX_NODE_MAX / ICBSP_CAN_TX_NODE_MAX。
 }
 
+/* ==================== */
 /* ==================== 中断转调（生成的设备用到 EXTI 时在这里生成 HAL_GPIO_EXTI_Callback；宿主别处就不要再定义它） ==================== */
 // <ICBSP-GEN callbacks>
 // </ICBSP-GEN callbacks da39a3ee>
+/* ==================== */

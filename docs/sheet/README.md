@@ -2,7 +2,7 @@
 
 驱动开发时对照的厂商说明书和板卡资料，**版权归各厂商所有，不属于本仓库的 MIT 许可**。
 
-**手册本身不随仓库分发**：2026-11-12 起已从仓库及其全部历史中移除（版权原因；手册占了仓库体积的九成以上，拖慢克隆）。
+**手册本身不随仓库分发**：2026-11-12 起已从仓库及其全部历史中移除（手册占了仓库体积的九成以上，拖慢克隆）。
 本目录只保留这份清单。需要原文件时按下面的“官方渠道”获取，以厂商发布的最新版为准。
 `.gitignore` 已忽略本目录下除本文件外的所有文件：下载后放在这里对照即可，不会被误提交。
 
@@ -26,10 +26,10 @@
 
 ## 官方渠道
 
-- DJI RoboMaster：[robomaster.com](https://www.robomaster.com/) 各组件产品页的下载栏（例如 [组件详情页](https://www.robomaster.com/en-US/products/components/detail/2696)）；
-  C620 说明书在官方 CDN：[RM C620 无刷电机调速器使用说明 V1.01](https://cdn-hz.robomaster.com/robomasters/public/document/RM%20C620%E6%97%A0%E5%88%B7%E7%94%B5%E6%9C%BA%E8%B0%83%E9%80%9F%E5%99%A8%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E%EF%BC%88%E4%B8%AD%E8%8B%B1%E6%97%A5%EF%BC%89V1.01.pdf)。
-  调参 / 固件升级用 RoboMaster Assistant。
-- 达妙科技：向厂商的官方渠道（店铺、技术支持）索取最新版说明书与上位机；2026-11-07 检索时没有找到可以确认的官网下载链接。
+- **DJI RoboMaster**：按上表的手册名称搜索即可找到（RoboMaster 官网各组件产品页的下载栏）。调参 / 固件升级用 RoboMaster Assistant。
+- **达妙科技**：从厂商的代码仓库获取说明书与上位机：
+  - [Gitee](https://gitee.com/kit-miao/projects)
+  - [GitHub](https://github.com/dmBots?tab=repositories)
 
 ## 本仓库自己的许可证例外
 

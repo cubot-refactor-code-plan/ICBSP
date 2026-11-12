@@ -102,6 +102,7 @@ inline uint32_t dlc_to_len(uint32_t dlc_code)
 } // namespace can_detail
 
 
+/* ==================== */
 /* ==================== 驱动 ==================== */
 
 /**
@@ -125,6 +126,7 @@ class BspCanT
   static_assert(RX_DEPTH >= 1U && TX_DEPTH >= 1U, "CAN 收发缓冲深度至少 1 帧");
 
 public:
+  /* ==================== */
   /* ==================== 配置 ==================== */
 
   /** @brief 配置（聚合体：`{.hfdcan = &hfdcanX, .name = "CANx"}`） */
@@ -286,6 +288,7 @@ private:
   static constexpr uint32_t PEND_SLOTS = 16U;
   PendCount                 _sw_pend[PEND_SLOTS] = {};
 
+  /* ==================== */
   /* ==================== 内部实现 ==================== */
 
   /** @brief 外设在跑、不在 Bus-Off、不在恢复中 */
@@ -877,6 +880,7 @@ void BspCanT<RX_DEPTH, TX_DEPTH>::cleanup_resources()
     _tx_message_buffer = nullptr;
   }
 }
+/* ==================== */
 
 #endif // HAL_FDCAN_MODULE_ENABLED
 

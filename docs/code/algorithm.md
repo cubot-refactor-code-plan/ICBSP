@@ -47,7 +47,7 @@ PID::Data d = speed.get();   // {target, feedback, output}（不加锁：跨任�
 
 - `calc()` 每周期调一次，内部顺序是「算输入 → 算微分 → 算积分 → 限幅输出」
 - 抗饱和靠**积分项单独限幅**（`i_max`，0 = 跟随 `out_max`）和**积分分离**（`i_sep`：误差绝对值超过它时积分项**清零**、不是冻结，0 = 不分离）；输出饱和时积分不会回退
-- 想自己看波形：`get()` 返回的结构可以直接塞进 `DeviceMotor::pid_frame()`
+- 想自己看波形：`get()` 返回 `{target, feedback, output}`，自己按 JustFloat 组帧发出去（`DeviceMotor` 内置的 PID 用 `DeviceMotor::get_pid_frame()` 直接组帧，见 [device.md](device.md)）
 
 ---
 
