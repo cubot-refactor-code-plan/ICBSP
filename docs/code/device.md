@@ -19,6 +19,7 @@
 | `motor/device_emmv5_group.hpp` | Emm_V5 步进闭环（一条 485 上多个地址） | `BspUartT`、`emmv5_protocol` | `DeviceEmmv5GroupT<Uart>` |
 | `motor/emmv5_protocol.hpp/.cpp` | Emm_V5 帧编解码（纯函数，不碰 HAL / bsp） | — | `emmv5::Frame`、`*Scanner` |
 | `sensor/device_bmi088.hpp/.cpp` | BMI088 IMU + VQF 姿态 | `BspSpiDevice`、`VQF` | `DeviceBmi088`、`Bmi088RawData` |
+| `sensor/device_wt102.hpp` | WT102 单轴陀螺仪（Z 轴加速度 / 角速度 / 航向角） | `BspUartT` | `DeviceWt102T<Uart>` |
 | `remote/device_r9ds.hpp` | R9DS 遥控接收机（SBUS） | `BspUartT` | `DeviceR9dsT<Uart>` |
 | `actuator/device_servo.hpp/.cpp` | 舵机（脉宽控制） | `BspPwm` | `DeviceServo` |
 | `actuator/device_buzzer.hpp/.cpp` | 无源蜂鸣器 | `BspPwm` | `DeviceBuzzer` |
@@ -182,6 +183,19 @@ DeviceBmi088 imu(bmi088_acc_spi, bmi088_gyro_spi, {DeviceBmi088::AccRange::G24, 
 - 自动模式只按陀螺仪节奏刷新，加速度计 INT1 只计数：不需要时宿主可以不转调、或者不开对应 EXTI
 - `attach_task(handle)` 可绑定任务句柄，让中断/错误能唤醒该任务
 
+### DeviceWt102T&lt;Uart&gt;
+
+```cpp
+DeviceWt102T<decltype(bsp_uart7)> gyro_z(bsp_uart7);   // board_cfg.cpp；串口在 CubeMX 里配 230400 8N1
+```
+
+- `init()` 挂进默认树并兜底校验串口帧格式（不是 230400 8N1 返回 `BAD_ARG`）；可重复调用，会清掉数据和诊断计数
+- `update(timeout_ms)` 把串口里攒的字节全部解完；设备 500 Hz 发帧，**要在某个任务里周期调用**（不建任务、不注册 Online）
+- `get_z_newest()` / `get_z_previous()` 取最近两帧的 Z 轴原始 int16（`acc_z` / `gyro_z` / `yaw`），单位换算：
+  `wz = gyro_z / 32768 × 2000 °/s`、`yaw = yaw / 32768 × 180 °`、`az = acc_z / 32768 × 16 g`
+- `is_online()` 按 tick 现算（50 ms 没有校验通过的帧就离线）；`get_diag()` 区分“没字节 / 切不出帧 / 校验错”
+- 不是线程安全的：`update()` 和读数据要在同一个任务里
+
 ---
 
 ## 4. remote/ — 遥控接收机
@@ -236,6 +250,7 @@ buzzer.tone(1000, 50);    // 持续音，音量 50%
 | `DmMotor` | CAN 总线节点 | 初始化失败；掉线 → `TIMEOUT`；反馈进入故障态 → `IO_ERROR` |
 | `DeviceEmmv5GroupT` | 串口总线节点 | 初始化失败；任一台电机掉线 → `TIMEOUT` |
 | `DeviceR9dsT` | 串口总线节点 | 初始化失败；`update()` 发现由在线变离线 → `TIMEOUT` |
+| `DeviceWt102T` | 串口总线节点 | 初始化失败；`update()` 发现由在线变离线 → `TIMEOUT` |
 | `DeviceBmi088` | SPI 总线节点 | 初始化失败；读帧失败 → 读帧返回的错误码 |
 
 `DeviceMotor`、`DeviceServo`、`DeviceBuzzer` 不在总线上（PWM / 编码器），没有节点。
