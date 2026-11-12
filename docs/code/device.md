@@ -50,7 +50,7 @@ inline DjiMotor<DjiMotorType::M3508, decltype(bsp_can1)> chassis_lf(bsp_can1, 1U
 
 ### DmMotor（达妙电机）
 
-协议来自 J4310 / J4340P / J8009P 说明书的 CAN 通信一章（`docs/sheet/`），三个系列逐项相同，所以**不按型号做模板**：
+协议来自 J4310 / J4340P / J8009P 说明书的 CAN 通信一章（清单与获取方式见 [docs/sheet/README.md](../sheet/README.md)），三个系列逐项相同，所以**不按型号做模板**：
 型号经 `Config::model`（`DmModel::J4310` / `J4340P` / `J4340P_V11` / `J8009P`）查 `dm_model_info()`（减速比、额定 / 峰值扭矩、空载转速），
 MIT 前馈扭矩按峰值扭矩限幅。映射范围是驱动器里可改的寄存器，不能从型号推出：实测 J4340P 是 12.5 / 10 / 28，不是说明书的预设 12.5 / 30 / 10。
 
