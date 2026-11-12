@@ -175,6 +175,19 @@
       ],
       "notes": ["不要启动板载加热电阻的定时器（DM-MC02 的 PB1 / TIM3_CH4）"]
     },
+    "wt102": {
+      "title": "WT102 单轴陀螺仪（Z 轴角速度 / 航向角）",
+      "status": "compile_only",
+      "status_note": "协议由 Rh-i 2026-11-06 实测校正；改成只有头文件、挂默认树后未上板",
+      "include": "device/sensor/device_wt102.hpp",
+      "needs": [{ "key": "bus", "kind": "uart", "title": "串口（230400 bit/s、8N1）" }],
+      "switches": [],
+      "params": [],
+      "define": ["DeviceWt102T<decltype({bus})> {name}({bus});"],
+      "extern": ["extern DeviceWt102T<decltype({bus})> {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"],
+      "notes": ["只解析不建任务：要在某个任务里周期调用 update()（帧率 500 Hz，建议 ≤ 10 ms 一次），否则串口接收缓冲会溢出、默认树也记不到掉线"]
+    },
     "r9ds": {
       "title": "R9DS 遥控接收机（SBUS）",
       "status": "compile_only",

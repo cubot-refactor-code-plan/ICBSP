@@ -17,7 +17,7 @@
 | --- | --- | --- | --- |
 | `code/bsp/` | 一个外设怎么初始化、怎么收发：CAN（FDCAN）、UART、SPI、PWM、GPIO、Key、Encoder、DWT；`bsp_series.hpp`（按系列选 HAL 头）、`bsp_dma_buffer.hpp`（`.dma_buffer` 段宏） | 帧格式、设备语义 | [bsp.md](bsp.md) |
 | `code/service/` | `system/`：库入口、EventState 与默认状态树、故障记录、配置检查、newlib 锁；`comm/`：CAN 收发节点；`monitor/`：在线检查；`definition/`：电机 / IMU 数据定义 | 具体设备协议 | [service.md](service.md) |
-| `code/device/` | `motor/`：DJI 电机、达妙电机、直流电机、Emm_V5（含帧编解码 `emmv5_protocol`）；`sensor/`：BMI088；`remote/`：R9DS；`actuator/`：舵机、蜂鸣器 | 硬件时序细节（交给 bsp） | [device.md](device.md) |
+| `code/device/` | `motor/`：DJI 电机、达妙电机、直流电机、Emm_V5（含帧编解码 `emmv5_protocol`）；`sensor/`：BMI088、WT102；`remote/`：R9DS；`actuator/`：舵机、蜂鸣器 | 硬件时序细节（交给 bsp） | [device.md](device.md) |
 | `code/algorithm/` | PID、四元数 PID、四元数、VQF、矩阵、RLS | 与硬件无关，不碰 HAL / RTOS | [algorithm.md](algorithm.md) |
 | `code/tasks/` | 三个库任务的任务体：sys / can_rx / can_tx | 任务创建（在 `service/system/system.cpp`） | [tasks.md](tasks.md) |
 
@@ -100,6 +100,7 @@ MX_FREERTOS_Init()            freertos.c 的 USER CODE Init 段
 | device | `DeviceBmi088`（含 VQF 姿态） | 实测 | I01~I07、P01~P06 |
 | device | `DeviceBuzzer` | 上板使用 | 开机提示音，没有专门用例 |
 | device | `DeviceMotor`、`DeviceServo`、`DeviceR9dsT`、`DeviceEmmv5GroupT`（含 `emmv5_protocol`） | 只编译验证 | 没有硬件；Emm_V5 的 XOR 校验未实测 |
+| device | `DeviceWt102T` | 只编译验证 | 协议由 Rh-i 在 2026-11-06 实测校正；改成只有头文件、挂默认树后未上板 |
 | algorithm | `PID`、`Quaternion`、`MatrixF32`、`Rls` | 主机单元测试 | `tests/host/`（45 条判据）；PID 另在 M07 / M08 上板 |
 | algorithm | `QuaternionPID` | 只编译验证 | 没有用例 |
 | algorithm | `VQF` | 实测 | BMI088 自动刷新任务里运行（I06、P 组） |
