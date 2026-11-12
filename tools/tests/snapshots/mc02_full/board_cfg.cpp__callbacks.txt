@@ -1,0 +1,18 @@
+// 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+/**
+ * @brief EXTI 回调：库不占用它，生成的设备的数据就绪中断由这里转给设备
+ * @note 宿主别处不要再定义 HAL_GPIO_EXTI_Callback（会重复定义）；还要处理别的 EXTI 时，把本区删掉、手写一份。
+ */
+extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  BaseType_t woken = pdFALSE;
+  if (GPIO_Pin == GYRO_ACC_INT_Pin)
+  {
+    imu_bmi088.on_acc_drdy_isr(&woken);
+  }
+  else if (GPIO_Pin == GYRO_GYRO_INT_Pin)
+  {
+    imu_bmi088.on_gyro_drdy_isr(&woken);
+  }
+  portYIELD_FROM_ISR(woken);
+}

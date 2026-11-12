@@ -1,0 +1,13 @@
+// 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+/// gimbal_yaw：DJI 电机（M3508 / M2006 / GM6020）
+extern DjiMotor<DjiMotorType::GM6020, decltype(bsp_can1)> gimbal_yaw;
+/// joint：达妙电机（J4310 / J4340P / J8009P）
+extern DmMotor<decltype(bsp_can3)> joint;
+/// hatch：舵机（PWM 脉宽）
+extern DeviceServo hatch;
+/// beeper：无源蜂鸣器
+extern DeviceBuzzer beeper;
+/// rc：R9DS 遥控接收机（SBUS）
+extern DeviceR9dsT<decltype(bsp_uart5)> rc;
+/// steppers：张大头 Emm_V5 步进闭环（一路串口多地址）
+extern DeviceEmmv5GroupT<decltype(bsp_uart8)> steppers;

@@ -1,4 +1,4 @@
-#include "pid.hpp"
+#include "algorithm/pid.hpp"
 #include <math.h>
 
 PID::PID(const Config& cfg) : _config(cfg)

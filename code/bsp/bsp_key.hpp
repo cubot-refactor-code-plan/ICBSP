@@ -24,16 +24,16 @@
  *       2. init() 以当前电平作为初始稳定状态：上电时若按键已被按住，
  *          不会产生 PRESS（防误触发），直接从"已按下"状态开始计时。
  *       3. 未 init()（或 init() 失败）时，update() / read_raw() 安全返回，不会崩溃。
- *       状态机与用法见 bsp_key.md。
+ *       状态机见下面 update() 的注释，用法见 docs/code/bsp.md 的 BspGpio / BspKey / BspEncoder 一节。
  */
 
 #ifndef __BSP_KEY_HPP__
 #define __BSP_KEY_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep (GPIO_TypeDef, GPIO pins, HAL_GPIO_ReadPin)
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep (GPIO_TypeDef, GPIO pins, HAL_GPIO_ReadPin)
 #include <stdint.h>
 
-#include "status.hpp" // 统一状态码
+#include "service/system/status_code.hpp" // 统一状态码
 
 
 /**
@@ -129,7 +129,7 @@ public:
    * @note 专给「按住时要一直亮、松手就灭」这类显示用：事件只在跳变那一刻给一次，
    *       而本函数每拍都能问到当前状态。未 init() 时返回 false。
    */
-  bool pressed() const { return _last_stable; }
+  bool is_pressed() const { return _last_stable; }
 
   /* ==================== */
 private:

@@ -1,0 +1,7 @@
+// 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+/// imu_bmi088：BMI088 IMU（含 VQF 姿态）
+BspSpiDevice imu_bmi088_acc_spi(bsp_spi2, {GYRO_ACC_CS_GPIO_Port, GYRO_ACC_CS_Pin, 0x80U, 1U});
+BspSpiDevice imu_bmi088_gyro_spi(bsp_spi2, {GYRO_GYRO_CS_GPIO_Port, GYRO_GYRO_CS_Pin, 0x80U, 0U});
+DeviceBmi088 imu_bmi088(imu_bmi088_acc_spi, imu_bmi088_gyro_spi, {.acc_range = DeviceBmi088::AccRange::G24, .gyro_range = DeviceBmi088::GyroRange::DPS2000});
+/// buzzer：无源蜂鸣器
+DeviceBuzzer buzzer(bsp_pwm_tim12_ch2);

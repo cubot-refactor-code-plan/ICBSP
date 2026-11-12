@@ -55,34 +55,38 @@
  *   1. CubeMX：开 FDCAN2 的 RX FIFO0 中断，确认经典 CAN 模式，重新生成
  *   2. 本文件「外设实例」分节下面加：
  *          inline BspCanT<16, 16> bsp_can2({.hfdcan = &hfdcan2, .name = "CAN2"});
- *   3. `board_instances.hpp` 的 `BSP_CAN_INSTANCES` 里加 `X(bsp_can2)`
+ *   3. `board_instances.hpp` 的 `ICBSP_CAN_INSTANCES` 里加 `X(bsp_can2)`
  *   4. `board_cfg.cpp` 的 `board_init()` 里加一行 `ICBSP_CHECK(bsp_can2.init() == Status::OK);`
  */
 
 #ifndef __BOARD_CFG_HPP__
 #define __BOARD_CFG_HPP__
 
+// 下面三个生成区（includes / peripherals / devices）由 tools/integrate.py 按 .ioc 与接入选择生成，区外的内容不动。
+// 手写工程直接改；改过的生成区再用 integrate.py 生成会被拒绝（先删掉或恢复）。
 // CubeMX 生成的句柄头文件：**按实际用到的外设增删**。
-#include "bsp_series.hpp" // IWYU pragma: keep（BSP_SERIES_F4）
+// <ICBSP-GEN includes>
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（ICBSP_SERIES_F4）
 #include "main.h"         // IWYU pragma: keep
 #include "tim.h"
 #include "usart.h"
 
 // CAN 句柄头：H7 是 FDCAN，F4 是 bxCAN。
 // 没在 CubeMX 里开 CAN 时，连 can.h / fdcan.h 都不会生成，所以整段按模块开关条件化。
-#if BSP_CAN_MODULE_ENABLED
-#  if BSP_SERIES_F4
+#if ICBSP_CAN_MODULE_ENABLED
+#  if ICBSP_SERIES_F4
 #    include "can.h"
 #  else
 #    include "fdcan.h"
 #  endif
 #endif
 
-#include "bsp_can.hpp"
-#include "bsp_dwt.hpp"
-#include "bsp_pwm.hpp"
-#include "bsp_uart.hpp"
-#include "device_buzzer.hpp"
+#include "bsp/bsp_can.hpp"
+#include "bsp/bsp_dwt.hpp"
+#include "bsp/bsp_pwm.hpp"
+#include "bsp/bsp_uart.hpp"
+#include "device/actuator/device_buzzer.hpp"
+// </ICBSP-GEN includes 2c89c80c>
 
 /** @brief 板级初始化：各实例 init()，实现在 board_cfg.cpp */
 void board_init(void);
@@ -95,13 +99,14 @@ void board_init(void);
 // 否则每个包含本头文件的 .cpp 都会生成一份构造代码，还会注册 atexit。
 // 需要释放资源时显式调 `deinit()`，不要写析构函数。
 
+// <ICBSP-GEN peripherals>
 /**
  * CAN1：一条总线的收发（`BspCanT<收队列帧数, 发队列帧数>`）
  *
  * @note 两边的 BspCanT 接口完全一致，只有 Config 字段名不同：H7 写 `.hfdcan = &hfdcan1`，F4 写 `.hcan = &hcan1`。
  */
-#if BSP_CAN_MODULE_ENABLED
-#  if BSP_SERIES_F4
+#if ICBSP_CAN_MODULE_ENABLED
+#  if ICBSP_SERIES_F4
 inline BspCanT<16, 16> bsp_can1(
   {.hcan  = &hcan1,
    .name = "CAN1"}); ///< CAN1，16 帧收 / 16 帧发
@@ -120,9 +125,9 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
    .mode     = UartDir::TxRx,
    .baudrate = 115200U});
 
-#define UART_PRINT_ENABLE 1
+#define ICBSP_UART_PRINT_ENABLE 1
 
-#if UART_PRINT_ENABLE
+#if ICBSP_UART_PRINT_ENABLE
 #  define print_uart(...) bsp_uart1.printf(__VA_ARGS__)
 #else
 #  define print_uart(...) ((void)0)
@@ -131,8 +136,8 @@ inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
 /**
  * DWT 计时基准：**由库内部初始化**
  *
- * 实例定义在 `stm32-framework/code/service/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
- * 这里只 `#include "bsp_dwt.hpp"` 后直接调用（如 `bsp_dwt.get_delta_s(&last)`）。
+ * 实例定义在 `ICBSP/code/service/system/system.cpp`，与 `system_init()` 里的 `init()` 在同一文件；
+ * 这里只 `#include "bsp/bsp_dwt.hpp"` 后直接调用（如 `bsp_dwt.get_delta_s(&last)`）。
  * 不要在这里再定义实例，也不要再调 `init()`。
  */
 
@@ -148,6 +153,7 @@ inline BspPwm bsp_pwm_buzzer(
    .timer_clk_hz = 275000000UL,
    .prescaler    = 23U,
    .period       = 1999U}); ///< 蜂鸣器 PWM：TIM12_CH2
+// </ICBSP-GEN peripherals 573e4330>
 
 
 /* ==================== */
@@ -155,11 +161,13 @@ inline BspPwm bsp_pwm_buzzer(
 // 设备层：包装外设，提供“按物理量”的接口；不拥有下面的外设实例。
 // 顺序要求：设备必须在本文件里外设实例之后定义，并且在 board_init() 里外设 init() 之后 init()。
 
+// <ICBSP-GEN devices>
 /**
  * 无源蜂鸣器：包装上面的 PWM 通道
  *
  */
 inline DeviceBuzzer buzzer(bsp_pwm_buzzer);
+// </ICBSP-GEN devices 2f179c51>
 
 /* ==================== */
 

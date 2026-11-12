@@ -18,7 +18,7 @@
 void heartbeat_task(void *argument);
 
 /**
- * @brief 监视业务：每秒记录 FreeRTOS 堆余量与任务数到内部观察量
+ * @brief 监视业务：每 10 s 记录 FreeRTOS 堆余量、任务数与本任务栈余量，并打印一行
  * @param argument 未使用（NULL）
  */
 void monitor_task(void *argument);

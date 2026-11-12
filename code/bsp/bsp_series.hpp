@@ -13,7 +13,7 @@
  *     1. 按编译环境选一个系列，include 对应的 HAL 头
  *     2. 给 F4 补上 H7 才有、但语义等价的宏/类型，让上层代码一行都不用改
  *
- * @note H7 侧一个宏都不定义、一个类型都不新增：所有补丁都在 `#if BSP_SERIES_F4` 里，
+ * @note H7 侧一个宏都不定义、一个类型都不新增：所有补丁都在 `#if ICBSP_SERIES_F4` 里，
  *       H7 编译出来的东西与引入本文件之前完全一致（除了多一层 include guard）。
  *
  * @note 系列判定用 `__has_include`：CubeMX 的 CMake 只把当前系列的 HAL 目录加进 include 路径，
@@ -34,16 +34,16 @@
 #if __has_include("stm32h7xx_hal.h")
 
 #  include "stm32h7xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
-#  define BSP_SERIES_H7 1
-#  define BSP_SERIES_F4 0
-#  define BSP_SERIES_NAME "STM32H7"
+#  define ICBSP_SERIES_H7 1
+#  define ICBSP_SERIES_F4 0
+#  define ICBSP_SERIES_NAME "STM32H7"
 
 #elif __has_include("stm32f4xx_hal.h")
 
 #  include "stm32f4xx_hal.h" // IWYU pragma: keep（HAL 模块开关）
-#  define BSP_SERIES_H7 0
-#  define BSP_SERIES_F4 1
-#  define BSP_SERIES_NAME "STM32F4"
+#  define ICBSP_SERIES_H7 0
+#  define ICBSP_SERIES_F4 1
+#  define ICBSP_SERIES_NAME "STM32F4"
 
 #else
 
@@ -55,7 +55,7 @@
 /* ==================== */
 /* ==================== ② F4 专属补丁 ==================== */
 
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
 
 /* ---------- UART 寄存器位名 ----------
  * F4 没有硬件 FIFO，寄存器位用的是不带 FIFO 后缀的旧名字，但**位号相同**：
@@ -86,7 +86,7 @@
 #  endif
 
 /** @brief 本系列是否有 UART 硬件 FIFO（决定 `huart->FifoMode` / `HAL_UARTEx_EnableFifoMode` 能不能用） */
-#  define BSP_UART_HAS_FIFO 0
+#  define ICBSP_UART_HAS_FIFO 0
 
 /* ---------- DMA 实例判定 ----------
  * bsp_uart.hpp 用它区分「DMA1 / DMA2 的流」与「BDMA 之类」。
@@ -107,9 +107,9 @@
  * 上层 service / tasks / device 统一看这一个宏，不再各自判断 HAL 模块名。
  */
 #  ifdef HAL_CAN_MODULE_ENABLED
-#    define BSP_CAN_MODULE_ENABLED 1
+#    define ICBSP_CAN_MODULE_ENABLED 1
 #  else
-#    define BSP_CAN_MODULE_ENABLED 0
+#    define ICBSP_CAN_MODULE_ENABLED 0
 #  endif
 
 /* ---------- CAN 常量：让上层写法原样成立 ----------
@@ -161,15 +161,15 @@ typedef struct
 #else /* ==================== H7 ==================== */
 
 /** @brief 本系列是否有 UART 硬件 FIFO */
-#  define BSP_UART_HAS_FIFO 1
+#  define ICBSP_UART_HAS_FIFO 1
 
 #  ifdef HAL_FDCAN_MODULE_ENABLED
-#    define BSP_CAN_MODULE_ENABLED 1
+#    define ICBSP_CAN_MODULE_ENABLED 1
 #  else
-#    define BSP_CAN_MODULE_ENABLED 0
+#    define ICBSP_CAN_MODULE_ENABLED 0
 #  endif
 
-#endif /* BSP_SERIES_F4 */
+#endif /* ICBSP_SERIES_F4 */
 
 
 /* ==================== */
@@ -191,7 +191,7 @@ inline bool dma_reachable(const void *addr)
 {
   const uintptr_t a = reinterpret_cast<uintptr_t>(addr);
 
-#if BSP_SERIES_H7
+#if ICBSP_SERIES_H7
   const bool itcm = a < 0x08000000U;
   const bool dtcm = a >= 0x20000000U && a < 0x24000000U;
   return !itcm && !dtcm;
@@ -218,7 +218,7 @@ inline bool dma_reachable(const void *addr)
  *       - system.cpp 那次「全局构造前拷贝初值」因找不到 __dma_buffer_* 弱符号而自动跳过
  *       - board_cfg.hpp 里 `inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<...>` 一处都不用改
  */
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
 #  define ICBSP_DMA_BUFFER(name) /* F4：主 SRAM 可 DMA，不需要专用段 */
 #else
 #  define ICBSP_DMA_BUFFER(name) __attribute__((section(".dma_buffer." #name)))

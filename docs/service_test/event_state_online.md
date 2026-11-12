@@ -1,5 +1,7 @@
 # EventState 父子树 / Online 运行时链表 实板测试（2026-11-01）
 
+> 对应代码：stm32-framework `d5221ea`（本记录随它提交）。API 名称是旧的（`error_code()` 等，2.7 起改成 `get_` / `is_`）；阶段 3 在当前代码上重跑了这 81 条判据（E01~E14、O01~O11），见 `../bsp_test/phase3_2026-11-06.md`。
+
 对 `service/status`（`Status` + `EventState`）与 `service/online_check`（`Online`）在 DM-MC02 上做实板测试：
 接口边界、错误传播、生命周期，以及 `Online` 的毫秒语义、多节点、运行期增删。
 

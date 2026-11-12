@@ -326,67 +326,85 @@ def fig_toolchain(c):
 
 def fig_layers(c):
     left, right = 90, 1000
-    rows = [
-        ("宿主 app/", ["app_main.cpp（app_init）", "StartDefaultTask", "task/*.cpp"], "host"),
-        ("宿主 board/", ["board_cfg.hpp", "board_cfg.cpp（board_init）", "board_instances.hpp", "hardware_config.h"], "host"),
-        ("库 device/", ["dji_motor", "device_motor", "servo", "r9ds", "emmv5_group", "bmi088", "buzzer"], "lib"),
-        ("库 tasks/", ["sys_task（10 ms）", "can_rx_task（1 ms）", "can_tx_task（按需建）"], "lib"),
-        ("库 service/", ["system", "status", "online_check", "can_rx_node", "can_tx_node", "fault_record"], "lib"),
-        ("库 bsp/", ["can", "uart", "spi", "pwm", "gpio", "key", "encoder", "dwt"], "lib"),
+    # 宿主两行
+    host_rows = [
+        ("宿主 app/", ["app_main.cpp（app_init）", "app_default_task", "task/*.cpp"], 40),
+        ("宿主 board/", ["board_cfg.hpp", "board_cfg.cpp（board_init）", "board_instances.hpp", "hardware_config.h"], 160),
     ]
-    row_y = [60, 180, 300, 420, 540, 660]
-    row_h = 92
+    for title, items, y in host_rows:
+        box(c, (left, y, right, y + 92), FILL["host"], LINE["host"], width=1.0)
+        text(c, (left + 92, y + 46), [title], size=14, bold=True)
+        chip_row(c, left + 190, y + 24, right - left - 214, 44, items, "host")
 
-    for (title, items, key), y in zip(rows, row_y):
-        box(c, (left, y, right, y + row_h), FILL[key], LINE[key], width=1.0)
-        text(c, (left + 92, y + row_h / 2), [title], size=14, bold=True)
-        chip_row(c, left + 190, y + 22, right - left - 214, row_h - 44, items, key)
+    # device 与 tasks 并列（互不依赖，都在 service 之上）
+    dy = 290
+    box(c, (left, dy, 640, dy + 130), FILL["lib"], LINE["lib"], width=1.0)
+    text(c, (left + 70, dy + 65), ["库 device/"], size=14, bold=True)
+    chip_row(c, left + 140, dy + 16, 640 - left - 156, 44, ["dji_motor", "dm_motor", "device_motor", "emmv5_group"], "lib")
+    chip_row(c, left + 140, dy + 70, 640 - left - 156, 44, ["bmi088", "r9ds", "servo", "buzzer"], "lib")
+    box(c, (660, dy, right, dy + 130), FILL["lib"], LINE["lib"], width=1.0)
+    text(c, (830, dy + 22), ["库 tasks/"], size=14, bold=True)
+    chip_row(c, 676, dy + 44, right - 692, 34, ["sys_task", "can_rx_task", "can_tx_task"], "lib", size=11, gap=6)
+    text(c, (830, dy + 104), ["10 ms · 1 ms · 有发送节点才建"], size=11, fill=SUB)
 
-    box(c, (left, 782, right, 862), FILL["hal"], LINE["hal"], width=1.0)
-    text(c, ((left + right) / 2, 822), ["HAL · FreeRTOS · CubeMX 生成的句柄（hfdcan1 / huart1 / htim12 …）"], size=13, fill=SUB)
+    sy = 470
+    box(c, (left, sy, right, sy + 130), FILL["lib"], LINE["lib"], width=1.0)
+    text(c, (left + 70, sy + 65), ["库 service/"], size=14, bold=True)
+    chip_row(c, left + 140, sy + 16, right - left - 156, 44, ["system/：system", "status（EventState）", "state_tree", "fault_record", "config_check"], "lib")
+    chip_row(c, left + 140, sy + 70, right - left - 156, 44, ["comm/：can_rx_node", "can_tx_node", "monitor/：online_check", "definition/：motor · imu"], "lib")
 
-    box(c, (1040, 300, 1390, 470), FILL["leaf"], LINE["leaf"], width=1.0)
-    text(c, (1215, 322), ["algorithm/"], size=14, bold=True)
-    chip_row(c, 1058, 340, 314, 42, ["pid", "quaternion_pid"], "leaf")
-    chip_row(c, 1058, 396, 314, 42, ["vqf", "matrix", "rls"], "leaf")
+    by = 650
+    box(c, (left, by, right, by + 92), FILL["lib"], LINE["lib"], width=1.0)
+    text(c, (left + 70, by + 46), ["库 bsp/"], size=14, bold=True)
+    chip_row(c, left + 140, by + 24, right - left - 156, 44, ["can", "uart", "spi", "pwm", "gpio", "key", "encoder", "dwt", "dma_buffer", "series"], "lib", size=11, gap=6)
 
-    box(c, (1040, 492, 1390, 560), FILL["leaf"], LINE["leaf"], width=1.0)
-    text(c, (1215, 512), ["protocol/"], size=14, bold=True)
-    text(c, (1215, 538), ["emmv5_protocol（纯编解码）"], size=12, fill=SUB)
+    box(c, (left, 782, right, 852), FILL["hal"], LINE["hal"], width=1.0)
+    text(c, ((left + right) / 2, 817), ["HAL（按 HAL_*_MODULE_ENABLED 条件编译）· FreeRTOS · CubeMX 生成的句柄"], size=13, fill=SUB)
 
-    notes = [
-        "app_init() 调 board_init()",
-        "board_cfg / board_instances（X-macro 清单）",
-        "device 用 PID / 四元数 / VQF / 帧编解码",
-        "—",
-        "任务的在线状态、系统事件组",
-        "service 收发都走 BspCan",
-    ]
-    for i, (y, msg) in enumerate(zip(row_y, notes)):
-        y_next = row_y[i + 1] if i + 1 < len(row_y) else 782
-        if msg != "—":
-            arrow(c, [(520, y + row_h), (520, y_next)], ARROW)
-            label(c, (536, (y + row_h + y_next) / 2), msg)
+    # 层间箭头
+    arrow(c, [(365, 132), (365, 160)], ARROW)
+    label(c, (380, 146), "app_init() 调 board_init()", size=11)
+    arrow(c, [(365, 252), (365, dy)], ARROW)
+    label(c, (380, 271), "设备实例在 board_cfg 构造", size=11)
+    arrow(c, [(365, dy + 130), (365, sy)], ARROW)
+    label(c, (380, dy + 150), "注册 CAN 节点 · 挂状态树", size=11)
+    arrow(c, [(830, dy + 130), (830, sy)], ARROW)
+    label(c, (845, dy + 150), "巡检 · 分发", size=11)
+    arrow(c, [(365, sy + 130), (365, by)], ARROW)
+    label(c, (380, sy + 150), "收发都走 BspCanT / BspUartT / BspSpi", size=11)
+    arrow(c, [(545, by + 92), (545, 782)], ARROW)
 
-    arrow(c, [(right, 346), (1040, 346)], LINE["leaf"])
-    label(c, (1032, 322), "用", LINE["leaf"], anchor="rm")
+    # X-macro：bsp 与 tasks 反向包含宿主清单
+    dash_line(c, [(60, 206), (60, by + 46), (90, by + 46)], LINE["host"], 1.3, 7)
+    label(c, (66, 452), "X-macro", LINE["host"], size=11)
+    dash_line(c, [(700, 252), (700, dy)], LINE["host"], 1.3, 7)
+    label(c, (708, 264), "X-macro", LINE["host"], size=11)
 
-    box(c, (1040, 660, 1390, 862), FILL["note"], LINE["note"], width=1.0)
-    text(c, (1215, 686), ["依赖只朝下（上层依赖下层）"], size=13, bold=True, fill=LINE["note"])
+    # algorithm：叶子层，device / service 可用
+    box(c, (1040, 290, 1390, 450), FILL["leaf"], LINE["leaf"], width=1.0)
+    text(c, (1215, 314), ["algorithm/（只依赖 C++ 标准库）"], size=13, bold=True)
+    chip_row(c, 1058, 338, 314, 42, ["pid", "quaternion_pid", "quaternion"], "leaf")
+    chip_row(c, 1058, 392, 314, 42, ["vqf", "matrix", "rls"], "leaf")
+    arrow(c, [(640, 300), (650, 300), (650, 280), (1215, 280), (1215, 290)], LINE["leaf"])
+    label(c, (1060, 268), "device 用", LINE["leaf"])
+    arrow(c, [(right, 535), (1215, 535), (1215, 450)], LINE["leaf"])
+    label(c, (1228, 500), "service 用", LINE["leaf"])
+
+    box(c, (1040, 580, 1390, 852), FILL["note"], LINE["note"], width=1.0)
+    text(c, (1215, 606), ["依赖只朝下（tools/check_layers.py 检查）"], size=13, bold=True, fill=LINE["note"])
     for i, line in enumerate(
         [
-            "跨层依赖：",
-            "app → service（system_init / start）",
-            "board → bsp（实例在 board_cfg 构造）",
-            "device → bsp（初始化 / 收发）",
-            "device → service（注册 CanRx / CanTx 节点）",
-            "tasks → bsp（巡检 / Bus-Off 恢复）",
+            "algorithm、bsp：只用本层",
+            "service：+ bsp、algorithm",
+            "device：+ service、bsp、algorithm",
+            "tasks：+ service、bsp（不用 device）",
+            "各层都能包含：status_code.hpp、",
+            "  config_check.hpp（读宿主配置的入口）",
+            "反向只有 X-macro：bsp / tasks 包含",
+            "  宿主 board_instances.hpp",
         ]
     ):
-        c.text(1058, 718 + i * 21, line, 11, False, SUB, "la")
-
-    dash_line(c, [(60, 226), (60, 706), (90, 706)], LINE["host"], 1.3, 7)
-    label(c, (68, 452), "X-macro", LINE["host"], size=11)
+        c.text(1058, 640 + i * 25, line, 11, False, SUB, "la")
 
 
 # ==================== 图3：启动顺序与任务 ====================
@@ -412,7 +430,7 @@ def fig_startup(c):
 
     for y, msg in [
         (296, "调度器还没启动：这里只是「创建」sys_task 与 can_rx_task，它们要等 vTaskStartScheduler() 才跑"),
-        (416, "任何一路 init() 返回非 OK 就 configASSERT 停机，fault_record 记下调用行号，print_uart 能打出来"),
+        (416, "每个 init() 一行 ICBSP_CHECK(x.init() == Status::OK)：失败写 fault_record（.noinit）后停机，复位后 print fault_record 看"),
         (536, "板级没有发送节点就不建 can_tx；随后置运行位，唤醒所有在 wait_running() 上等待的任务"),
     ]:
         box(c, (560, y, 1330, y + ch), FILL["note"], LINE["note"], width=1.0)
@@ -422,9 +440,9 @@ def fig_startup(c):
     tw, gap, ty = 380, 40, 872
     for i, (name, lines) in enumerate(
         [
-            ("sys_task", ["10 ms 周期 · DWT 计时", "CAN Bus-Off 恢复 · UART 巡检", "Online::update() · 每 2 s 打印"]),
+            ("sys_task", ["10 ms 周期 · Online::update() · 状态树巡检", "CAN Bus-Off 恢复 · UART 巡检", "耗时统计 · 报告回调（库不打印）"]),
             ("can_rx_task", ["1 ms 周期", "按 ID 分发", "未认领的进回退缓冲"]),
-            ("can_tx_task", ["槽位聚合 · 保底心跳", "100 ms 指令有效期", "没有发送节点就不创建"]),
+            ("can_tx_task", ["槽位聚合 · 保底心跳 5 ms", "指令有效期 100 ms", "没有发送节点就不创建"]),
         ]
     ):
         x = 100 + i * (tw + gap)
@@ -438,14 +456,16 @@ def fig_startup(c):
     arrow(c, [(rail_b, 580), (rail_b, 838), (1035, 838), (1035, ty)], LINE["int"], dashed=True)
     label(c, (700, 846), "③ system_start 有节点才创建 can_tx_task", LINE["int"], size=11, anchor="la")
 
-    label(c, (100, 852), "优先级 / 栈深在宿主 hardware_config.h：CAN_TASK_PRIORITY 最高", SUB, size=11, anchor="la")
+    box(c, (560, 656, 1330, 744), FILL["note"], LINE["note"], width=1.0)
+    c.text(584, 686, "库任务优先级在宿主 hardware_config.h，按 configMAX_PRIORITIES 取：", 12, False, SUB, "lm")
+    c.text(584, 716, "CAN −2 > BMI088 −3 > sys −4；业务任务要低于它们（osPriorityNormal 即可）", 12, False, SUB, "lm")
 
 
 # ==================== 入口 ====================
 
 FIGURES = [
     ("toolchain", 1480, 1250, fig_toolchain),
-    ("layers", 1440, 940, fig_layers),
+    ("layers", 1440, 890, fig_layers),
     ("startup", 1400, 1010, fig_startup),
 ]
 

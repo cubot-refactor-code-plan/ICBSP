@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICBSP 接入帮助</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>ICBSP 接入帮助</h1>
+  <p class="sub">按 CubeMX 的 .ioc 校验配置、生成板级实例与设备。接入逻辑在 <code>tools/integrate.py</code>，这个页面只负责展示和收集选择。</p>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+<div id="suggest" class="banner info hidden"></div>
+
+<main>
+  <section id="project">
+    <h2>工程</h2>
+    <div id="project-info" class="muted">读取中…</div>
+    <div class="row">
+      <label>板级目录 <input id="board_dir" value="user/board"></label>
+      <label>应用目录 <input id="app_dir" value="user/app"></label>
+      <label>.ioc <input id="ioc" placeholder="默认：根目录下唯一的 .ioc"></label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="no_vscode"> 不处理 .vscode</label>
+      <label><input type="checkbox" id="no_clang"> 不生成 .clangd / .clang-format</label>
+      <button id="rescan">重新扫描</button>
+    </div>
+  </section>
+
+  <section id="checks-sec">
+    <h2>CubeMX 配置校验</h2>
+    <div id="checks"></div>
+    <div class="row">
+      <button id="fix-preview">预览 .ioc 修改</button>
+      <button id="fix-apply" class="warn">修改所选项</button>
+      <label><input type="checkbox" id="regenerate" checked> 修改后用 CubeMX 重新生成</label>
+      <label>CubeMX 目录 <input id="cubemx" placeholder="默认 ICBSP_CUBEMX / ~/STM32CubeMX"></label>
+    </div>
+    <pre id="fix-out" class="diff hidden"></pre>
+  </section>
+
+  <section>
+    <h2>外设</h2>
+    <p class="muted">每个选中的外设生成一个库实例（如 FDCAN1 → <code>bsp_can1</code>）。PWM / 编码器默认不选。</p>
+    <div class="row"><label>调试打印串口（print_uart） <select id="debug_uart"></select></label></div>
+    <div id="peripherals"></div>
+  </section>
+
+  <section>
+    <h2>功能开关</h2>
+    <div id="switches"></div>
+  </section>
+
+  <section id="flash-sec">
+    <h2>外置 Flash</h2>
+    <p class="muted">片内 Flash 不够时把程序放到 QUADSPI 外置 Flash：方案 A 由 bootloader 拷进 AXI SRAM 运行，方案 B 在 QSPI 上就地执行（XIP）。
+      日常切换用 CMake 预设 <code>&lt;类型&gt;-Internal / -QspiRam / -QspiXip</code>，这里选的是默认方式。</p>
+    <div id="flash"></div>
+  </section>
+
+  <section>
+    <h2>编译优化</h2>
+    <p class="muted">生成 <code>icbsp_optimization(...)</code>：追加在工具链文件的优化等级之后（GCC 以最后一个 -O 为准），不改 CubeMX 生成的文件。</p>
+    <div id="optim"></div>
+  </section>
+
+  <section>
+    <h2>工程文件</h2>
+    <div id="hostfiles"></div>
+  </section>
+
+  <section>
+    <h2>设备</h2>
+    <div id="devices"></div>
+    <h3>添加设备</h3>
+    <div id="add-device"></div>
+  </section>
+
+  <section>
+    <h2>宿主现有的生成区</h2>
+    <div id="generated"></div>
+  </section>
+
+  <section>
+    <h2>预览与写入</h2>
+    <div id="report"></div>
+    <div id="plan"></div>
+    <div class="row">
+      <label><input type="checkbox" id="overwrite"> 生成区被手改过也覆盖</label>
+      <button id="apply" class="primary">写入宿主工程</button>
+    </div>
+    <div id="apply-out"></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

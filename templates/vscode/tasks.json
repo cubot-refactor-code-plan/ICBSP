@@ -84,36 +84,6 @@
                 "panel": "shared",
                 "clear": true
             }
-        },
-        /* ==================== 烧录 ==================== */
-        // 脚本自己递归找 build/ 下的 .elf，不需要 VS Code 传路径
-        {
-            "label": "OpenOCD_flash",
-            "detail": "OpenOCD + CMSIS-DAP 烧录",
-            "type": "process",
-            "command": "${workspaceFolder}/Flash/OpenOCD_flash.sh",
-            "windows": {
-                "command": "${workspaceFolder}\\Flash\\OpenOCD_flash.bat"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "JLink_flash",
-            "detail": "经 OpenOCD 的 jlink 适配器烧录",
-            "type": "process",
-            "command": "${workspaceFolder}/Flash/JLink_flash.sh",
-            "windows": {
-                "command": "${workspaceFolder}\\Flash\\JLink_flash.bat"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "group": "build",
-            "problemMatcher": []
         }
     ]
 }

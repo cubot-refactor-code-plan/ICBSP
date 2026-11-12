@@ -19,11 +19,11 @@
 #ifndef __BSP_CAN_HPP__
 #define __BSP_CAN_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（系列桥接）
 
 #if defined(HAL_FDCAN_MODULE_ENABLED)
 
-#  include "bsp_fdcan.hpp"
+#  include "bsp/bsp_fdcan.hpp"
 
 #elif defined(HAL_CAN_MODULE_ENABLED)
 
@@ -52,17 +52,11 @@
 #include "message_buffer.h"
 #include "task.h" // IWYU pragma: keep
 
-#include "hardware_config.h" // CAN_RX_ENABLE、CAN_RX_RETURN_FRAMES、CAN_BUSOFF_RETRY_MS
-#include "status.hpp"
+#include "service/system/config_check.hpp" // ICBSP_CAN_RX_ENABLE、ICBSP_CAN_RX_RETURN_FRAMES、ICBSP_CAN_BUSOFF_RETRY_MS
+#include "service/system/status_code.hpp"
 
 #include <string.h>
 
-#ifndef CAN_RX_RETURN_FRAMES
-#  error "hardware_config.h 缺少 CAN_RX_RETURN_FRAMES（回退缓冲深度，0 = 不建回退缓冲），见 templates/user/board/hardware_config.h"
-#endif
-#ifndef CAN_BUSOFF_RETRY_MS
-#  error "hardware_config.h 缺少 CAN_BUSOFF_RETRY_MS，见 templates/user/board/hardware_config.h"
-#endif
 
 
 /* ==================== 帧结构（与 bsp_fdcan.hpp 的 FDCAN 版逐字相同） ==================== */
@@ -88,7 +82,7 @@ constexpr uint16_t CAN_DLC_MASK_8   = 1U << 8;  ///< 只接受 8 字节帧（默
 constexpr uint16_t CAN_DLC_MASK_ANY = 0x01FFU;  ///< 接受 0~8 任意长度
 
 /**
- * @brief 实例是否在 board_instances.hpp 的 BSP_CAN_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_can.cpp）
+ * @brief 实例是否在 board_instances.hpp 的 ICBSP_CAN_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_can.cpp）
  */
 bool bsp_bxcan_is_listed(const void *self, const CAN_HandleTypeDef *hcan);
 
@@ -200,7 +194,7 @@ public:
   }
 
   /** @brief 底层句柄（供 HAL 回调分发） */
-  CAN_HandleTypeDef *handle() const
+  CAN_HandleTypeDef *get_handle() const
   {
     return _hcan;
   }
@@ -251,7 +245,7 @@ private:
   /* ==================== 成员 ==================== */
 
   /** @brief 回退缓冲是否存在（有 can_rx_task 且深度非 0） */
-  static constexpr bool HAS_RETURN = (CAN_RX_ENABLE != 0) && (CAN_RX_RETURN_FRAMES > 0);
+  static constexpr bool HAS_RETURN = (ICBSP_CAN_RX_ENABLE != 0) && (ICBSP_CAN_RX_RETURN_FRAMES > 0);
 
   /** @brief 发送邮箱个数（bxCAN 固定 3 个） */
   static constexpr uint32_t MAILBOXES = 3U;
@@ -259,7 +253,7 @@ private:
   CAN_HandleTypeDef    *_hcan;
   const char           *_name;
   MessageBufferHandle_t _tx_message_buffer  = nullptr; ///< 写者：send()（临界区）；读者：临界区里的任务侧或发送完成中断
-  MessageBufferHandle_t _rx_message_buffer  = nullptr; ///< 写者：FIFO0 中断；读者：can_rx_task（或 CAN_RX_ENABLE = 0 时的 receive()）
+  MessageBufferHandle_t _rx_message_buffer  = nullptr; ///< 写者：FIFO0 中断；读者：can_rx_task（或 ICBSP_CAN_RX_ENABLE = 0 时的 receive()）
   MessageBufferHandle_t _rx_return_buffer   = nullptr; ///< 写者：can_rx_task；读者：receive()
   TickType_t            _recovery_started   = 0U;
   TickType_t            _recovery_attempted = 0U;
@@ -419,7 +413,7 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::init()
   _tx_message_buffer = xMessageBufferCreate((sizeof(CanTxMsg) + 4U) * TX_DEPTH);
   if (HAS_RETURN)
   {
-    _rx_return_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4U) * static_cast<size_t>(CAN_RX_RETURN_FRAMES > 0 ? CAN_RX_RETURN_FRAMES : 1));
+    _rx_return_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4U) * static_cast<size_t>(ICBSP_CAN_RX_RETURN_FRAMES > 0 ? ICBSP_CAN_RX_RETURN_FRAMES : 1));
   }
   if (_rx_message_buffer == nullptr || _tx_message_buffer == nullptr || (HAS_RETURN && _rx_return_buffer == nullptr))
   {
@@ -513,10 +507,10 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::receive(CanRxMsg *msg, uint32_t timeout_ms)
   {
     return Status::BAD_ARG;
   }
-#if CAN_RX_ENABLE
+#if ICBSP_CAN_RX_ENABLE
   if (!HAS_RETURN)
   {
-    return Status::NOT_SUPPORTED; // CAN_RX_RETURN_FRAMES = 0：没人认领的帧不保留
+    return Status::NOT_SUPPORTED; // ICBSP_CAN_RX_RETURN_FRAMES = 0：没人认领的帧不保留
   }
   MessageBufferHandle_t buf = _rx_return_buffer; // 只读回退缓冲：原始缓冲只归 can_rx_task
 #else
@@ -551,7 +545,7 @@ bool BspCanT<RX_DEPTH, TX_DEPTH>::return_frame(const CanRxMsg &msg)
   diagnostics.rx_unclaimed = diagnostics.rx_unclaimed + 1U;
   if (_rx_return_buffer == nullptr)
   {
-    return false; // 没有回退缓冲（CAN_RX_RETURN_FRAMES = 0）：只计数
+    return false; // 没有回退缓冲（ICBSP_CAN_RX_RETURN_FRAMES = 0）：只计数
   }
   if (xMessageBufferSend(_rx_return_buffer, &msg, sizeof(msg), 0) != sizeof(msg))
   {
@@ -591,7 +585,7 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::service_recovery()
   }
 
   const TickType_t now   = xTaskGetTickCount();
-  const TickType_t retry = pdMS_TO_TICKS(CAN_BUSOFF_RETRY_MS);
+  const TickType_t retry = pdMS_TO_TICKS(ICBSP_CAN_BUSOFF_RETRY_MS);
   taskENTER_CRITICAL();
   const bool bus_off = (_hcan->Instance->ESR & CAN_ESR_BOFF) != 0U;
   if (bus_off && !diagnostics.recovering)

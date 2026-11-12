@@ -1,10 +1,10 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 UART（HAL_UART_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_UART_MODULE_ENABLED
 
 #include "board_instances.hpp"
-#include "bsp_uart.hpp"
+#include "bsp/bsp_uart.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 
@@ -13,6 +13,9 @@
 
 bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart)
 {
+  // 实例清单为空时 X-macro 展开成空，参数用不到
+  (void)self;
+  (void)huart;
   bool     listed = false;
   uint32_t same   = 0U; // 清单里绑这个句柄的实例数
 #define X(name)                                                    \
@@ -20,11 +23,11 @@ bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart)
   {                                                                \
     listed = true;                                                 \
   }                                                                \
-  if (name.handle() == huart)                                      \
+  if (name.get_handle() == huart)                                      \
   {                                                                \
     same = same + 1U;                                              \
   }
-  BSP_UART_INSTANCES(X)
+  ICBSP_UART_INSTANCES(X)
 #undef X
   return listed && same == 1U;
 }
@@ -32,7 +35,7 @@ bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart)
 
 /* ==================== HAL 回调分发 ==================== */
 
-// BspUartT 只有头文件，这里只放 HAL 回调：HAL 的回调没有实例参数，按 huart 指针和 BSP_UART_INSTANCES 清单逐个比对。
+// BspUartT 只有头文件，这里只放 HAL 回调：HAL 的回调没有实例参数，按 huart 指针和 ICBSP_UART_INSTANCES 清单逐个比对。
 // 清单外的串口（宿主自己用 HAL 管的）直接忽略。
 extern "C"
 {
@@ -44,11 +47,11 @@ extern "C"
     {
     }
 #define X(name)                     \
-  else if (huart == name.handle())  \
+  else if (huart == name.get_handle())  \
   {                                 \
     name.on_idle_isr(Size, &woken); \
   }
-    BSP_UART_INSTANCES(X)
+    ICBSP_UART_INSTANCES(X)
 #undef X
     else
     {
@@ -65,11 +68,11 @@ extern "C"
     {
     }
 #define X(name)                               \
-  else if (huart == name.handle())            \
+  else if (huart == name.get_handle())            \
   {                                           \
     name.start_transmission_from_isr(&woken); \
   }
-    BSP_UART_INSTANCES(X)
+    ICBSP_UART_INSTANCES(X)
 #undef X
     else
     {
@@ -85,11 +88,11 @@ extern "C"
     {
     }
 #define X(name)                    \
-  else if (huart == name.handle()) \
+  else if (huart == name.get_handle()) \
   {                                \
     name.on_error_isr();           \
   }
-    BSP_UART_INSTANCES(X)
+    ICBSP_UART_INSTANCES(X)
 #undef X
     else
     {

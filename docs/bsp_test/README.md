@@ -1,26 +1,23 @@
-# stm32_framework 接口实机测试（2026-10-17）
+# ICBSP 实板测试记录
 
-> **2026-11-04 注明**：本目录是从 STM32_BSP 原样带过来的，记录对应 **STM32_BSP @ 43a34cf 的旧实现**（`BspUart<N>`、实例登记表、`SysFlag*`）；UART、CAN 已分别在 1.1、1.2 回填并复测，见 `uart_backfill_2026-11-04.md`、`can_backfill_2026-11-04.md`；SPI / BMI088 在 1.3 复测，见 `arch_1_3_2026-11-04.md`。回填（`undo.md` 阶段 1.1 / 1.2）完成后在宿主 MC02_with_submodule 上复测，再更新这里。
+本目录是回归宿主工程 `MC02_with_submodule`（DM-MC02，STM32H723）`docs/bsp_test/` 的副本：测试代码在宿主 `app/test/`，不在本库里；
+文中的路径都以**宿主工程根目录**为准（`app/`、`Core/`、`CMakeLists.txt`；`third_party/stm32-framework/` / `third_party/icbsp/` 即本库）。
+阶段 3 及之后的原始结果表只在宿主的 `docs/bsp_test/raw/` 里。
 
-> 本目录是宿主工程 `MC02_with_submodule` 的 `docs/bsp_test/` 的副本（2026-10-17，2026-10-28 补 SPI / BMI088）。文中的路径都以**宿主工程根目录**为准：
-> `app/`、`Core/`、`CMakeLists.txt` 指宿主工程，`third_party/stm32-framework/` 即本库。测试代码在宿主工程 `app/test/`，不在本库里。
+**当前代码以 [phase3_2026-11-06.md](phase3_2026-11-06.md) 为准**；更早的记录对应的代码版本见下表，里面的类名、宏名、目录可能和现在不同。
 
-对 submodule `third_party/stm32-framework` 的 UART、RS485、CAN 接口在 DM-MC02 上做实机测试：常规用法、参数边界、满载、故障注入、长时间浸泡、物理插拔。
-测试中发现的库问题当场修复并回归（库改动未提交，见 `changes.md`）；同时首次用 EmberProbe skill 烧写调试，与命令行方案对比（`flash_debug_eval.md`）。
+| 记录 | 日期 | 对应的库代码 | API 名称 |
+| --- | --- | --- | --- |
+| [phase3_2026-11-06.md](phase3_2026-11-06.md) | 2026-11-06 ~ 07 | ICBSP `phase2` 分支：`68451b7`（单元测试）~ `d71421a`（UART 巡检修复）；第 A 轮 `255250b`、第 B 轮 `ad1259b`、DMA 循环专项 `12ebd38`、F2 `d71421a` | 当前 |
+| [review_1_4_2026-11-04.md](review_1_4_2026-11-04.md) | 2026-11-04 ~ 05 | stm32-framework `11c1fc2`（1.3 与 1.4 一起提交） | 旧（改名 ICBSP、目录重排之前） |
+| [arch_1_3_2026-11-04.md](arch_1_3_2026-11-04.md) | 2026-11-04 | stm32-framework `5cf97d9` + 1.3 工作区改动（随 `11c1fc2` 提交） | 旧 |
+| [can_backfill_2026-11-04.md](can_backfill_2026-11-04.md) | 2026-11-04 | stm32-framework `626260c` + 1.2 工作区改动（提交为 `5cf97d9`） | 旧 |
+| [uart_backfill_2026-11-04.md](uart_backfill_2026-11-04.md) | 2026-11-04 | stm32-framework `bf8df28` + 1.1 工作区改动（提交为 `626260c`） | 旧 |
+| [spi_bmi088.md](spi_bmi088.md) | 2026-10-28 | 旧库 STM32_BSP 工作区（提交为 `be91caf` / `a79e1ae`，2026-10-29） | 旧（`BspUart<N>`、登记表） |
+| [uart_u7_u10.md](uart_u7_u10.md)、[rs485_u2_u3.md](rs485_u2_u3.md)、[can1_can2.md](can1_can2.md)、[changes.md](changes.md) | 2026-10-17 | 旧库 STM32_BSP `97e138b` + 当天的修复（提交为 `d32a996`） | 旧 |
+| [flash_debug_eval.md](flash_debug_eval.md) | 2026-10-17 | 与库版本无关（烧录 / 调试工具的评估） | — |
 
-| 文件 | 内容 |
-| --- | --- |
-| `uart_u7_u10.md` | UART U7 ⇄ U10：用例、方案、现象、结论，3 个专项诊断 |
-| `can_backfill_2026-11-04.md` | **当前实现**：undo 1.2 CAN 回填后的 CAN 回归，以及 TX 队列模式同 ID 乱序的诊断 |
-| `arch_1_3_2026-11-04.md` | **当前实现**：undo 1.3 架构问题修复后的回归（SPI / BMI088 组适配新库、新增服务层组 Y01 ~ Y05，-O2 全组） |
-| `review_1_4_2026-11-04.md` | undo 1.4：评审遗留问题修复、TIM8 时基改回 15；服务层组 Y06 ~ Y12（含故意触发 BusFault 验证故障现场），Debug 与 -O2 全组回归 |
-| `uart_backfill_2026-11-04.md` | **当前实现**：undo 1.1 UART 回填后的 UART / RS485 回归（Debug + -O2 浸泡），以及测试时钟回绕导致 R03 假超时的诊断 |
-| `rs485_u2_u3.md` | RS485 U2 ⇄ U3 |
-| `can1_can2.md` | CAN1 ⇄ CAN2 |
-| `spi_bmi088.md` | SPI2 + 板载 BMI088（2026-10-28）：基本功能、错误路径、故障注入、总线争用与浸泡 |
-| `changes.md` | 所有代码与配置改动（CubeMX、测试代码、库修复 L1~L13）及原因 |
-| `flash_debug_eval.md` | EmberProbe 与 OpenOCD / GDB / CubeMX 命令行的对比与今后分工 |
-| `raw/` | 各轮原始结果表 |
+另有 `../service_test/event_state_online.md`（2026-11-01，stm32-framework `d5221ea`，EventState / Online 81 条判据）。
 
 ## 环境
 

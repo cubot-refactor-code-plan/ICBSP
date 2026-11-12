@@ -1,10 +1,10 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本文件不参与编译
 #ifdef HAL_SPI_MODULE_ENABLED
 
 #  include "board_instances.hpp"
-#  include "bsp_spi.hpp"
+#  include "bsp/bsp_spi.hpp"
 
 #  include <string.h>
 
@@ -18,7 +18,7 @@ namespace
 /**
  * @brief 毫秒 → tick；portMAX_DELAY 原样保留（表示一直等）
  *
- * @note pdMS_TO_TICKS(portMAX_DELAY) 会按 32 位溢出，不再是“一直等”（见 bsp_uart.cpp 同名函数）。
+ * @note pdMS_TO_TICKS(portMAX_DELAY) 会按 32 位溢出，不再是“一直等”（与 bsp_uart.hpp 的 uart_detail::ms_to_ticks() 相同，N9）。
  */
 TickType_t ms_to_ticks(uint32_t ms)
 {
@@ -44,7 +44,7 @@ extern "C"
 {
   /**
    * @brief DMA 全双工传输完成（SPI EOT 中断里由 HAL 调用）
-   * @note 只处理 BSP_SPI_INSTANCES 清单里的实例，清单外的 SPI 直接忽略。
+   * @note 只处理 ICBSP_SPI_INSTANCES 清单里的实例，清单外的 SPI 直接忽略。
    */
   void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   {
@@ -54,11 +54,11 @@ extern "C"
     }
 
 #  define X(name)                                       \
-    else if (hspi == name.handle())                     \
+    else if (hspi == name.get_handle())                     \
     {                                                   \
       name.on_txrx_cplt_isr(&xHigherPriorityTaskWoken); \
     }
-    BSP_SPI_INSTANCES(X)
+    ICBSP_SPI_INSTANCES(X)
 #  undef X
     else
     {
@@ -77,11 +77,11 @@ extern "C"
     }
 
 #  define X(name)                                   \
-    else if (hspi == name.handle())                 \
+    else if (hspi == name.get_handle())                 \
     {                                               \
       name.on_error_isr(&xHigherPriorityTaskWoken); \
     }
-    BSP_SPI_INSTANCES(X)
+    ICBSP_SPI_INSTANCES(X)
 #  undef X
     else
     {
@@ -106,6 +106,9 @@ extern "C"
 
 bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi)
 {
+  // 实例清单为空时 X-macro 展开成空，参数用不到
+  (void)self;
+  (void)hspi;
   bool     listed = false;
   uint32_t same   = 0U; // 清单里绑这个句柄的实例数
 #  define X(name)                                 \
@@ -113,11 +116,11 @@ bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi)
     {                                             \
       listed = true;                              \
     }                                             \
-    if (name.handle() == hspi)                    \
+    if (name.get_handle() == hspi)                    \
     {                                             \
       same = same + 1U;                           \
     }
-  BSP_SPI_INSTANCES(X)
+  ICBSP_SPI_INSTANCES(X)
 #  undef X
   return listed && same == 1U;
 }
@@ -188,7 +191,7 @@ Status BspSpi::init()
   return Status::OK;
 }
 
-bool BspSpi::is_init() const
+bool BspSpi::is_initialized() const
 {
   return _init;
 }
@@ -248,7 +251,7 @@ Status BspSpi::transfer_locked(const uint8_t *tx, uint8_t *rx, size_t len, uint3
   // 调用方缓冲 DMA 访问不到、必须中转（只计这种，填充 / 丢弃不算）
   const bool bounced = use_dma && ((tx != nullptr && !tx_direct) || (rx != nullptr && !rx_direct));
   // 任一方向用弹跳缓冲，每段就不能超过它
-  const size_t max_seg = (tx_direct && rx_direct) ? HAL_MAX_SEGMENT : SPI_DMA_BUFFER_SIZE;
+  const size_t max_seg = (tx_direct && rx_direct) ? HAL_MAX_SEGMENT : ICBSP_SPI_DMA_BUFFER_SIZE;
 
   size_t done = 0U;
   while (done < len)
@@ -356,7 +359,7 @@ void BspSpi::on_error_isr(BaseType_t *pxHigherPriorityTaskWoken)
   }
 }
 
-BspSpi::Diag BspSpi::diag() const
+BspSpi::Diag BspSpi::get_diag() const
 {
   Diag d;
   d.poll_cnt         = _poll_cnt;
@@ -380,11 +383,11 @@ BspSpiDevice::BspSpiDevice(BspSpi &bus, const Config &cfg) : _bus(bus), _cs(BspG
 
 Status BspSpiDevice::init()
 {
-  if (!_bus.is_init())
+  if (!_bus.is_initialized())
   {
     return Status::NOT_INIT;
   }
-  if (_cs.port() == nullptr || _cs.pin() == 0U)
+  if (_cs.get_port() == nullptr || _cs.get_pin() == 0U)
   {
     return Status::BAD_ARG;
   }

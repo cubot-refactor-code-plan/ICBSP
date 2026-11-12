@@ -1,0 +1,15 @@
+{
+    // 烧录按钮（Task Buttons 插件），integrate.py 在生成 Flash/ 时合并进宿主 .vscode/settings.json 的 VsCodeTaskButtons.tasks
+    "VsCodeTaskButtons.tasks": [
+        {
+            "label": "[⚡ DAP烧录]",
+            "task": "OpenOCD_flash",
+            "tooltip": "OpenOCD + DAPLink 烧录（外置 Flash 方案：bootloader + QSPI 镜像）"
+        },
+        {
+            "label": "[🔌 JLink烧录]",
+            "task": "JLink_flash",
+            "tooltip": "经 OpenOCD 的 jlink 适配器烧录（只支持片内 Flash）"
+        }
+    ]
+}
