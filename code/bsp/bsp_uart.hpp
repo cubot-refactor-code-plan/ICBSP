@@ -295,6 +295,7 @@ inline void force_rx_ready(UART_HandleTypeDef *huart)
 }
 
 
+/* ==================== */
 /* ==================== Transport 策略 ==================== */
 
 /**
@@ -553,6 +554,7 @@ enum class UartDir : uint8_t
 };
 
 
+/* ==================== */
 /* ==================== 串口驱动 ==================== */
 
 /**
@@ -579,6 +581,7 @@ class BspUartT
   static_assert(TX_SIZE > 0U && TX_SIZE <= 65535U, "TX_SIZE 必须在 1~65535 之间");
 
 public:
+  /* ==================== */
   /* ==================== 公有接口 ==================== */
 
   static constexpr size_t TX_CAPACITY = TX_SIZE; ///< 单次 send() 的上限（发送暂存区大小），设备层按它定自己的帧缓冲
@@ -1571,6 +1574,7 @@ void BspUartT<Transport, RX_SIZE, TX_SIZE>::cleanup_resources()
     _printf_lock = nullptr;
   }
 }
+/* ==================== */
 
 #endif // HAL_UART_MODULE_ENABLED
 

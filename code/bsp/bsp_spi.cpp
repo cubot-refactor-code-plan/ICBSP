@@ -102,6 +102,7 @@ extern "C"
   }
 }
 
+/* ==================== */
 /* ==================== 实例清单核对 ==================== */
 
 bool bsp_spi_is_listed(const void *self, const SPI_HandleTypeDef *hspi)

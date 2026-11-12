@@ -117,7 +117,7 @@ public:
   explicit Online(uint16_t timeout_gap = 30);  // 超过多少 ms 没刷新就判离线
   Status refresh_task();   // 任务上下文：收到有效数据时刷新
   Status refresh_isr();    // 中断上下文：同上，ISR 安全
-  bool is_online() const;   // true = 在线（2.7 起；之前返回 Status）
+  bool is_online() const;   // true = 在线（阶段 2.7 起；之前返回 Status）
 };
 ```
 

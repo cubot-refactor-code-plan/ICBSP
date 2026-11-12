@@ -21,3 +21,8 @@ Flash/*.log
 
 # integrate.py --fix-ioc 修改 .ioc 前的备份
 *.ioc.bak-*
+
+# EmberProbe（VS Code 扩展）自动安装的 Agent Skills：扩展会按自己的版本重新生成，不进仓库
+# 只忽略它生成的部分（公共脚本 _emberprobe/ 与 mcu-* 技能），宿主自己写的 .agents/skills/<名字>/ 照常提交
+.agents/skills/_emberprobe/
+.agents/skills/mcu-*/

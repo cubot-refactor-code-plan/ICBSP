@@ -90,10 +90,10 @@ inline DeviceMotor motor(
 | `void set_speed(float cm_s)` | 设目标线速度 |
 | `void set_speed_time(float cm_s, uint32_t ms)` | 带时长的目标（到期自动停） |
 | `bool update(float dt_s)` | 每周期调用：算编码器速度 → PID → 写 PWM |
-| `size_t pid_frame(uint8_t *buf, uint8_t fields = PID_ALL)` | **只组 JustFloat 帧**，发不发、发到哪由 App 决定 |
+| `size_t get_pid_frame(uint8_t *buf, uint8_t fields = PID_ALL) const` | **只组 JustFloat 帧**，发不发、发到哪由 App 决定 |
 | `void stop()` / `Mode::STOP` | 两路 PWM 给满占空比（绕组短路刹车） |
 
-`pid_frame()` 的字段位：
+`get_pid_frame()` 的字段位：
 
 ```cpp
 DeviceMotor::PID_TARGET | DeviceMotor::PID_FEEDBACK | DeviceMotor::PID_OUTPUT | DeviceMotor::PID_ALL
@@ -101,7 +101,7 @@ DeviceMotor::PID_TARGET | DeviceMotor::PID_FEEDBACK | DeviceMotor::PID_OUTPUT | 
 
 帧尾固定 `00 00 80 7F`（JustFloat 结束符），返回值是实际写入的字节数。
 
-**为什么设备不持有串口**：波形发给上位机是调试需求，不是电机的一部分。App 拿 `pid_frame()` 的缓冲
+**为什么设备不持有串口**：波形发给上位机是调试需求，不是电机的一部分。App 拿 `get_pid_frame()` 组好的缓冲
 用哪个串口发都行，换传输方式也不用改设备。
 
 ### DeviceEmmv5GroupT&lt;Uart&gt;
@@ -206,9 +206,10 @@ DeviceWt102T<decltype(bsp_uart7)> gyro_z(bsp_uart7);   // board_cfg.cpp；串口
 inline DeviceR9dsT<decltype(bsp_uart3)> rc(bsp_uart3);
 ```
 
-`init()` 注册串口帧处理，`update(timeout_ms)` 取最新通道值，`is_online()` / `is_frame_lost()` / `is_failsafe()`；
-`update()` 在别的任务里跑时用 `snapshot(Rc &, uint16_t *raw)` 读（评审 F5）。诊断计数 `byte_cnt` / `frame_cnt` 是 `uint32_t`（N34）
-用于失控保护。
+- `init()` 挂进默认树，并兜底校验串口帧格式（SBUS：100000 bit/s、8E2，不对返回 `BAD_ARG`）；SBUS 是反相电平，要么在 CubeMX 里开 RX 引脚反相（Advanced Features），要么板上有硬件反相器
+- `update(timeout_ms)` 把串口里攒的字节解成通道值，要在某个任务里周期调用（本类不建任务）；控制逻辑读 `get_rc()`（摇杆 / 旋钮 −100 ~ +100，开关给挡位）
+- `is_online()` 同时看三条：帧超时、失控保护位、连续丢帧，失控保护时怎么处置由上层决定；单看 `is_frame_lost()` / `is_failsafe()` 也可以
+- `update()` 在别的任务里跑时用 `snapshot(Rc &, uint16_t *raw)` 读（评审 F5）；诊断计数 `byte_cnt` / `frame_cnt` 是 `uint32_t`（N34）
 
 ---
 
@@ -269,7 +270,7 @@ buzzer.tone(1000, 50);    // 持续音，音量 50%
 | 多电机只动一个 | 同总线两台同 ID（DJI 电调拨码 / 达妙 can_id、master_id） |
 | Emm_V5 偶发丢指令 | 多任务共用 485 却没 `lock_bus()` |
 | BMI088 读数乱 / 芯片 ID 不对 | `BspSpiDevice` 的 `read_dummy` 配反（加速度计读寄存器多一个空字节 = 1，陀螺仪 = 0），或 CubeMX 没开 `MasterKeepIOState` |
-| 波形发不出去 | `pid_frame()` 只组帧；要在 App 里调 `bsp_uart1.send()` |
+| 波形发不出去 | `get_pid_frame()` 只组帧；要在 App 里调 `bsp_uart1.send()` |
 | Emm_V5 不响应 | 地址与驱动器设置不一致，或校验方式和驱动器菜单（Checksum）不一致 |
 | Emm_V5 偶发丢回复 | 用「读一次就解析」而不是扫描器，遇到半帧就丢 |
 | Emm_V5 位置值跳变 | `PositionScanner` 的 `addr` 传错，把别的电机回复当成自己的 |

@@ -33,6 +33,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
 }
 
 
+/* ==================== */
 /* ==================== HAL 回调分发 ==================== */
 
 // BspCanT 只有头文件，这里只放 HAL 回调：按句柄和 ICBSP_CAN_INSTANCES 清单逐个比对，清单外的 FDCAN 直接忽略。
@@ -118,5 +119,6 @@ extern "C"
     (void)its;
   }
 }
+/* ==================== */
 
 #endif // HAL_FDCAN_MODULE_ENABLED

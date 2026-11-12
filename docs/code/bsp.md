@@ -50,7 +50,7 @@ DMA 用到的实例（`BspUartT` 在 dma 模式、`BspSpi` 开 DMA）必须放 `
 inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(...);
 ```
 
-原因：DMA1/DMA2 访问不到 ITCM/DTCM，只能访问 AXI SRAM（D1）。段必须是**可加载**的
+原因：DMA1/DMA2 访问不到 ITCM/DTCM，而 H723 等型号的 CubeMX 链接脚本把 `.data` / `.bss` 放在 DTCM；库统一把 DMA 对象放进 AXI SRAM（D1，DMA1/DMA2 可达）。段必须是**可加载**的
 （`>RAM_D1 AT> FLASH`），框架在全局构造之前把初值从 Flash 拷进 RAM；写成 `NOLOAD`
 会让句柄、波特率、DMA 配置上电变随机值。CMake 配置阶段会检查这一点。
 
@@ -173,7 +173,7 @@ inline BspPwm bsp_pwm_buzzer(
 | --- | --- | --- |
 | `BspGpio` | `{port, pin}`，`constexpr` | `set() / reset() / toggle() / set_level(bool) / get_level()` |
 | `BspKey` | `{port, pin, active_low, ...}` | `init()` 开中断，`is_pressed()` 读稳定态 |
-| `BspEncoder` | `{htim, ...}` | `init()`，`read_delta()` 取本周期增量，`get_position()` 累计值，`reset()` 清零；增量按 16 位回绕算，CubeMX 的 Period 必须是 0xFFFF（32 位定时器 0xFFFFFFFF），否则 `init()` 返回 `BAD_ARG`（N37） |
+| `BspEncoder` | `{htim, ...}` | `init()`，`read_delta()` 取本周期增量，`get_position()` 累计值，`reset()` 清零；增量按计数器位宽回绕算，CubeMX 的 Period 必须是计数器最大值：16 位定时器 0xFFFF、32 位定时器 0xFFFFFFFF，否则 `init()` 返回 `BAD_ARG`（N37） |
 
 ### BspDwt
 
@@ -188,7 +188,7 @@ CPU 频率由 `init()` 从 RCC 自动推算，**没有配置项**，全局一个
 | --- | --- |
 | `delay_us(double)` / `delay_ns` / `delay_ms` / `delay_s` | 忙等延时 |
 | `double get_delta_s(uint32_t *last)` | 传入上次时间戳，返回间隔秒数（`sys_task` 用它算循环耗时） |
-| `uint32_t update_timeline()` | 刷新并返回当前计数 |
+| `uint64_t update_timeline()` | 刷新 64 位时间轴并返回当前计数 |
 
 `get_delta_s()` 的时间戳由调用方保存，**同一个 `last` 不要跨任务共用**。
 

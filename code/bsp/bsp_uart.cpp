@@ -33,6 +33,7 @@ bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart)
 }
 
 
+/* ==================== */
 /* ==================== HAL 回调分发 ==================== */
 
 // BspUartT 只有头文件，这里只放 HAL 回调：HAL 的回调没有实例参数，按 huart 指针和 ICBSP_UART_INSTANCES 清单逐个比对。
@@ -115,5 +116,6 @@ extern "C"
     (void)huart;
   }
 }
+/* ==================== */
 
 #endif // HAL_UART_MODULE_ENABLED

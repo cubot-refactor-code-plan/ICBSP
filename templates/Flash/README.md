@@ -37,7 +37,7 @@ J-Link 版本还要求 OpenOCD 带 `jlink` 适配器（`openocd -c "adapter list
 
 ## 关于 SVD
 
-这里**不带** `.svd` 文件。SVD 只用于 VS Code 的「外设寄存器」面板，与调试器无关（OpenOCD 和 J-Link 都要靠它）：
+这里**不带** `.svd` 文件。SVD 只用于 VS Code 的「外设寄存器」面板，与调试器无关（OpenOCD 和 J-Link 都不需要它）：
 
 - 宿主 `Flash/` 下有 `*.svd` 时，`integrate.py` 会在 `.vscode/launch.json` 里写 `svdFile`
 - 没有就不写，只在报告里提示一次，调试本身不受影响
@@ -59,7 +59,7 @@ Keil 的 `STM32H7xx_DFP` 包，或 ST 官网下载，放到 `Flash/` 下即可�
 与板上不同才烧（`--boot` 强制），QSPI 写 `<工程名>_qspi.bin` 到 0x90000000；`--ram`（只用于 `QSPI_RAM`）直接下载进 AXI SRAM 运行、不写 Flash。
 J-Link 脚本只支持片内 Flash。详见 `docs/外置Flash.md`。
 
-上面“不要注册外置 Flash bank”的经验对 `daplink.cfg` 仍然成立：外置 bank 只放在 `daplink_qspi.cfg` 里，并且它在 `reset-init` 与 `gdb-attach`
+下面“实测经验”里“不要注册外置 Flash bank”的经验对 `daplink.cfg` 仍然成立：外置 bank 只放在 `daplink_qspi.cfg` 里，并且它在 `reset-init` 与 `gdb-attach`
 时先初始化 QSPI 再探测芯片，所以不会出现 MC02 上那种访问未初始化的外置 Flash 把调试口卡死的情况（H750 + W25Q128 实测）。
 
 ## 实测经验（DM-MC02 / STM32H723）

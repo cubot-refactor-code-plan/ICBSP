@@ -628,6 +628,7 @@ Status DjiMotor<type, CanT>::get_status(void) const
 {
   return _statu;
 }
+/* ==================== */
 
 #endif // HAL_FDCAN_MODULE_ENABLED && ICBSP_CAN_RX_ENABLE && ICBSP_CAN_TX_ENABLE
 

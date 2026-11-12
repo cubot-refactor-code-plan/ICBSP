@@ -729,6 +729,7 @@ Status DmMotor<CanT>::unpack(const CanRxMsg &rx)
   }
   return Status::OK;
 }
+/* ==================== */
 
 #endif // HAL_FDCAN_MODULE_ENABLED && ICBSP_CAN_RX_ENABLE
 

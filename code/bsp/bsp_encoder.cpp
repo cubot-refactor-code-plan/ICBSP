@@ -20,7 +20,7 @@ Status BspEncoder::init()
 
   if (_config.htim == nullptr)
     return Status::BAD_ARG;
-  // read_delta() 按 16 位回绕算增量：计数器必须在 0xFFFF（16 位定时器）或 0xFFFFFFFF（32 位定时器）处回绕，
+  // read_delta() 按计数器位宽回绕算增量：计数器必须在 0xFFFF（16 位定时器）或 0xFFFFFFFF（32 位定时器）处回绕，
   // CubeMX 里 Period 填别的值（例如按编码器线数填 4095）时跨零的那一拍增量是错的（N37）
   const uint32_t arr = __HAL_TIM_GET_AUTORELOAD(_config.htim);
   if (arr != 0xFFFFU && arr != 0xFFFFFFFFU)

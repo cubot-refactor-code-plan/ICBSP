@@ -27,7 +27,6 @@
 
 #elif defined(HAL_CAN_MODULE_ENABLED)
 
-/* ==================== */
 /* ==================== F4：bxCAN 后端 ==================== */
 
 /*
@@ -59,6 +58,7 @@
 
 
 
+/* ==================== */
 /* ==================== 帧结构（与 bsp_fdcan.hpp 的 FDCAN 版逐字相同） ==================== */
 
 /** @brief 接收到的一帧：帧头 + 最多 8 字节数据（DLC 之后的字节为 0） */
@@ -115,6 +115,7 @@ inline uint32_t dlc_to_len(uint32_t dlc_code)
 } // namespace can_detail
 
 
+/* ==================== */
 /* ==================== 驱动 ==================== */
 
 /**
@@ -133,6 +134,7 @@ class BspCanT
   static_assert(RX_DEPTH >= 1U && TX_DEPTH >= 1U, "CAN 收发缓冲深度至少 1 帧");
 
 public:
+  /* ==================== */
   /* ==================== 配置 ==================== */
 
   /** @brief 配置（聚合体：`{.hcan = &hcanX, .name = "CANx"}`） */
@@ -275,6 +277,7 @@ private:
   static constexpr uint32_t PEND_SLOTS = 16U;
   PendCount                 _sw_pend[PEND_SLOTS] = {};
 
+  /* ==================== */
   /* ==================== 内部实现 ==================== */
 
   /** @brief 外设在跑、不在 Bus-Off、不在恢复中 */
@@ -885,6 +888,7 @@ void BspCanT<RX_DEPTH, TX_DEPTH>::cleanup_resources()
     _tx_message_buffer = nullptr;
   }
 }
+/* ==================== */
 
 #endif // HAL_CAN_MODULE_ENABLED
 

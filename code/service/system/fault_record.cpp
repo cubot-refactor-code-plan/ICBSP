@@ -190,6 +190,7 @@ extern "C" void fault_on_exception(uint32_t kind, uint32_t exc_return)
   halt();
 }
 
+/* ==================== */
 /* ==================== 上电清零（评审 A8） ==================== */
 
 namespace

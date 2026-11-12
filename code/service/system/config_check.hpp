@@ -23,7 +23,6 @@
 #include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL_*_MODULE_ENABLED、ICBSP_CAN_MODULE_ENABLED、ICBSP_UART_HAS_FIFO）
 #include "hardware_config.h"  // IWYU pragma: export（宿主提供的唯一配置源）
 
-/* ==================== */
 /* ==================== ① 缺宏 ==================== */
 
 #ifndef ICBSP_SYS_TASK_ENABLE
@@ -151,5 +150,6 @@ static_assert(ICBSP_CAN_BUSOFF_RETRY_MS >= 10, "hardware_config.h: ICBSP_CAN_BUS
 static_assert(ICBSP_SPI_DMA_BUFFER_SIZE >= 16 && ICBSP_SPI_DMA_BUFFER_SIZE <= 65535, "hardware_config.h: ICBSP_SPI_DMA_BUFFER_SIZE 取 16~65535");
 static_assert(ICBSP_SPI_TRANSFER_TIMEOUT_MS >= 1, "hardware_config.h: ICBSP_SPI_TRANSFER_TIMEOUT_MS 至少 1 ms");
 #endif
+/* ==================== */
 
 #endif // __SERVICE_CONFIG_CHECK_HPP__
