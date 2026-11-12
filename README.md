@@ -29,7 +29,7 @@ ICBSP/
 │  │  └─ definition/  电机 / IMU 数据定义
 │  ├─ device/
 │  │  ├─ motor/       DjiMotor、DmMotor、DeviceMotor、Emm_V5（含 emmv5_protocol 帧编解码）
-│  │  ├─ sensor/      BMI088
+│  │  ├─ sensor/      BMI088、WT102
 │  │  ├─ remote/      R9DS
 │  │  └─ actuator/    Servo、Buzzer
 │  ├─ algorithm/    PID、QuaternionPID、Quaternion、VQF、Matrix、RLS
