@@ -36,7 +36,7 @@ SPI / BMI088 的写法在 `board_cfg.hpp` 注释里，开 SPI 后再取消注释
 宿主 CMake 只需要包含路径和 `user/**/*.cpp` 收集：
 
 ```cmake
-add_subdirectory(third_party/icbsp)
+add_subdirectory(Middlewares/Third_Party/ICBSP)
 target_include_directories(icbsp PRIVATE user/board)  # 库自身也要看到 hardware_config.h
 target_link_libraries(${CMAKE_PROJECT_NAME} icbsp)
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_20)

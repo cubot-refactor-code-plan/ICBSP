@@ -43,27 +43,38 @@ ICBSP/
 
 ## 克隆
 
-建议将本仓库作为`submodule`克隆到目标宿主工程，以获得更新支持  
-若目的仅为使用，建议浅克隆`main`分支
+建议将本仓库作为`submodule`克隆到目标宿主工程，以获得更新支持。
+下文的命令都假设库放在 `Middlewares/Third_Party/ICBSP`，放在别处时换成实际路径。
+
+若目的仅为使用，建议浅克隆`main`分支（在宿主工程根目录执行）：
 ```bash
-$ git submodule add --depth 1 git@github.com:cubot-refactor-code-plan/ICBSP.git Middlewares/Third_Party/ # 浅克隆最近一次主分支内的提交
+git submodule add --depth 1 git@github.com:cubot-refactor-code-plan/ICBSP.git Middlewares/Third_Party/ICBSP   # 浅克隆 main 最近一次提交
+git config -f .gitmodules submodule.Middlewares/Third_Party/ICBSP.shallow true                             # 别人 clone 宿主后 submodule update 也只拉最近一次提交
 ```
 
-若希望克隆特定分支
+> 路径要写到 `ICBSP` 这一级：`git submodule add` 的路径就是子模块目录本身，写成 `Middlewares/Third_Party/` 会和 CubeMX 生成的 FreeRTOS 冲突。
+> `--depth` 只对本次克隆生效，不写进 `.gitmodules`，所以要第二行的 `shallow = true` 才能让其他人也浅克隆。
+
+若希望克隆特定分支：
 ```bash
-$ git submodule add -b <branch name> --depth <clone depth> git@github.com:cubot-refactor-code-plan/ICBSP.git <local path>
+git clone --depth <clone depth> -b <branch name> git@github.com:cubot-refactor-code-plan/ICBSP.git <local path>
+git submodule add -b <branch name> git@github.com:cubot-refactor-code-plan/ICBSP.git <local path>   # 把上一步的仓库登记为子模块
 ```
+
+
+> 只浅克隆下默认分支，随后检出 `<branch name>` 失败（git 2.34.1 实测；分支恰好是 `main` 时才不出错）。
+> 不需要浅克隆时，直接 `git submodule add -b <branch name> <url> <local path>` 即可。
 
 
 ## 快速接入
 
 ### 直接使用python脚本
-![python_version](https://img.shields.io/badge/python-3.7-blue.svg)
+![python_version](https://img.shields.io/badge/python-3.8+-blue.svg)   
 在宿主工程根目录：
 
 ```bash
-python3 third_party/icbsp/tools/integrate.py --dry-run   # 只看将改什么
-python3 third_party/icbsp/tools/integrate.py             # 执行
+python3 Middlewares/Third_Party/ICBSP/tools/integrate.py --dry-run   # 只看将改什么
+python3 Middlewares/Third_Party/ICBSP/tools/integrate.py             # 执行
 ```
 
 脚本可重复执行，已完成的步骤会跳过。它会检查 CubeMX 前提、给链接脚本加 `.dma_buffer` / `.noinit`、
@@ -71,11 +82,11 @@ python3 third_party/icbsp/tools/integrate.py             # 执行
 改根 `CMakeLists.txt`、生成 `.vscode/*`、复制 `Flash/` 烧录脚本。
 
 ### Nodejs图形化界面
-![](https://img.shields.io/badge/Node-v14.14.0-green.svg)
+![](https://img.shields.io/badge/Node-v14.14.0-green.svg)   
 按 CubeMX 的 `.ioc` 生成外设实例和设备、校验并修改 `.ioc`，可以用图形界面（零依赖，不用 `npm install`）：
 
 ```bash
-node third_party/icbsp/tools/web_ui/server.mjs   # 浏览器打开 http://127.0.0.1:8765/
+node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs   # 浏览器打开 http://127.0.0.1:8765/
 ```
 
 参数、每步的判定条件、手动接入步骤、排错见 **[docs/接入指南.md](docs/接入指南.md)**。
