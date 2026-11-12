@@ -2,7 +2,7 @@
 // ICBSP 接入帮助的 Web 前端：只做展示和收集选择，接入逻辑全在 tools/integrate.py（经 --json 调用）。
 // 零依赖：只用 Node 自带模块，不需要 npm install。
 //
-//   node third_party/icbsp/tools/web_ui/server.mjs [--host <宿主工程根目录>] [--port 8765] [--python <python 可执行文件>]
+//   node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs [--host <宿主工程根目录>] [--port 8765] [--python <python 可执行文件>]
 //
 // 只监听 127.0.0.1。找不到 Python（>= 3.8）时页面上会给出提示。
 

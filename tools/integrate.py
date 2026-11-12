@@ -4,8 +4,8 @@ icbsp 宿主工程自动接入：按 docs/接入指南.md 把 CubeMX（CMake）�
 
 用法（在宿主工程根目录，或用 --host 指定）：
 
-    python3 third_party/icbsp/tools/integrate.py --dry-run   # 只检查并打印将要做的修改
-    python3 third_party/icbsp/tools/integrate.py             # 执行
+    python3 Middlewares/Third_Party/ICBSP/tools/integrate.py --dry-run   # 只检查并打印将要做的修改
+    python3 Middlewares/Third_Party/ICBSP/tools/integrate.py             # 执行
 
 做的事（每一步都先判断是否已完成，已完成就跳过，可重复运行）：
   1. 检查 CubeMX 前提（docs/接入指南.md 第 1 节）：STM32H7、CMake 工具链、FreeRTOS CMSIS_V2、tick 1 kHz、栈溢出检查 2、分配失败钩子

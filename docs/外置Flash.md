@@ -20,12 +20,12 @@ STM32H750 / H7B0 / H730 片内只有 128 KB Flash。接入 ICBSP 后，Debug（-
 
 ```bash
 # 命令行：启用并把默认存放方式设为方案 A，芯片 W25Q128
-python3 third_party/icbsp/tools/integrate.py --external-flash QSPI_RAM --flash-chip W25Q128
+python3 Middlewares/Third_Party/ICBSP/tools/integrate.py --external-flash QSPI_RAM --flash-chip W25Q128
 # 可选：.ioc 里 QUADSPI 的参数、引脚速度改成与芯片一致（只影响应用自己用 QSPI；bootloader 不读这些）
-python3 third_party/icbsp/tools/integrate.py --fix-ioc qspi_params --regenerate
+python3 Middlewares/Third_Party/ICBSP/tools/integrate.py --fix-ioc qspi_params --regenerate
 ```
 
-或者在 Web UI（`node third_party/icbsp/tools/web_ui/server.mjs`）的“外置 Flash”一节勾选。`.ioc` 有 QUADSPI 且片内 Flash ≤ 128 KB、
+或者在 Web UI（`node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs`）的“外置 Flash”一节勾选。`.ioc` 有 QUADSPI 且片内 Flash ≤ 128 KB、
 或最近一次构建占片内 Flash ≥ 85%（链接溢出也算）时，脚本会给出 `[注意]`，Web UI 顶部会出现建议横幅。
 
 `integrate.py` 写进宿主的东西：
