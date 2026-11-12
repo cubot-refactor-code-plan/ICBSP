@@ -30,7 +30,7 @@
 
 #include "app_task.hpp"
 #include "board_cfg.hpp"
-#include "system.hpp"
+#include "service/system/system.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"
@@ -58,7 +58,7 @@ extern "C" void app_default_task(void *argument)
 
 /**
  * @brief sys_task 的周期报告：每 5 s 把维护耗时打到调试串口（库本身不打印，见 system_set_report_hook()）
- * @note 跑在 sys_task 的栈上；printf 的 vsnprintf 要栈，库任务栈 SYS_TASK_STACK 已按这个留了余量。
+ * @note 跑在 sys_task 的栈上；printf 的 vsnprintf 要栈，库任务栈 ICBSP_SYS_TASK_STACK 已按这个留了余量。
  */
 static void sys_report(const SysTaskStats *stats)
 {
@@ -92,7 +92,7 @@ extern "C" void app_init(void)
   //    优先级必须低于库任务（CAN / BMI088 / sys 默认是 configMAX_PRIORITIES - 2 / -3 / -4，见 hardware_config.h）：
   //    CubeMX 的 osPriorityNormal（24）、osPriorityHigh（40）都可以。
   //
-  //    monitor：每秒打印 heap / min / tasks / stack 四个值（实现见 task/demo_task.cpp）。
+  //    monitor：每 10 s 打印 heap / min / tasks / stack 四个值（实现见 task/demo_task.cpp）。
   //    默认不建；栈给 384 字（1.5 KB）而不是 256，因为里面要跑 vsnprintf。
   //  ICBSP_CHECK(xTaskCreate(monitor_task, "monitor", 384, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
 

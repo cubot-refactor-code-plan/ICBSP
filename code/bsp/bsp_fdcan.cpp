@@ -1,10 +1,10 @@
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // FDCAN 的 HAL 回调（H7）；F4 的 bxCAN 回调在 bsp_can.cpp
 #if defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "board_instances.hpp"
-#include "bsp_can.hpp"
+#include "bsp/bsp_can.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 
@@ -13,6 +13,9 @@
 
 bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
 {
+  // 实例清单为空时 X-macro 展开成空，参数用不到
+  (void)self;
+  (void)hfdcan;
   bool     listed = false;
   uint32_t same   = 0U; // 清单里绑这个句柄的实例数
 #define X(name)                                 \
@@ -20,11 +23,11 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
   {                                             \
     listed = true;                              \
   }                                             \
-  if (name.handle() == hfdcan)                  \
+  if (name.get_handle() == hfdcan)                  \
   {                                             \
     same = same + 1U;                           \
   }
-  BSP_CAN_INSTANCES(X)
+  ICBSP_CAN_INSTANCES(X)
 #undef X
   return listed && same == 1U;
 }
@@ -32,7 +35,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan)
 
 /* ==================== HAL 回调分发 ==================== */
 
-// BspCanT 只有头文件，这里只放 HAL 回调：按句柄和 BSP_CAN_INSTANCES 清单逐个比对，清单外的 FDCAN 直接忽略。
+// BspCanT 只有头文件，这里只放 HAL 回调：按句柄和 ICBSP_CAN_INSTANCES 清单逐个比对，清单外的 FDCAN 直接忽略。
 extern "C"
 {
   /**
@@ -46,11 +49,11 @@ extern "C"
     {
     }
 #define X(name)                                  \
-  else if (hfdcan == name.handle())              \
+  else if (hfdcan == name.get_handle())              \
   {                                              \
     name.process_fifo0_isr(RxFifo0ITs, &woken);  \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -67,11 +70,11 @@ extern "C"
     {
     }
 #define X(name)                            \
-  else if (hfdcan == name.handle())        \
+  else if (hfdcan == name.get_handle())        \
   {                                        \
     name.trigger_tx_from_isr(&woken);      \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {
@@ -87,11 +90,11 @@ extern "C"
     {
     }
 #define X(name)                             \
-  else if (hfdcan == name.handle())         \
+  else if (hfdcan == name.get_handle())         \
   {                                         \
     name.process_error_isr(ErrorStatusITs); \
   }
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #undef X
     else
     {

@@ -1,4 +1,4 @@
-#include "quaternion.hpp"
+#include "algorithm/quaternion.hpp"
 
 #include <math.h>
 
@@ -232,7 +232,7 @@ void Quaternion::to_euler_zyx(double &yaw, double &pitch, double &roll) const
 
 double angle_wrap_pi(double rad)
 {
-  return remainder(rad, 2.0 * PI_D); // IEEE 余数：结果在 [-π, π]，任意大小的输入一步到位
+  return remainder(rad, 2.0 * ICBSP_PI); // IEEE 余数：结果在 [-π, π]，任意大小的输入一步到位
 }
 
 double angle_diff(double target, double current)

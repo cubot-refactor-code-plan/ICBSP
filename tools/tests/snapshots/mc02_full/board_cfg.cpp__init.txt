@@ -1,0 +1,13 @@
+  // 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+  ICBSP_CHECK(bsp_can1.init() == Status::OK);
+  ICBSP_CHECK(bsp_can2.init() == Status::OK);
+  ICBSP_CHECK(bsp_uart1.init() == Status::OK);
+  ICBSP_CHECK(bsp_uart2.init() == Status::OK);
+  ICBSP_CHECK(bsp_uart3.init() == Status::OK);
+  ICBSP_CHECK(bsp_uart7.init() == Status::OK);
+  ICBSP_CHECK(bsp_uart10.init() == Status::OK);
+  ICBSP_CHECK(bsp_spi2.init() == Status::OK);
+  ICBSP_CHECK(bsp_pwm_tim12_ch2.init() == Status::OK);
+  ICBSP_CHECK(imu_bmi088_acc_spi.init() == Status::OK);
+  ICBSP_CHECK(imu_bmi088_gyro_spi.init() == Status::OK);
+  ICBSP_CHECK(imu_bmi088.init() == Status::OK);

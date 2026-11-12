@@ -9,12 +9,16 @@
  *
  * @details 通用模板 BspUartT<Transport, RX_SIZE, TX_SIZE>，**只有头文件**（任意缓冲尺寸都不用补显式实例化）。
  *          流缓冲区、发送状态机、诊断计数与恢复流程共用，底层 DMA / 中断由 Transport 选择；
- *          HAL 回调按 board_instances.hpp 的 BSP_UART_INSTANCES 分发（bsp_uart.cpp）。
+ *          HAL 回调按 board_instances.hpp 的 ICBSP_UART_INSTANCES 分发（bsp_uart.cpp）。
  *
  * @note 接收：
  *       - uart_mode::dma：RX DMA 工作在**循环模式**（init() 自动把 hdmarx 改成 Circular + 直接模式）。
  *         HAL 的 IDLE / 半满（HT）/ 写满（TC）事件都不停 DMA，库按“上次读到的位置 → DMA 当前写到的位置”
  *         把新字节投进流缓冲区（处理回绕）。IDLE 路径从不调用阻塞版 HAL_DMA_Abort()，没有重新挂接收的空窗。
+ *         **前提：串口 / RX DMA 中断被挡住（临界区、更高优先级中断）的时间不超过收满半个 RX_SIZE 的时间**
+ *         （RX_SIZE / 2 × 10 / 波特率，例如 128 字节、921600 下约 0.69 ms）。超过时 DMA 可能写满一圈、覆盖还没投递的数据，
+ *         这种丢失库的诊断计数察觉不到（阶段 3 实测 U19：屏蔽 0.45 圈无损，0.75 / 1.5 圈丢帧且计数为 0）。
+ *         高波特率或长临界区的场合加大 RX_SIZE。
  *       - uart_mode::it：HAL 的 ReceiveToIdle_IT，每次 IDLE / 写满投递一包后立即重新挂接收。
  *       - 接收流缓冲区容量是 2 × RX_SIZE（给“写满投递 + 紧接着的 IDLE 投递”留余量）。
  *       - 线路错误（ORE / FE / NE / PE）时 HAL 在 DMA 模式下会中止接收；sys_task 每 10 ms 调 rx_recover() 重建。
@@ -26,14 +30,14 @@
  * @note RS485：只支持 UART 硬件 DE（CubeMX 里 UART 选 RS485 模式）。库不提供软件 DE。
  *
  * @warning 已知限制：TX DMA 开着 DMA FIFO（CubeMX 配置）时，DMA 预读进 FIFO 的字节已被剩余计数算作“发出”；
- *          init() 还会打开 UART 硬件 FIFO（UART_ENABLE_FIFO）。tx_recover() 中止卡死的发送后按剩余计数续发，
+ *          init() 还会打开 UART 硬件 FIFO（ICBSP_UART_ENABLE_FIFO）。tx_recover() 中止卡死的发送后按剩余计数续发，
  *          这两个 FIFO 里的字节会丢。只影响“卡死后恢复”这条路径，正常发送不受影响。
  */
 
 #ifndef __BSP_UART_HPP__
 #define __BSP_UART_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 UART（HAL_UART_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_UART_MODULE_ENABLED
@@ -43,9 +47,9 @@
 #include "stream_buffer.h"
 #include "task.h" // IWYU pragma: keep
 
-#include "bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
-#include "hardware_config.h"  // UART_ENABLE_FIFO
-#include "status.hpp"        // 统一状态码
+#include "bsp/bsp_dma_buffer.hpp" // ICBSP_DMA_BUFFER
+#include "service/system/config_check.hpp" // ICBSP_UART_ENABLE_FIFO
+#include "service/system/status_code.hpp"        // 统一状态码
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -500,7 +504,7 @@ private:
   {
     constexpr uint32_t BYTE_BITS = USART_CR1_RXNEIE_RXFNEIE | USART_CR1_IDLEIE;
     const bool         byte_irq  = (huart->Instance->CR1 & BYTE_BITS) == BYTE_BITS;
-#if BSP_UART_HAS_FIFO
+#if ICBSP_UART_HAS_FIFO
     if (huart->FifoMode == UART_FIFOMODE_ENABLE)
     {
       const bool fifo_irq = ((huart->Instance->CR3 & USART_CR3_RXFTIE) != 0U) && ((huart->Instance->CR1 & USART_CR1_IDLEIE) != 0U);
@@ -514,7 +518,7 @@ private:
 
 
 /**
- * @brief 实例是否在 board_instances.hpp 的 BSP_UART_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_uart.cpp）
+ * @brief 实例是否在 board_instances.hpp 的 ICBSP_UART_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_uart.cpp）
  * @note HAL 回调与 sys_task 巡检只认清单里的实例：不在清单里的实例 init() 成功也收不到回调（对比评估 N13），
  *       两个实例绑同一个句柄时回调只会交给前一个。init() 用它把这两种配置错误变成 BAD_ARG。
  */
@@ -523,7 +527,7 @@ bool bsp_uart_is_listed(const void *self, const UART_HandleTypeDef *huart);
 /**
  * @brief 清单外串口的回调转调（弱函数，默认什么也不做；实现在 bsp_uart.cpp）
  * @note 库占用了 HAL_UARTEx_RxEventCallback / HAL_UART_TxCpltCallback / HAL_UART_ErrorCallback，宿主不能再定义它们。
- *       宿主自己用 HAL 管的串口（不在 BSP_UART_INSTANCES 里）的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
+ *       宿主自己用 HAL 管的串口（不在 ICBSP_UART_INSTANCES 里）的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
  */
 extern "C"
 {
@@ -562,7 +566,7 @@ enum class UartDir : uint8_t
  *
  *   inline ICBSP_DMA_BUFFER(bsp_uart1) BspUartT<uart_mode::dma, 128, 128> bsp_uart1(
  *     {.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
- *   // board_instances.hpp 的 BSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 ICBSP_CHECK(bsp_uart1.init() == Status::OK);
+ *   // board_instances.hpp 的 ICBSP_UART_INSTANCES 里加 X(bsp_uart1)；board_init() 里 ICBSP_CHECK(bsp_uart1.init() == Status::OK);
  *
  *   bsp_uart1.send(buf, 8);             // 写进发送流缓冲区，自动发出去
  *   bsp_uart1.printf("v=%d\r\n", 42);   // 格式化输出（10 ms 入队超时）
@@ -576,6 +580,9 @@ class BspUartT
 
 public:
   /* ==================== 公有接口 ==================== */
+
+  static constexpr size_t TX_CAPACITY = TX_SIZE; ///< 单次 send() 的上限（发送暂存区大小），设备层按它定自己的帧缓冲
+  static constexpr size_t RX_CAPACITY = RX_SIZE; ///< 接收 DMA 缓冲大小
 
   /**
    * @brief 串口配置
@@ -619,7 +626,10 @@ public:
     uint32_t drop_bytes;        ///< 入队失败（缓冲区满或超时）丢掉的字节数
     uint32_t start_fail_cnt;    ///< 启动发送失败的次数
     uint32_t isr_skip_cnt;      ///< 中断里发现通道不空闲，跳过续传的次数
-    uint32_t stall_recover_cnt; ///< 巡检发现卡死并恢复成功的次数
+    uint32_t stall_recover_cnt; ///< 巡检发现卡死并恢复成功的次数（含下面的 idle_kick_cnt）
+    uint32_t idle_kick_cnt;     ///< 其中“通道空闲、却有数据没人启动”、由巡检补发的次数（漏唤醒；正常应为 0）
+    uint32_t idle_kick_uart_err; ///< 最近一次发现“空闲却有数据”时 huart->ErrorCode 的快照（定位漏唤醒的来源）
+    uint32_t idle_kick_dma_err;  ///< 同上，hdmatx->ErrorCode 的快照（中断收发为 0）
     uint32_t error_cnt;         ///< TX 触发错误回调的次数（最终由 tx_recover() 恢复）
     uint32_t dma_repair_cnt;    ///< tx_recover() 发现 TX DMA 句柄卡在非 READY 并复位的次数
   };
@@ -649,7 +659,7 @@ public:
    *
    * @return OK=成功；IO_ERROR=资源创建失败或接收没能启动；
    *         BAD_ARG=句柄为空；DMA 模式下需要的 RX / TX DMA 没配，或实例不在 DMA 可达的内存里（没放进 .dma_buffer）；
-   *         实例不在 BSP_UART_INSTANCES 清单里，或清单里有另一个实例绑了同一个句柄
+   *         实例不在 ICBSP_UART_INSTANCES 清单里，或清单里有另一个实例绑了同一个句柄
    */
   Status init();
 
@@ -714,7 +724,7 @@ public:
   bool rx_recover();
 
   /** @brief 底层 UART 句柄（供 HAL 回调分发） */
-  UART_HandleTypeDef *handle() const
+  UART_HandleTypeDef *get_handle() const
   {
     return _huart;
   }
@@ -762,6 +772,7 @@ private:
 
   static constexpr size_t   RX_STREAM_SIZE         = 2U * RX_SIZE; ///< 接收流缓冲区容量
   static constexpr uint32_t PRINTF_TIMEOUT_MS      = 10U;          ///< printf() 取锁 / 入队的等待上限
+  static constexpr uint32_t TX_STALL_MIN_MS        = 10U;          ///< 发送卡死判定阈值的下限 (ms)，= sys_task 巡检周期
 
   UART_HandleTypeDef  *_huart;                      ///< UART 句柄
   StreamBufferHandle_t _rx_stream_buffer = nullptr; ///< 接收流缓冲区（写者：接收中断；读者：receive()）
@@ -797,6 +808,9 @@ private:
   volatile uint32_t _tx_stall_rec_cnt  = 0U;
   volatile uint32_t _tx_error_cnt      = 0U;
   volatile uint32_t _tx_dma_repair_cnt = 0U;
+  volatile uint32_t _tx_idle_kick_cnt  = 0U;
+  uint32_t          _tx_idle_kick_uart_err = 0U; ///< 只有 tx_recover() 写
+  uint32_t          _tx_idle_kick_dma_err  = 0U; ///< 只有 tx_recover() 写
 
   volatile TickType_t _tx_last_activity_tick = 0U; ///< 最近一次发送有推进（启动 / 剩余计数变化 / 串口在移位）的时刻
   size_t              _tx_last_remaining     = 0U; ///< tx_recover() 上次看到的剩余计数（只有 tx_recover() 读写）
@@ -807,7 +821,8 @@ private:
   volatile size_t _tx_chunk_len    = 0U;    ///< 这一段的长度；0 = 没有未发完的数据
   volatile bool   _tx_chunk_active = false; ///< true = 这一段已交给 Transport 在传；false = 启动失败、等待重发
 
-  bool _tx_idle_pending_seen = false; ///< 上次 tx_recover() 是否已看到「通道空闲但有数据」（只有 tx_recover() 读写）
+  bool       _tx_idle_pending_seen = false; ///< 上次 tx_recover() 是否已看到「通道空闲但有数据」（只有 tx_recover() 读写）
+  TickType_t _tx_idle_seen_activity = 0U;   ///< 那次看到时的 _tx_last_activity_tick：之后有过启动就不算“没人启动”（只有 tx_recover() 读写）
 
   /* ==================== */
   /* ==================== 内部实现 ==================== */
@@ -929,8 +944,8 @@ Status BspUartT<Transport, RX_SIZE, TX_SIZE>::init()
   // 打开 UART 硬件 FIFO（16 字节）。CubeMX 默认关着，此时接收只有 RDR 一级缓冲：搬运稍晚一点下一个字节就 ORE。
   // 2026-10-17 实测：不开 FIFO 时连续流在 2 Mbps 以上几乎全丢，开了之后 4 Mbps 也基本无损。
   // 代价：tx_recover() 中止发送时会清掉 TX FIFO 里最多 16 字节（只在卡死恢复路径上）。
-  // F4 没有硬件 FIFO（BSP_UART_HAS_FIFO = 0），也没有 HAL_UARTEx_EnableFifoMode()，整段不编译。
-#if UART_ENABLE_FIFO && BSP_UART_HAS_FIFO
+  // F4 没有硬件 FIFO（ICBSP_UART_HAS_FIFO = 0），也没有 HAL_UARTEx_EnableFifoMode()，整段不编译。
+#if ICBSP_UART_ENABLE_FIFO && ICBSP_UART_HAS_FIFO
   (void)HAL_UARTEx_EnableFifoMode(_huart);
 #endif
 
@@ -1065,8 +1080,10 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
     return false;
   }
 
-  // 卡死判定阈值 (ms) = 一包发送耗时的 2 倍（向上取整）：TX_SIZE × 10 bit ÷ 波特率 × 1000 × 2
-  const uint32_t stall_ms = static_cast<uint32_t>((static_cast<uint64_t>(TX_SIZE) * 20000U + baud - 1U) / baud);
+  // 卡死判定阈值 (ms) = 一包发送耗时的 2 倍（向上取整）：TX_SIZE × 10 bit ÷ 波特率 × 1000 × 2，
+  // 下限是巡检周期 TX_STALL_MIN_MS（Q5）：tick 只有 1 ms 分辨率，阈值 1~2 ms 时刚开始的一次传输就可能被判成卡死并中止
+  const uint32_t pack_ms  = static_cast<uint32_t>((static_cast<uint64_t>(TX_SIZE) * 20000U + baud - 1U) / baud);
+  const uint32_t stall_ms = (pack_ms < TX_STALL_MIN_MS) ? TX_STALL_MIN_MS : pack_ms;
 
   if (xStreamBufferBytesAvailable(_tx_stream_buffer) == 0U && _tx_chunk_len == 0U)
   {
@@ -1083,8 +1100,10 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
   bool restarted = false;
   if (_huart->gState == HAL_UART_STATE_READY)
   {
-    // ① 通道空闲却有数据：第一次只记下，下一次仍是这样才重新启动
-    if (_tx_idle_pending_seen)
+    // ① 通道空闲却有数据：第一次只记下，下一次仍是这样、并且这期间没有任何一次启动，才重新启动。
+    //    只看“两次都空闲且有数据”会误报：写者在“写进流缓冲区 → 拿 _tx_lock 启动”之间被本巡检抢占时也是这个样子，
+    //    短段连续发送时相隔 10 ms 的两次巡检都可能落进这个窗口（阶段 3 U21 实测，数据都是写者自己随后发出的）
+    if (_tx_idle_pending_seen && _tx_last_activity_tick == _tx_idle_seen_activity)
     {
       if (Transport::repair_tx(_huart))
       {
@@ -1092,10 +1111,17 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
       }
       restarted             = start_chunk(false, nullptr);
       _tx_idle_pending_seen = false;
+      if (restarted)
+      {
+        _tx_idle_kick_cnt = _tx_idle_kick_cnt + 1U;
+      }
     }
     else
     {
-      _tx_idle_pending_seen = true;
+      _tx_idle_pending_seen  = true;
+      _tx_idle_seen_activity = _tx_last_activity_tick;
+      _tx_idle_kick_uart_err = _huart->ErrorCode;
+      _tx_idle_kick_dma_err  = (_huart->hdmatx != nullptr) ? _huart->hdmatx->ErrorCode : 0U;
     }
   }
   else
@@ -1106,7 +1132,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::tx_recover()
     // 只看计数不够：一段末尾计数已是 0、UART / DMA FIFO 里的字节还在发，相邻两次巡检都落在段尾会误判（实测）。
     // 真卡死时两条都不成立：DMAT 被清 → 计数不动、移位完后 TC 置位；完成中断丢失 → 计数 0 且 TC 已置位。
     const size_t remaining = Transport::tx_remaining(_huart);
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
     // F4：状态寄存器是 SR，TC 位宏是 USART_SR_TC
     const bool   shifting  = (_huart->Instance->SR & USART_SR_TC) == 0U;
 #else
@@ -1335,6 +1361,9 @@ typename BspUartT<Transport, RX_SIZE, TX_SIZE>::TxDiag BspUartT<Transport, RX_SI
   d.start_fail_cnt    = _tx_start_fail_cnt;
   d.isr_skip_cnt      = _tx_isr_skip_cnt;
   d.stall_recover_cnt = _tx_stall_rec_cnt;
+  d.idle_kick_cnt      = _tx_idle_kick_cnt;
+  d.idle_kick_uart_err = _tx_idle_kick_uart_err;
+  d.idle_kick_dma_err  = _tx_idle_kick_dma_err;
   d.error_cnt         = _tx_error_cnt;
   d.dma_repair_cnt    = _tx_dma_repair_cnt;
   return d;
@@ -1349,7 +1378,7 @@ bool BspUartT<Transport, RX_SIZE, TX_SIZE>::arm_reception()
   }
 
   // 先清掉残留的 UART 错误标志：否则 HAL 会因为“启动前已有挂起的 ORE / FE / NE”拒绝启动
-#if BSP_SERIES_F4
+#if ICBSP_SERIES_F4
   // F4 没有 ICR / UART_CLEAR_xxx：错误标志靠「先读 SR 再读 DR」清除
   __HAL_UART_CLEAR_PEFLAG(_huart);
   __HAL_UART_CLEAR_FEFLAG(_huart);

@@ -9,7 +9,7 @@
  *
  * @note CYCCNT 不占外设、不依赖中断，关中断期间仍可计时；分辨率 = 1 个 CPU 周期。
  *       CPU 频率由 init() 从 RCC 自动推算，不设 Config。
- *       回绕周期、精度对比与调用约束见 bsp_dwt.md。
+ *       回绕周期与调用约束见下面 get_cycles() / delay_*() 的注释，用法见 docs/code/bsp.md 的 BspDwt 一节。
  *
  * @warning get_delta_s() 的时间戳由调用方保存，同一个 last 不要跨任务共用。
  * @warning CPU 进入 sleep/stop 时停止计数；32 位计数器会周期性回绕。
@@ -18,8 +18,8 @@
 #ifndef __BSP_DWT_HPP__
 #define __BSP_DWT_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（DWT / CoreDebug / RCC / HAL）
-#include "status.hpp" // 统一状态码
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（DWT / CoreDebug / RCC / HAL）
+#include "service/system/status_code.hpp" // 统一状态码
 
 #include <stdint.h>
 
@@ -63,7 +63,7 @@ public:
    * @brief 当前绝对时间（秒，自 init() 起算）
    * @note 任何上下文都能调（任务 / ISR / 调度器启动前）：回绕检测在一段很短的关中断区里做（C11）。
    * @note 回绕要求两次调用间隔小于一圈（550 MHz 下 7.8 s）：sys_task 每 10 ms 调一次 get_cycles() 保证这一点；
-   *       SYS_TASK_ENABLE = 0 时由宿主自己定期调用。
+   *       ICBSP_SYS_TASK_ENABLE = 0 时由宿主自己定期调用。
    */
   double get_time_s();
 
@@ -77,7 +77,7 @@ public:
   uint64_t get_cycles();
 
   /** @brief init() 是否成功（未成功时 delay_*() 不等待、时间恒为 0） */
-  bool is_init() const
+  bool is_initialized() const
   {
     return _inited;
   }
@@ -135,7 +135,7 @@ private:
 /**
  * @brief 库内唯一的 DWT 实例
  *
- * @note 定义在 `code/service/system.cpp`（与 `system_init()` 同一文件）。
+ * @note 定义在 `code/service/system/system.cpp`（与 `system_init()` 同一文件）。
  *       宿主**不要**再定义同名实例、也不要再调 `init()`：包含本头文件后直接使用即可
  *       （例如 `bsp_dwt.get_delta_s(&last)`）。
  */

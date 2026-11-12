@@ -1,0 +1,600 @@
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+
+// 宿主工程没在 CubeMX 里开 SPI（HAL_SPI_MODULE_ENABLED 未定义）时，本文件不参与编译
+#ifdef HAL_SPI_MODULE_ENABLED
+
+#include "device/sensor/device_bmi088.hpp"
+#include "service/system/system.hpp"
+
+#include <new>
+
+#include "bsp/bsp_dwt.hpp" // 调度器启动前的忙等
+#include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
+
+#include "algorithm/quaternion.hpp"
+#include "algorithm/vqf.hpp"
+
+
+/* ==================== 寄存器表（BMI088 数据手册 BST-BMI088-DS001） ==================== */
+
+namespace
+{
+// 加速度计
+constexpr uint8_t ACC_CHIP_ID      = 0x00U; ///< 芯片 ID，读值 0x1E
+constexpr uint8_t ACC_X_LSB        = 0x12U; ///< ACC_X_LSB … ACC_Z_MSB 共 6 字节
+constexpr uint8_t ACC_TEMP_MSB     = 0x22U; ///< TEMP_MSB、TEMP_LSB 共 2 字节
+constexpr uint8_t ACC_CONF         = 0x40U; ///< [7:4] 滤波（0xA = normal），[3:0] ODR
+constexpr uint8_t ACC_RANGE        = 0x41U; ///< 量程
+constexpr uint8_t ACC_INT1_IO_CTRL = 0x53U; ///< INT1 引脚：输出使能 / 开漏 / 电平
+constexpr uint8_t ACC_INT_MAP_DATA = 0x58U; ///< 中断映射：bit2 = 数据就绪到 INT1
+constexpr uint8_t ACC_PWR_CONF     = 0x7CU; ///< 0x00 = 工作，0x03 = 挂起
+constexpr uint8_t ACC_PWR_CTRL     = 0x7DU; ///< 0x04 = 打开加速度计，0x00 = 关闭
+constexpr uint8_t ACC_SOFTRESET    = 0x7EU; ///< 写 0xB6 软复位
+
+constexpr uint8_t ACC_CHIP_ID_VALUE = 0x1EU;
+
+// 陀螺仪
+constexpr uint8_t GYRO_CHIP_ID           = 0x00U; ///< 芯片 ID，读值 0x0F
+constexpr uint8_t GYRO_RATE_X_LSB        = 0x02U; ///< RATE_X_LSB … RATE_Z_MSB 共 6 字节
+constexpr uint8_t GYRO_RANGE             = 0x0FU; ///< 量程
+constexpr uint8_t GYRO_BANDWIDTH         = 0x10U; ///< 输出数据率 / 带宽（读回 bit7 恒为 1）
+constexpr uint8_t GYRO_LPM1              = 0x11U; ///< 0x00 = 正常模式
+constexpr uint8_t GYRO_SOFTRESET         = 0x14U; ///< 写 0xB6 软复位
+constexpr uint8_t GYRO_INT_CTRL          = 0x15U; ///< bit7 = 数据就绪中断使能
+constexpr uint8_t GYRO_INT3_INT4_IO_CONF = 0x16U; ///< INT3：bit0 电平（1 = 高有效），bit1 开漏
+constexpr uint8_t GYRO_INT3_INT4_IO_MAP  = 0x18U; ///< bit0 = 数据就绪到 INT3
+
+constexpr uint8_t GYRO_CHIP_ID_VALUE = 0x0FU;
+
+constexpr uint8_t SOFTRESET_CMD = 0xB6U; ///< 两颗芯片共用的软复位命令字
+
+constexpr float GRAVITY = 9.80665f; ///< 标准重力加速度 (m/s²)
+
+/** @brief 陀螺仪量程（°/s），下标 = GyroRange 枚举值 */
+constexpr float GYRO_FULL_SCALE_DPS[] = {2000.0f, 1000.0f, 500.0f, 250.0f, 125.0f};
+
+/** @brief 陀螺仪输出数据率（Hz），下标 = GyroOdr 枚举值；姿态解算按它的周期积分 */
+constexpr double GYRO_ODR_HZ[] = {2000.0, 2000.0, 1000.0, 400.0, 200.0, 100.0, 200.0, 100.0};
+
+/** @brief 一次刷新最多补积分的陀螺仪样本数：限住内部任务单次耗时，任务被长时间饿住后不一口气补几百次 */
+constexpr uint32_t ATTITUDE_MAX_GYRO_STEPS = 10U;
+
+constexpr double RAD_TO_DEG = 180.0 / ICBSP_PI;
+} // namespace
+
+/* ==================== */
+
+
+/* ==================== 构造与初始化 ==================== */
+
+DeviceBmi088::DeviceBmi088(BspSpiDevice &acc, BspSpiDevice &gyro, const Config &cfg) : _acc(acc), _gyro(gyro), _cfg(cfg)
+{
+  // 构造函数只做赋值；上电配置在 init()
+}
+
+/**
+ * @note 顺序依据数据手册：加速度计上电后处于 I²C 模式，CS 上的一个上升沿（一次假读）才切到 SPI；
+ *       软复位后同样回到 I²C 模式，要再假读一次。加速度计复位后处于挂起模式，要先打开再写配置。
+ */
+Status DeviceBmi088::init()
+{
+  // 默认树第三层（Q6）：挂在所用 SPI 的总线节点下（总线不在清单里时挂 sys_state）；重复调用无害
+  if (_state.init() == Status::OK)
+  {
+    EventState *bus = bus_state(&_acc.get_bus());
+    (void)_state.set_parent((bus != nullptr) ? *bus : sys_state);
+  }
+
+  // 运行中重新 init()：先拿到刷新锁，内部任务正在做的那一帧做完、之后的帧等 init() 结束（F8）
+  const bool scheduler = xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED;
+  if (_run_lock == nullptr)
+  {
+    _run_lock = xSemaphoreCreateMutex();
+    if (_run_lock == nullptr)
+    {
+      (void)_state.init_error(Status::FULL);
+      return Status::IO_ERROR;
+    }
+  }
+  if (scheduler)
+  {
+    (void)xSemaphoreTake(_run_lock, portMAX_DELAY);
+  }
+  const Status st = init_locked();
+  if (scheduler)
+  {
+    (void)xSemaphoreGive(_run_lock);
+  }
+  if (st == Status::OK)
+  {
+    (void)_state.complete_init();
+  }
+  else
+  {
+    (void)_state.init_error(st); // 运行中重新 init() 失败时降级成 error()，不清运行位
+  }
+  return st;
+}
+
+Status DeviceBmi088::init_locked()
+{
+  _init           = false;
+  _attitude_ready = false;
+
+  uint8_t id = 0U;
+  Status  st = Status::OK;
+
+  // 1) 加速度计切到 SPI，软复位，再切一次
+  st = _acc.read_reg8(ACC_CHIP_ID, id);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  st = _acc.write_reg8(ACC_SOFTRESET, SOFTRESET_CMD);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  delay_ms(1U);
+  st = _acc.read_reg8(ACC_CHIP_ID, id);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+
+  // 2) 陀螺仪软复位（复位后约 30 ms 可访问）
+  st = _gyro.write_reg8(GYRO_SOFTRESET, SOFTRESET_CMD);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  delay_ms(30U);
+
+  // 3) 芯片 ID：读不对说明没焊、接错或片选接反
+  st = _acc.read_reg8(ACC_CHIP_ID, id);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  if (id != ACC_CHIP_ID_VALUE)
+  {
+    return init_fail(Status::IO_ERROR, __LINE__);
+  }
+  st = _gyro.read_reg8(GYRO_CHIP_ID, id);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  if (id != GYRO_CHIP_ID_VALUE)
+  {
+    return init_fail(Status::IO_ERROR, __LINE__);
+  }
+
+  // 4) 加速度计上电：打开后等 50 ms 再切到工作模式
+  st = write_verify(_acc, ACC_PWR_CTRL, 0x04U);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  delay_ms(50U);
+  st = write_verify(_acc, ACC_PWR_CONF, 0x00U);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+
+  // 5) 量程与数据率
+  st = write_verify(_acc, ACC_CONF, static_cast<uint8_t>(0xA0U | static_cast<uint8_t>(_cfg.acc_odr)));
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  st = write_verify(_acc, ACC_RANGE, static_cast<uint8_t>(_cfg.acc_range));
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  st = write_verify(_gyro, GYRO_RANGE, static_cast<uint8_t>(_cfg.gyro_range));
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  st = write_verify(_gyro, GYRO_BANDWIDTH, static_cast<uint8_t>(_cfg.gyro_odr), 0x7FU);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+  st = write_verify(_gyro, GYRO_LPM1, 0x00U);
+  if (st != Status::OK)
+  {
+    return init_fail(st, __LINE__);
+  }
+
+  // 6) 数据就绪中断：加速度计 INT1、陀螺仪 INT3，推挽、高有效
+  if (_cfg.drdy_int)
+  {
+    st = write_verify(_acc, ACC_INT1_IO_CTRL, 0x0AU); // bit3 输出使能、bit1 高有效、bit2 = 0 推挽
+    if (st != Status::OK)
+    {
+      return init_fail(st, __LINE__);
+    }
+    st = write_verify(_acc, ACC_INT_MAP_DATA, 0x04U);
+    if (st != Status::OK)
+    {
+      return init_fail(st, __LINE__);
+    }
+    st = write_verify(_gyro, GYRO_INT3_INT4_IO_CONF, 0x01U, 0x0FU); // 高 4 位保留
+    if (st != Status::OK)
+    {
+      return init_fail(st, __LINE__);
+    }
+    st = write_verify(_gyro, GYRO_INT3_INT4_IO_MAP, 0x01U);
+    if (st != Status::OK)
+    {
+      return init_fail(st, __LINE__);
+    }
+    st = write_verify(_gyro, GYRO_INT_CTRL, 0x80U);
+    if (st != Status::OK)
+    {
+      return init_fail(st, __LINE__);
+    }
+  }
+
+  // 7) 换算系数：加速度计满量程 = 1.5 g × 2^(range+1)
+  _acc_scale  = 1.5f * static_cast<float>(1U << (static_cast<uint8_t>(_cfg.acc_range) + 1U)) * GRAVITY / 32768.0f;
+  _gyro_scale = GYRO_FULL_SCALE_DPS[static_cast<uint8_t>(_cfg.gyro_range)] * (ICBSP_PI_F / 180.0f) / 32768.0f;
+
+  // 8) 姿态解算器（只有自动刷新任务用它）：第一次分配，之后重复 init() 时清空状态、从头解算
+  if (_cfg.auto_update && _cfg.attitude)
+  {
+    if (_vqf == nullptr)
+    {
+      _vqf = new (std::nothrow) VQF(1.0 / GYRO_ODR_HZ[static_cast<uint8_t>(_cfg.gyro_odr)]);
+      if (_vqf == nullptr)
+      {
+        return init_fail(Status::IO_ERROR, __LINE__);
+      }
+    }
+    else
+    {
+      _vqf->resetState();
+    }
+  }
+
+  _init = true;
+
+  // 9) 自动刷新：第一次成功时建内部任务（之后重复 init() 不再建）
+  if (_cfg.auto_update && _worker == nullptr)
+  {
+    TaskHandle_t worker = nullptr;
+    if (xTaskCreate(task_entry, "imu", ICBSP_BMI088_TASK_STACK, this, ICBSP_BMI088_TASK_PRIORITY, &worker) != pdPASS)
+    {
+      return init_fail(Status::IO_ERROR, __LINE__);
+    }
+    _worker = worker;
+  }
+  return Status::OK;
+}
+
+/* ==================== */
+
+
+/* ==================== 读数 ==================== */
+
+Status DeviceBmi088::update(uint32_t timeout_ms)
+{
+  return refresh(timeout_ms, 0U);
+}
+
+Status DeviceBmi088::refresh(uint32_t timeout_ms, uint32_t gyro_steps)
+{
+  const Status st = read_frame(timeout_ms, gyro_steps);
+  if (st == Status::OK)
+  {
+    _update_cnt = _update_cnt + 1U;
+  }
+  else
+  {
+    _update_fail_cnt = _update_fail_cnt + 1U;
+    if (_init)
+    {
+      (void)_state.error(st); // 读帧失败记在本节点（向上传到 SPI 总线节点与 sys_state，不动运行位）
+    }
+  }
+  _last_status = st;
+  return st;
+}
+
+Status DeviceBmi088::read_frame(uint32_t timeout_ms, uint32_t gyro_steps)
+{
+  if (!_init)
+  {
+    return Status::NOT_INIT;
+  }
+
+  uint8_t acc[6]  = {};
+  uint8_t gyro[6] = {};
+  uint8_t temp[2] = {};
+
+  Status st = _acc.read_reg(ACC_X_LSB, acc, sizeof(acc), timeout_ms);
+  if (st != Status::OK)
+  {
+    return st;
+  }
+  st = _gyro.read_reg(GYRO_RATE_X_LSB, gyro, sizeof(gyro), timeout_ms);
+  if (st != Status::OK)
+  {
+    return st;
+  }
+  st = _acc.read_reg(ACC_TEMP_MSB, temp, sizeof(temp), timeout_ms);
+  if (st != Status::OK)
+  {
+    return st;
+  }
+
+  // 先在局部变量里拼好、换算好，三组都读成功才一次性写回，避免内部数据一半新一半旧
+  Bmi088RawData raw = {};
+  for (uint32_t i = 0U; i < 3U; ++i)
+  {
+    raw.acc[i]  = static_cast<int16_t>(static_cast<uint16_t>(acc[2U * i]) | (static_cast<uint16_t>(acc[2U * i + 1U]) << 8));
+    raw.gyro[i] = static_cast<int16_t>(static_cast<uint16_t>(gyro[2U * i]) | (static_cast<uint16_t>(gyro[2U * i + 1U]) << 8));
+  }
+  // 11 位补码：MSB 是高 8 位，LSB 的 [7:5] 是低 3 位
+  int16_t t11 = static_cast<int16_t>((static_cast<uint16_t>(temp[0]) << 3) | (static_cast<uint16_t>(temp[1]) >> 5));
+  if (t11 > 1023)
+  {
+    t11 = static_cast<int16_t>(t11 - 2048);
+  }
+  raw.temp = t11;
+
+  // 饱和：ADC 顶到满量程，读数被截断（量程不够）
+  uint8_t sat = 0U;
+  for (uint32_t i = 0U; i < 3U; ++i)
+  {
+    if (raw.acc[i] == INT16_MAX || raw.acc[i] == INT16_MIN)
+    {
+      sat = static_cast<uint8_t>(sat | (1U << i));
+    }
+    if (raw.gyro[i] == INT16_MAX || raw.gyro[i] == INT16_MIN)
+    {
+      sat = static_cast<uint8_t>(sat | (1U << (3U + i)));
+    }
+  }
+  raw.saturated = sat;
+
+  ImuData data        = ImuData();
+  float   temperature = 0.0f;
+  convert(raw, data, temperature);
+
+  // 姿态也先算进局部变量，和读数一起写回，snapshot() 拿到的读数与姿态是同一帧
+  const bool attitude = (gyro_steps > 0U) && (_vqf != nullptr);
+  if (attitude)
+  {
+    solve_attitude(data, gyro_steps);
+  }
+
+  // 自动刷新任务与手动调用、snapshot() 可能并发：写回放在临界区里（一百多字节拷贝）
+  taskENTER_CRITICAL();
+  _raw_data  = raw;
+  _data.gyro = data.gyro;
+  _data.acc  = data.acc;
+  if (attitude) // 不解算的帧保留上一次的姿态
+  {
+    _data.euler_angle  = data.euler_angle;
+    _data.euler_radian = data.euler_radian;
+    for (uint32_t i = 0U; i < 4U; ++i)
+    {
+      _data.quaternion[i] = data.quaternion[i];
+    }
+    _attitude_ready = true;
+  }
+  _temperature = temperature;
+  if ((sat & 0x07U) != 0U)
+  {
+    ++_acc_sat_cnt;
+  }
+  if ((sat & 0x38U) != 0U)
+  {
+    ++_gyro_sat_cnt;
+  }
+  taskEXIT_CRITICAL();
+  return Status::OK;
+}
+
+void DeviceBmi088::snapshot(ImuData &data, Bmi088RawData *raw) const
+{
+  taskENTER_CRITICAL();
+  data = _data;
+  if (raw != nullptr)
+  {
+    *raw = _raw_data;
+  }
+  taskEXIT_CRITICAL();
+}
+
+void DeviceBmi088::convert(const Bmi088RawData &raw, ImuData &data, float &temperature) const
+{
+  data.acc.x = static_cast<float>(raw.acc[0]) * _acc_scale;
+  data.acc.y = static_cast<float>(raw.acc[1]) * _acc_scale;
+  data.acc.z = static_cast<float>(raw.acc[2]) * _acc_scale;
+
+  data.gyro.x = static_cast<float>(raw.gyro[0]) * _gyro_scale;
+  data.gyro.y = static_cast<float>(raw.gyro[1]) * _gyro_scale;
+  data.gyro.z = static_cast<float>(raw.gyro[2]) * _gyro_scale;
+
+  temperature = static_cast<float>(raw.temp) * 0.125f + 23.0f;
+}
+
+void DeviceBmi088::solve_attitude(ImuData &data, uint32_t gyro_steps)
+{
+  // gyro.x / y / z = 绕芯片 X / Y / Z（本体系）
+  const vqf_real_t gyr[3] = {static_cast<vqf_real_t>(data.gyro.x), static_cast<vqf_real_t>(data.gyro.y), static_cast<vqf_real_t>(data.gyro.z)};
+  const vqf_real_t acc[3] = {static_cast<vqf_real_t>(data.acc.x), static_cast<vqf_real_t>(data.acc.y), static_cast<vqf_real_t>(data.acc.z)};
+
+  // 漏掉的样本没有读数，按本帧角速度补积分（VQF 每次 updateGyr() 固定积分一个 ODR 周期）
+  for (uint32_t i = 0U; i < gyro_steps; ++i)
+  {
+    _vqf->updateGyr(gyr);
+  }
+  _vqf->updateAcc(acc);
+
+  vqf_real_t q[4] = {};
+  _vqf->getQuat6D(q);
+  for (uint32_t i = 0U; i < 4U; ++i)
+  {
+    data.quaternion[i] = static_cast<double>(q[i]);
+  }
+
+  // Z-Y-X 欧拉角（pitch = ±90° 处万向节锁，见 quaternion.hpp；控制用四元数）
+  Quaternion::from_array(data.quaternion).to_euler_zyx(data.euler_radian.yaw, data.euler_radian.pitch, data.euler_radian.roll);
+
+  data.euler_angle.yaw   = data.euler_radian.yaw * RAD_TO_DEG;
+  data.euler_angle.pitch = data.euler_radian.pitch * RAD_TO_DEG;
+  data.euler_angle.roll  = data.euler_radian.roll * RAD_TO_DEG;
+}
+
+/* ==================== */
+
+
+/* ==================== 自动刷新任务 ==================== */
+
+void DeviceBmi088::task_entry(void *argument)
+{
+  static_cast<DeviceBmi088 *>(argument)->run();
+}
+
+void DeviceBmi088::run()
+{
+  sys_state.wait_running(); // 初始化期有失败时这里让任务自行退出
+
+  // 丢掉等运行位期间攒下的数据就绪计数，否则第一帧会被当成漏了几百帧
+  (void)ulTaskNotifyTake(pdTRUE, 0U);
+
+  for (;;)
+  {
+    // 陀螺仪数据就绪中断唤醒，返回值 = 上次以来的数据就绪次数；没有中断（没开 drdy_int、宿主没转调 EXTI）时最多等 10 ms 也刷新一次
+    const uint32_t drdy = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10U));
+    (void)xSemaphoreTake(_run_lock, portMAX_DELAY); // 与 init() 互斥（F8）
+    if (!_init)
+    {
+      (void)xSemaphoreGive(_run_lock);
+      continue; // init() 失败过，等下一次成功的 init()
+    }
+
+    // 姿态按陀螺仪样本周期积分：只在数据就绪唤醒时解算；超时唤醒不知道过了几个样本，只刷新读数
+    uint32_t steps = 0U;
+    if (_vqf != nullptr && drdy > 0U)
+    {
+      steps = drdy;
+      if (steps > 1U)
+      {
+        _attitude_skip_cnt = _attitude_skip_cnt + (steps - 1U);
+      }
+      if (steps > ATTITUDE_MAX_GYRO_STEPS)
+      {
+        steps = ATTITUDE_MAX_GYRO_STEPS;
+      }
+    }
+    const Status st = refresh(ICBSP_SPI_TRANSFER_TIMEOUT_MS, steps);
+    (void)xSemaphoreGive(_run_lock);
+    if (st == Status::OK)
+    {
+      TaskHandle_t task = _notify_task;
+      if (task != nullptr)
+      {
+        (void)xTaskNotify(task, UPDATED_BIT, eSetBits);
+      }
+    }
+  }
+}
+
+/* ==================== */
+
+
+/* ==================== 数据就绪中断 ==================== */
+
+void DeviceBmi088::attach_task(TaskHandle_t task)
+{
+  _notify_task = task;
+}
+
+void DeviceBmi088::on_acc_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken)
+{
+  _acc_drdy_cnt = _acc_drdy_cnt + 1U;
+  if (_worker != nullptr)
+  {
+    return; // 自动模式按陀螺仪节奏刷新，加速度计中断只计数
+  }
+  TaskHandle_t task = _notify_task;
+  if (task != nullptr)
+  {
+    xTaskNotifyFromISR(task, ACC_DRDY_BIT, eSetBits, pxHigherPriorityTaskWoken);
+  }
+}
+
+void DeviceBmi088::on_gyro_drdy_isr(BaseType_t *pxHigherPriorityTaskWoken)
+{
+  _gyro_drdy_cnt = _gyro_drdy_cnt + 1U;
+  TaskHandle_t worker = _worker;
+  if (worker != nullptr)
+  {
+    vTaskNotifyGiveFromISR(worker, pxHigherPriorityTaskWoken);
+    return;
+  }
+  TaskHandle_t task = _notify_task;
+  if (task != nullptr)
+  {
+    xTaskNotifyFromISR(task, GYRO_DRDY_BIT, eSetBits, pxHigherPriorityTaskWoken);
+  }
+}
+
+/* ==================== */
+
+
+/* ==================== 私有工具 ==================== */
+
+void DeviceBmi088::delay_ms(uint32_t ms)
+{
+  if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
+  {
+    // 调度器启动前不用 HAL_Delay()：xTaskCreate() 之后 BASEPRI 一直挡着优先级 ≥ 5 的中断，HAL 时基优先级低于它时 tick 不走、永远等不完（A3）
+    if (bsp_dwt.is_initialized())
+    {
+      bsp_dwt.delay_ms(static_cast<double>(ms));
+    }
+    else
+    {
+      HAL_Delay(ms);
+    }
+  }
+  else
+  {
+    // vTaskDelay(n) 只等到第 n 个 tick 边界，实际时长在 (n − 1, n] ms 之间：n = 1 时可能几乎不等。
+    // 芯片时序要的是“至少 ms 毫秒”（例如加速度计软复位后 1 ms 才能切回 SPI），所以多等一个 tick。
+    // 阶段 3 实测：原来的 vTaskDelay(1) 让 P04（连续 200 次 init）在两次完整回归里都有 48 次读错加速度计芯片 ID。
+    vTaskDelay(pdMS_TO_TICKS(ms) + 1U);
+  }
+}
+
+Status DeviceBmi088::write_verify(BspSpiDevice &dev, uint8_t reg, uint8_t value, uint8_t mask)
+{
+  Status st = dev.write_reg8(reg, value);
+  if (st != Status::OK)
+  {
+    return st;
+  }
+  delay_ms(1U);
+
+  uint8_t back = 0U;
+  st           = dev.read_reg8(reg, back);
+  if (st != Status::OK)
+  {
+    return st;
+  }
+  return ((back & mask) == (value & mask)) ? Status::OK : Status::IO_ERROR;
+}
+
+/* ==================== */
+
+#endif // HAL_SPI_MODULE_ENABLED

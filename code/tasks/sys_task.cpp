@@ -1,20 +1,21 @@
-#include "bsp_can.hpp" // 未开 FDCAN 时为空
-#include "bsp_dwt.hpp"
-#include "bsp_uart.hpp" // 未开 UART 时为空
-#include "online_check.hpp"
-#include "system.hpp"
+#include "bsp/bsp_can.hpp" // 未开 FDCAN 时为空
+#include "bsp/bsp_dwt.hpp"
+#include "bsp/bsp_uart.hpp" // 未开 UART 时为空
+#include "service/monitor/online_check.hpp"
+#include "service/system/state_tree.hpp" // state_tree_poll()
+#include "service/system/system.hpp"
 
 #include "FreeRTOS.h" // IWYU pragma: keep
 #include "task.h"
 #include <stdint.h>
 
 #include "board_instances.hpp"
-#include "hardware_config.h"
+#include "service/system/config_check.hpp" // 宿主配置（经检查）
 
 // 维护周期：Online 计时、CAN 恢复、UART 巡检统一按这个节拍
 constexpr uint32_t SYS_TASK_PERIOD_MS = 10U;
 
-static_assert(CAN_BUSOFF_RETRY_MS >= SYS_TASK_PERIOD_MS, "hardware_config.h: CAN_BUSOFF_RETRY_MS 不能短于 sys_task 的 10 ms 节拍");
+static_assert(ICBSP_CAN_BUSOFF_RETRY_MS >= SYS_TASK_PERIOD_MS, "hardware_config.h: ICBSP_CAN_BUSOFF_RETRY_MS 不能短于 sys_task 的 10 ms 节拍");
 
 extern "C"
 {
@@ -35,7 +36,7 @@ extern "C" void system_set_report_hook(SystemReportHook hook, uint32_t period_ms
   report_hook           = hook;
 }
 
-#if SYS_TASK_ENABLE
+#if ICBSP_SYS_TASK_ENABLE
 
 
 extern "C" void sys_task(void *argument)
@@ -50,7 +51,7 @@ extern "C" void sys_task(void *argument)
   uint64_t   window_sum  = 0U; // 平均值窗口内的耗时和 (µs)
   constexpr uint32_t AVG_WINDOW = 1000U / SYS_TASK_PERIOD_MS;
 
-  vTaskDelayUntil(&wake_time, pdMS_TO_TICKS(1000));
+  // 不等开机 1 s（Q5）：Online 初始就是离线，Bus-Off 恢复与串口巡检在没出故障时什么都不做，上电立刻开始维护没有副作用
   for (;;)
   {
     // 本轮计时基准（无状态，首次结果丢弃）
@@ -60,26 +61,29 @@ extern "C" void sys_task(void *argument)
     // DWT 绝对时间的回绕跟踪：两次调用要短于一圈（550 MHz 下 7.8 s），这里每 10 ms 推进一次（C11）
     (void)bsp_dwt.get_cycles();
 
-#  if defined(HAL_FDCAN_MODULE_ENABLED) && (CAN_RX_ENABLE || CAN_TX_ENABLE)
+#  if defined(HAL_FDCAN_MODULE_ENABLED) && (ICBSP_CAN_RX_ENABLE || ICBSP_CAN_TX_ENABLE)
     // CAN：Bus-Off 自恢复 + 发送兜底（软件缓冲有帧、TX-FIFO-EMPTY 中断却关着时补发，N27）
 #    define X(name)                   \
       (void)name.service_recovery(); \
       (void)name.tx_recover();
-    BSP_CAN_INSTANCES(X)
+    ICBSP_CAN_INSTANCES(X)
 #    undef X
 #  endif
 
-#  if defined(HAL_UART_MODULE_ENABLED) && UART_PATROL_ENABLE
+#  if defined(HAL_UART_MODULE_ENABLED) && ICBSP_UART_PATROL_ENABLE
     // 串口补救：卡死的发送续发 + 停摆的接收重建
 #    define X(name)            \
       (void)name.tx_recover(); \
       (void)name.rx_recover();
-    BSP_UART_INSTANCES(X)
+    ICBSP_UART_INSTANCES(X)
 #    undef X
 #  endif
 
-    // 在线情况更新
+    // 在线情况更新（设备由在线变离线时，Online 在设备节点上记 TIMEOUT）
     (void)Online::update();
+
+    // 默认树：总线实例的诊断计数涨了就在对应总线节点上记错误（Q6）
+    state_tree_poll();
 
     // 耗时统计（不含报告回调本身）
     const uint32_t cost_us  = static_cast<uint32_t>(bsp_dwt.get_delta_s(&mark) * 1000000.0);
@@ -112,4 +116,4 @@ extern "C" void sys_task(void *argument)
   }
 }
 
-#endif // SYS_TASK_ENABLE
+#endif // ICBSP_SYS_TASK_ENABLE
