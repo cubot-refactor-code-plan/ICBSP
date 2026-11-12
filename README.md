@@ -1,6 +1,6 @@
 # ICBSP
 
-![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP)  [![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  ![CopyRight](https://img.shields.io/badge/CopyRight-INVC%20&%20CUBOT-blue.svg)    
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP?include_prereleases)  [![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  ![CopyRight](https://img.shields.io/badge/CopyRight-INVC%20&%20CUBOT-blue.svg)    
 ![](https://img.shields.io/badge/chip-STM32H7xx%20%7C%20STM32F4xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg)
 
 面向 **STM32H7 / STM32F4 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Algorithm、Tasks 分层，宿主工程通过 git submodule 接入。
