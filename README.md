@@ -109,7 +109,7 @@ node third_party/icbsp/tools/web_ui/server.mjs   # 浏览器打开 http://127.0.
 | [templates/README.md](templates/README.md)  | 每个模板文件复制到宿主哪里；`.vscode` 与 `Flash/` 的占位符规则     |
 | [docs/bsp_test/](docs/bsp_test/)            | 实板测试记录（每份注明对应的代码版本；早期记录里的 API 名称是旧的） |
 | [docs/service_test/](docs/service_test/)    | EventState / Online 的实板测试记录（2026-11-01）                     |
-| [docs/sheet/](docs/sheet/)                  | 器件手册（版权归各厂商，见其中 README）                              |
+| [docs/sheet/](docs/sheet/README.md)         | 器件手册清单与获取方式（手册本身不随仓库分发）                       |
 | [undo.md](undo.md)                          | v1.0.0 路线与待办                                                    |
 | `stm32_bsp_review.md`、`stm32_framework_对比评估.md` | 评审与合并方案（代码注释里的 F / A / I / D / N / Q 编号出自这两份） |
 
@@ -148,4 +148,4 @@ MIT，见根目录 [`LICENSE`](LICENSE)。例外：
 
 - `code/algorithm/vqf.*`：第三方代码 VQF，MIT，版权 Daniel Laidig（文件头的 `SPDX-FileCopyrightText` / `SPDX-License-Identifier` 行，不要删）；保持上游原样（CMake 里单独关了 `-Wshadow`）。
 - `code/algorithm/matrix.*`：移植自 USTC-RoboWalker（yssickjgd/damiao_mc02_bsp）的代码，原作者许可在 RoboMaster 赛事范围内使用，**不适用本仓库的 MIT**；超出这个范围请自行征求原作者意见。文件头的出处说明要保留。
-- `docs/sheet/` 下的器件手册：版权归各厂商，不属于本仓库的 MIT 许可，只为方便查阅；清单与官方渠道见 [docs/sheet/README.md](docs/sheet/README.md)。
+- 器件手册：版权归各厂商，**不随本仓库分发**（2026-11-12 起已从仓库及其历史中移除）；清单与官方渠道见 [docs/sheet/README.md](docs/sheet/README.md)。

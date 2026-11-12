@@ -3,7 +3,7 @@
  * @brief 达妙（DAMIAO）CAN 电机：MIT / 位置速度 / 速度模式，使能、失能、清错误、设零点，反馈解包（阶段 2.9）
  *
  * @details 协议来源：《DM-J4310-2EC V1.2》《DM-J4340P-2EC V1.2 / V1.1》《DM-J8009P-2EC V1.3 / V1.1》说明书的“CAN 通信”一章
- *          （库里 docs/sheet/），映射函数照 J4340P 说明书给出的 float_to_uint / uint_to_float（截断取整）。
+ *          （清单与获取方式见 docs/sheet/README.md），映射函数照 J4340P 说明书给出的 float_to_uint / uint_to_float（截断取整）。
  *
  *   **型号**：三个系列的 CAN 协议逐项相同（帧 ID、帧格式、映射、命令、ERR 状态码），不同的只是数值，所以不做成按型号的模板
  *   （DJI 用模板是因为不同型号的反馈 / 控制帧 ID、ID 范围本身就不同）。型号经 `Config::model` 给出，用来查

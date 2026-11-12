@@ -74,4 +74,8 @@ __pycache__/
 .venv/
 
 example/
+
+# 厂商手册不进仓库（版权归各厂商；也会拖慢克隆），本地可以放在 docs/sheet/ 下对照
+docs/sheet/*
+!docs/sheet/README.md
 AGENTS.md
