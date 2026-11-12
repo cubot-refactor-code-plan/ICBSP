@@ -1,4 +1,4 @@
-# ---- stm32_framework（integrate.py 添加，可手动调整）------------------------------
+# ---- icbsp（integrate.py 添加，可手动调整）------------------------------
 # clangd 不会自己去 CMake 构建目录找 compile_commands.json，必须在这里指明；
 # 少了它，Cortex-M 的 -mcpu / -mfpu 与系统头全丢，头文件会一路标红。
 #   - CompilationDatabase：相对宿主根目录的构建目录（取自 CMakePresets.json 的 binaryDir）

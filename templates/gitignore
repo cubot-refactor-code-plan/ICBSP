@@ -1,0 +1,23 @@
+# icbsp：STM32CubeMX（CMake）宿主工程的示例忽略项
+# integrate.py / Web UI 的“复制示例 .gitignore”：宿主没有 .gitignore 时复制本文件；已有时只把缺的行追加到末尾。
+
+# 构建产物（CMake 预设的 binaryDir 都在 build/ 下，含 bootloader 与 QSPI 镜像）
+build/
+*.su
+
+# clangd 索引与编译数据库副本
+.cache/
+compile_commands.json
+
+# Python（integrate.py、Web UI）
+__pycache__/
+*.pyc
+
+# VS Code 调试器的临时文件
+.vscode/.cortex-debug*
+
+# 烧录 / 调试日志
+Flash/*.log
+
+# integrate.py --fix-ioc 修改 .ioc 前的备份
+*.ioc.bak-*

@@ -9,7 +9,8 @@
     // 调试时变量按自然类型显示（寄存器位域不会显示成十进制大数）
     "cortex-debug.variableUseNaturalFormat": true,
     "cmake.useCMakePresets": "always",
-    // 状态栏按钮，对应 tasks.json 里的任务 label
+    // 状态栏按钮（Task Buttons 插件 spencerwmiles.vscode-task-buttons），对应 tasks.json 里的任务 label；
+    // 生成 Flash/ 时 integrate.py 再追加烧录按钮（templates/vscode/settings_flash.json）
     "VsCodeTaskButtons.showCounter": false,
     "VsCodeTaskButtons.tasks": [
         {
@@ -26,16 +27,6 @@
             "label": "[🗑️ 清理]",
             "task": "Clean",
             "tooltip": "仅清理构建产物"
-        },
-        {
-            "label": "[⚡ DAP烧录]",
-            "task": "OpenOCD_flash",
-            "tooltip": "OpenOCD + DAPLink 烧录"
-        },
-        {
-            "label": "[🔌 JLink烧录]",
-            "task": "JLink_flash",
-            "tooltip": "经 OpenOCD 的 jlink 适配器烧录"
         }
     ],
     // 源码用两种注释分区：`// ---------------- 标题 ----------------`（.cpp 多用）和

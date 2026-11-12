@@ -11,7 +11,7 @@
  *          定时器时钟、PSC、ARR 全部由使用方从 CubeMX 生成的配置里抄进 Config，
  *          驱动本身不写死任何硬件常量，换板子只改实例化处的参数。
  *
- * @note 换算式、计数单位与“同定时器共通道 ARR”的后果见 bsp_pwm.md。
+ * @note 换算式见 docs/code/bsp.md 的 BspPwm 一节；“同定时器的通道共用 ARR”的后果见下面的 @warning，计数单位见 get_period_cnt() 的注释。
  *
  * @warning 同一定时器的多个通道共用计数器与 ARR：set_freq() 会同时改变该定时器
  *          所有通道的频率。
@@ -23,13 +23,13 @@
 #ifndef __BSP_PWM_HPP__
 #define __BSP_PWM_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
 
-#include "status.hpp" // 统一状态码
-#include "bsp_series.hpp" // IWYU pragma: keep（TIM_HandleTypeDef / TIM_CHANNEL_x）
+#include "service/system/status_code.hpp" // 统一状态码
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（TIM_HandleTypeDef / TIM_CHANNEL_x）
 
 #include <stdint.h>
 

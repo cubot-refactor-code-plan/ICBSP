@@ -1,5 +1,5 @@
 ---
-# ---- stm32_framework（integrate.py 添加）：库的 templates/ 不是编译单元 ----
+# ---- icbsp（integrate.py 添加）：库的 templates/ 不是编译单元 ----
 # 里面的 .hpp / .cpp 只是给宿主抄的样例，不参与构建。若让 clangd 也按工程配置解析它们：
 #   - 会冒出一堆假错误（模板没有你的 CubeMX 句柄、也没有宿主的上下文）
 #   - 同名文件互相干扰：templates/user/board/board_cfg.hpp 与宿主 user/board/board_cfg.hpp

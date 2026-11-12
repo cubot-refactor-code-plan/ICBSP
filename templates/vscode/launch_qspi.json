@@ -1,0 +1,66 @@
+{
+    // 外置 Flash 方案的调试配置（integrate.py 在打开“外置 Flash”时合并进 .vscode/launch.json）。
+    // 第一次用之前先跑一遍 OpenOCD_flash 任务（烧 bootloader；方案 B 还要它把镜像写进 QSPI）。
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // 方案 A：直接下载进 AXI SRAM 运行，不写 Flash；软件断点不限个数
+            "cwd": "${workspaceFolder}",
+            "type": "cortex-debug",
+            "request": "launch",
+            "name": "cmsis-dap-debug (QSPI_RAM)",
+            "servertype": "openocd",
+            "executable": "build/{{PRESET}}-QspiRam/{{PROJECT}}.elf",
+            "configFiles": [
+                "interface/cmsis-dap.cfg",
+                "target/{{OPENOCD_TARGET}}"
+            ],
+            "overrideLaunchCommands": [
+                "monitor reset halt",
+                "load",
+                "set $sp = *(unsigned int *)0x24000000",
+                "set $pc = *(unsigned int *)0x24000004"
+            ],
+            "overrideRestartCommands": [
+                "monitor reset halt",
+                "load",
+                "set $sp = *(unsigned int *)0x24000000",
+                "set $pc = *(unsigned int *)0x24000004"
+            ],
+            "runToEntryPoint": "main",
+            // SVD: 外设寄存器面板用，与调试器无关；宿主没有 SVD 时 integrate.py 会去掉这两行
+            "svdFile": "Flash/{{SVD}}",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 20
+            }
+        },
+        {
+            // 方案 B：GDB 的 load 经 stmqspi 把程序写进 QSPI，复位后由 bootloader 跳转；只能打硬件断点
+            "cwd": "${workspaceFolder}",
+            "type": "cortex-debug",
+            "request": "launch",
+            "name": "cmsis-dap-debug (QSPI_XIP)",
+            "servertype": "openocd",
+            "executable": "build/{{PRESET}}-QspiXip/{{PROJECT}}.elf",
+            "configFiles": [
+                "Flash/daplink_qspi.cfg"
+            ],
+            "overrideLaunchCommands": [
+                "monitor reset init",
+                "load",
+                "monitor reset halt"
+            ],
+            "overrideRestartCommands": [
+                "monitor reset halt"
+            ],
+            "runToEntryPoint": "main",
+            // SVD: 同上
+            "svdFile": "Flash/{{SVD}}",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 20
+            }
+        }
+    ]
+}

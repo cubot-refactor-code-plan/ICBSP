@@ -1,0 +1,19 @@
+// 由 tools/integrate.py 按 .ioc 与接入选择生成：要改就改选择后重新运行；手改本区会被检测到、拒绝覆盖
+/// FDCAN1：CAN 总线
+inline BspCanT<32, 8> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
+/// FDCAN3：CAN 总线
+inline BspCanT<16, 16> bsp_can3({.hfdcan = &hfdcan3, .name = "CAN3"});
+/// USART1：串口
+inline BspUartT<uart_mode::it, 64, 256> bsp_uart1({.huart = &huart1, .mode = UartDir::TxRx, .baudrate = 115200U});
+/// UART5：串口
+inline BspUartT<uart_mode::it, 128, 128> bsp_uart5({.huart = &huart5, .mode = UartDir::RxOnly, .baudrate = 100000U});
+/// UART8：串口
+inline BspUartT<uart_mode::it, 128, 128> bsp_uart8({.huart = &huart8, .mode = UartDir::TxRx, .baudrate = 115200U});
+/// TIM1_CH1：PWM 通道
+inline BspPwm bsp_pwm_tim1_ch1({.htim = &htim1, .channel = TIM_CHANNEL_1, .timer_clk_hz = 275000000UL, .prescaler = 24U, .period = 10000U});
+/// TIM2_CH3：PWM 通道
+inline BspPwm bsp_pwm_tim2_ch3({.htim = &htim2, .channel = TIM_CHANNEL_3, .timer_clk_hz = 275000000UL, .prescaler = 24U, .period = 10000U});
+
+/// 调试打印串口：USART1
+#define ICBSP_UART_PRINT_ENABLE 1
+#define print_uart(...) bsp_uart1.printf(__VA_ARGS__)

@@ -1,195 +1,227 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="940" viewBox="0 0 1440 940">
-<rect width="1440" height="940" fill="#ffffff"/>
-<rect x="90" y="60" width="910" height="92" rx="10" ry="10" fill="#FFF6E9" stroke="#C08A45" stroke-width="1.0"/>
-<text x="182" y="106.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">宿主 app/</text>
-<rect x="280" y="82" width="171.8" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="365.9" y="106.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">app_main.cpp（app_init）</text>
-<rect x="461.8" y="82" width="112.544375" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="518.0721875" y="106.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">StartDefaultTask</text>
-<rect x="584.344375" y="82" width="77.72000000000003" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="623.204375" y="106.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">task/*.cpp</text>
-<rect x="90" y="180" width="910" height="92" rx="10" ry="10" fill="#FFF6E9" stroke="#C08A45" stroke-width="1.0"/>
-<text x="182" y="226.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">宿主 board/</text>
-<rect x="280" y="202" width="102.02187500000002" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="331.0109375" y="226.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">board_cfg.hpp</text>
-<rect x="392.021875" y="202" width="183.07062499999995" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="483.55718750000005" y="226.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">board_cfg.cpp（board_init）</text>
-<rect x="585.0925" y="202" width="137.8025" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="653.99375" y="226.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">board_instances.hpp</text>
-<rect x="732.895" y="202" width="125.14625000000001" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
-<text x="795.468125" y="226.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">hardware_config.h</text>
-<rect x="90" y="300" width="910" height="92" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="182" y="346.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 device/</text>
-<rect x="280" y="322" width="75.17374999999998" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="317.586875" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">dji_motor</text>
-<rect x="365.17375" y="322" width="97.31374999999997" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="413.830625" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">device_motor</text>
-<rect x="472.48749999999995" y="322" width="50.74249999999995" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="497.85874999999993" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">servo</text>
-<rect x="533.2299999999999" y="322" width="44.37125000000003" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="555.4156249999999" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">r9ds</text>
-<rect x="587.6012499999999" y="322" width="101.77999999999997" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="638.4912499999999" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">emmv5_group</text>
-<rect x="699.3812499999999" y="322" width="61.80687499999999" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="730.2846874999999" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">bmi088</text>
-<rect x="771.1881249999999" y="322" width="57.27312500000005" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="799.8246874999999" y="346.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">buzzer</text>
-<rect x="90" y="420" width="910" height="92" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="182" y="466.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 tasks/</text>
-<rect x="280" y="442" width="124.15812499999998" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="342.0790625" y="466.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">sys_task（10 ms）</text>
-<rect x="414.158125" y="442" width="137.42000000000002" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="482.86812499999996" y="466.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_rx_task（1 ms）</text>
-<rect x="561.578125" y="442" width="146.99749999999995" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="635.076875" y="466.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_tx_task（按需建）</text>
-<rect x="90" y="540" width="910" height="92" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="182" y="586.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 service/</text>
-<rect x="280" y="562" width="59.32249999999999" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="309.66125" y="586.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">system</text>
-<rect x="349.3225" y="562" width="53.58687500000002" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="376.1159375" y="586.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">status</text>
-<rect x="412.909375" y="562" width="94.77500000000003" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="460.296875" y="586.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">online_check</text>
-<rect x="517.684375" y="562" width="92.79312500000003" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="564.0809375" y="586.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_rx_node</text>
-<rect x="620.4775000000001" y="562" width="92.44624999999996" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="666.7006250000001" y="586.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_tx_node</text>
-<rect x="722.92375" y="562" width="88.5575" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="767.2025000000001" y="586.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">fault_record</text>
-<rect x="90" y="660" width="910" height="92" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="182" y="706.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 bsp/</text>
-<rect x="280" y="682" width="40.064374999999984" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="300.0321875" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can</text>
-<rect x="330.064375" y="682" width="43.21999999999997" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="351.674375" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">uart</text>
-<rect x="383.28437499999995" y="682" width="36.35562500000003" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="401.46218749999997" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">spi</text>
-<rect x="429.64" y="682" width="48.126874999999984" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="453.7034375" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">pwm</text>
-<rect x="487.76687499999997" y="682" width="44.78000000000003" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="510.15687499999996" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">gpio</text>
-<rect x="542.546875" y="682" width="39.344375000000014" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="562.2190625" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">key</text>
-<rect x="591.89125" y="682" width="65.81562499999995" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="624.7990625" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">encoder</text>
-<rect x="667.706875" y="682" width="41.588750000000005" height="48" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
-<text x="688.50125" y="706.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">dwt</text>
-<rect x="90" y="782" width="910" height="80" rx="10" ry="10" fill="#EFEFF2" stroke="#8A8F99" stroke-width="1.0"/>
-<text x="545.0" y="822.0" font-family="Noto Sans CJK SC" font-size="13" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">HAL · FreeRTOS · CubeMX 生成的句柄（hfdcan1 / huart1 / htim12 …）</text>
-<rect x="1040" y="300" width="350" height="170" rx="10" ry="10" fill="#F3EEFB" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1215" y="322.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">algorithm/</text>
-<rect x="1058" y="340" width="38.180000000000064" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1077.09" y="361.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">pid</text>
-<rect x="1106.18" y="340" width="107.04874999999993" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1159.704375" y="361.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">quaternion_pid</text>
-<rect x="1058" y="396" width="37.54250000000002" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1076.77125" y="417.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">vqf</text>
-<rect x="1105.5425" y="396" width="56.14249999999993" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1133.61375" y="417.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">matrix</text>
-<rect x="1171.685" y="396" width="33.680000000000064" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1188.5249999999999" y="417.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">rls</text>
-<rect x="1040" y="492" width="350" height="68" rx="10" ry="10" fill="#F3EEFB" stroke="#7A5FB5" stroke-width="1.0"/>
-<text x="1215" y="512.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">protocol/</text>
-<text x="1215" y="538.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">emmv5_protocol（纯编解码）</text>
-<line x1="520" y1="152" x2="520" y2="180" stroke="#5F6A7D" stroke-width="1.4"/>
-<polygon points="520,180 514.5,170 525.5,170" fill="#5F6A7D"/>
-<text x="536" y="166.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">app_init() 调 board_init()</text>
-<line x1="520" y1="272" x2="520" y2="300" stroke="#5F6A7D" stroke-width="1.4"/>
-<polygon points="520,300 514.5,290 525.5,290" fill="#5F6A7D"/>
-<text x="536" y="286.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">board_cfg / board_instances（X-macro 清单）</text>
-<line x1="520" y1="392" x2="520" y2="420" stroke="#5F6A7D" stroke-width="1.4"/>
-<polygon points="520,420 514.5,410 525.5,410" fill="#5F6A7D"/>
-<text x="536" y="406.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">device 用 PID / 四元数 / VQF / 帧编解码</text>
-<line x1="520" y1="632" x2="520" y2="660" stroke="#5F6A7D" stroke-width="1.4"/>
-<polygon points="520,660 514.5,650 525.5,650" fill="#5F6A7D"/>
-<text x="536" y="646.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">任务的在线状态、系统事件组</text>
-<line x1="520" y1="752" x2="520" y2="782" stroke="#5F6A7D" stroke-width="1.4"/>
-<polygon points="520,782 514.5,772 525.5,772" fill="#5F6A7D"/>
-<text x="536" y="767.0" font-family="Noto Sans CJK SC" font-size="12" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">service 收发都走 BspCan</text>
-<line x1="1000" y1="346" x2="1040" y2="346" stroke="#7A5FB5" stroke-width="1.4"/>
-<polygon points="1040,346 1030,340.5 1030,351.5" fill="#7A5FB5"/>
-<text x="1032" y="322" font-family="Noto Sans CJK SC" font-size="12" fill="#7A5FB5" text-anchor="end" dominant-baseline="central" xml:space="preserve">用</text>
-<rect x="1040" y="660" width="350" height="202" rx="10" ry="10" fill="#FFFDF0" stroke="#C8B96B" stroke-width="1.0"/>
-<text x="1215" y="686.0" font-family="Noto Sans CJK SC" font-size="13" font-weight="bold" fill="#C8B96B" text-anchor="middle" dominant-baseline="central" xml:space="preserve">依赖只朝下（上层依赖下层）</text>
-<text x="1058" y="718" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">跨层依赖：</text>
-<text x="1058" y="739" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">app → service（system_init / start）</text>
-<text x="1058" y="760" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">board → bsp（实例在 board_cfg 构造）</text>
-<text x="1058" y="781" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">device → bsp（初始化 / 收发）</text>
-<text x="1058" y="802" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">device → service（注册 CanRx / CanTx 节点）</text>
-<text x="1058" y="823" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">tasks → bsp（巡检 / Bus-Off 恢复）</text>
-<line x1="60.0" y1="226.0" x2="60.0" y2="230.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="233.0" x2="60.0" y2="237.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="240.0" x2="60.0" y2="244.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="247.0" x2="60.0" y2="251.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="254.0" x2="60.0" y2="258.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="261.0" x2="60.0" y2="265.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="268.0" x2="60.0" y2="272.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="275.0" x2="60.0" y2="279.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="282.0" x2="60.0" y2="286.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="289.0" x2="60.0" y2="293.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="296.0" x2="60.0" y2="300.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="303.0" x2="60.0" y2="307.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="310.0" x2="60.0" y2="314.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="317.0" x2="60.0" y2="321.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="324.0" x2="60.0" y2="328.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="331.0" x2="60.0" y2="335.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="338.0" x2="60.0" y2="342.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="345.0" x2="60.0" y2="349.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="352.0" x2="60.0" y2="356.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="359.0" x2="60.0" y2="363.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="366.0" x2="60.0" y2="370.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="373.0" x2="60.0" y2="377.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="380.0" x2="60.0" y2="384.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="387.0" x2="60.0" y2="391.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="394.0" x2="60.0" y2="398.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="401.0" x2="60.0" y2="405.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="408.0" x2="60.0" y2="412.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="415.0" x2="60.0" y2="419.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="422.0" x2="60.0" y2="426.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="429.0" x2="60.0" y2="433.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="436.0" x2="60.0" y2="440.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="443.0" x2="60.0" y2="447.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="450.0" x2="60.0" y2="454.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="457.0" x2="60.0" y2="461.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="464.0" x2="60.0" y2="468.19999999999993" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="471.0" x2="60.0" y2="475.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="478.0" x2="60.0" y2="482.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="485.0" x2="60.0" y2="489.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="492.0" x2="60.0" y2="496.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="499.0" x2="60.0" y2="503.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="506.0" x2="60.0" y2="510.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="513.0" x2="60.0" y2="517.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="520.0" x2="60.0" y2="524.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="527.0" x2="60.0" y2="531.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="534.0" x2="60.0" y2="538.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="541.0" x2="60.0" y2="545.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="548.0" x2="60.0" y2="552.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="555.0" x2="60.0" y2="559.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="562.0" x2="60.0" y2="566.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="569.0" x2="60.0" y2="573.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="576.0" x2="60.0" y2="580.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="583.0" x2="60.0" y2="587.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="590.0" x2="60.0" y2="594.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="597.0" x2="60.0" y2="601.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="604.0" x2="60.0" y2="608.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="611.0" x2="60.0" y2="615.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="618.0" x2="60.0" y2="622.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="625.0" x2="60.0" y2="629.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="632.0" x2="60.0" y2="636.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="639.0" x2="60.0" y2="643.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="646.0" x2="60.0" y2="650.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="653.0" x2="60.0" y2="657.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="660.0" x2="60.0" y2="664.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="667.0" x2="60.0" y2="671.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="674.0" x2="60.0" y2="678.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="681.0" x2="60.0" y2="685.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="688.0" x2="60.0" y2="692.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="695.0" x2="60.0" y2="699.2" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="702.0" x2="60.0" y2="706.0" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="60.0" y1="706.0" x2="64.2" y2="706.0" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="67.0" y1="706.0" x2="71.2" y2="706.0" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="74.0" y1="706.0" x2="78.2" y2="706.0" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="81.0" y1="706.0" x2="85.2" y2="706.0" stroke="#C08A45" stroke-width="1.3"/>
-<line x1="88.0" y1="706.0" x2="90.0" y2="706.0" stroke="#C08A45" stroke-width="1.3"/>
-<text x="68" y="452" font-family="Noto Sans CJK SC" font-size="11" fill="#C08A45" text-anchor="start" dominant-baseline="central" xml:space="preserve">X-macro</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="890" viewBox="0 0 1440 890">
+<rect width="1440" height="890" fill="#ffffff"/>
+<rect x="90" y="40" width="910" height="92" rx="10" ry="10" fill="#FFF6E9" stroke="#C08A45" stroke-width="1.0"/>
+<text x="182" y="86.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">宿主 app/</text>
+<rect x="280" y="64" width="171.8" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="365.9" y="86.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">app_main.cpp（app_init）</text>
+<rect x="461.8" y="64" width="117.981875" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="520.7909375" y="86.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">app_default_task</text>
+<rect x="589.781875" y="64" width="77.72000000000003" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="628.641875" y="86.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">task/*.cpp</text>
+<rect x="90" y="160" width="910" height="92" rx="10" ry="10" fill="#FFF6E9" stroke="#C08A45" stroke-width="1.0"/>
+<text x="182" y="206.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">宿主 board/</text>
+<rect x="280" y="184" width="102.02187500000002" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="331.0109375" y="206.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">board_cfg.hpp</text>
+<rect x="392.021875" y="184" width="183.07062499999995" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="483.55718750000005" y="206.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">board_cfg.cpp（board_init）</text>
+<rect x="585.0925" y="184" width="137.8025" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="653.99375" y="206.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">board_instances.hpp</text>
+<rect x="732.895" y="184" width="125.14625000000001" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#C08A45" stroke-width="1.0"/>
+<text x="795.468125" y="206.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">hardware_config.h</text>
+<rect x="90" y="290" width="550" height="130" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="160" y="355.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 device/</text>
+<rect x="230" y="306" width="75.17374999999998" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="267.586875" y="328.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">dji_motor</text>
+<rect x="315.17375" y="306" width="79.685" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="355.01625" y="328.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">dm_motor</text>
+<rect x="404.85875" y="306" width="97.31375000000003" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="453.515625" y="328.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">device_motor</text>
+<rect x="512.1725" y="306" width="101.77999999999997" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="563.0625" y="328.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">emmv5_group</text>
+<rect x="230" y="360" width="61.80687499999999" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="260.9034375" y="382.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">bmi088</text>
+<rect x="301.806875" y="360" width="44.37125000000003" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="323.9925" y="382.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">r9ds</text>
+<rect x="356.178125" y="360" width="50.74250000000001" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="381.549375" y="382.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">servo</text>
+<rect x="416.92062500000003" y="360" width="57.27312499999999" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="445.55718750000005" y="382.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">buzzer</text>
+<rect x="660" y="290" width="340" height="130" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="830" y="312.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 tasks/</text>
+<rect x="676" y="334" width="63.47062500000004" height="34" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="707.7353125" y="351.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">sys_task</text>
+<rect x="745.470625" y="334" width="81.73234375000004" height="34" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="786.336796875" y="351.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_rx_task</text>
+<rect x="833.2029687500001" y="334" width="81.41437500000006" height="34" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="873.9101562500001" y="351.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_tx_task</text>
+<text x="830" y="394.0" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">10 ms · 1 ms · 有发送节点才建</text>
+<rect x="90" y="470" width="910" height="130" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="160" y="535.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 service/</text>
+<rect x="230" y="486" width="115.34937500000001" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="287.6746875" y="508.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">system/：system</text>
+<rect x="355.349375" y="486" width="137.85125" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="424.275" y="508.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">status（EventState）</text>
+<rect x="503.200625" y="486" width="76.210625" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="541.3059375" y="508.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">state_tree</text>
+<rect x="589.41125" y="486" width="88.5575" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="633.69" y="508.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">fault_record</text>
+<rect x="687.96875" y="486" width="93.89750000000004" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="734.9175" y="508.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">config_check</text>
+<rect x="230" y="540" width="144.8225" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="302.41125" y="562.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">comm/：can_rx_node</text>
+<rect x="384.8225" y="540" width="92.44625000000002" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="431.045625" y="562.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can_tx_node</text>
+<rect x="487.26875" y="540" width="156.29750000000007" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="565.4175" y="562.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">monitor/：online_check</text>
+<rect x="653.5662500000001" y="540" width="164.52687500000002" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="735.8296875000001" y="562.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">definition/：motor · imu</text>
+<rect x="90" y="650" width="910" height="92" rx="10" ry="10" fill="#F2F6FB" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="160" y="696.0" font-family="Noto Sans CJK SC" font-size="14" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">库 bsp/</text>
+<rect x="230" y="674" width="38.39234375000001" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="249.196171875" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">can</text>
+<rect x="274.39234375" y="674" width="41.28499999999997" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="295.03484375" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">uart</text>
+<rect x="321.67734375" y="674" width="34.99265624999998" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="339.17367187499997" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">spi</text>
+<rect x="362.66999999999996" y="674" width="45.78296875000001" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="385.56148437499996" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">pwm</text>
+<rect x="414.45296874999997" y="674" width="42.71500000000003" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="435.81046875" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">gpio</text>
+<rect x="463.16796875" y="674" width="37.732343749999984" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="482.034140625" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">key</text>
+<rect x="506.9003125" y="674" width="61.997656250000034" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="537.899140625" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">encoder</text>
+<rect x="574.89796875" y="674" width="39.789687500000014" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="594.7928125" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">dwt</text>
+<rect x="620.68765625" y="674" width="80.13734375000001" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="660.756328125" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">dma_buffer</text>
+<rect x="706.825" y="674" width="49.77734375" height="44" rx="8" ry="8" fill="#FFFFFF" stroke="#7A8CA6" stroke-width="1.0"/>
+<text x="731.713671875" y="696.0" font-family="Noto Sans CJK SC" font-size="11" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">series</text>
+<rect x="90" y="782" width="910" height="70" rx="10" ry="10" fill="#EFEFF2" stroke="#8A8F99" stroke-width="1.0"/>
+<text x="545.0" y="817.0" font-family="Noto Sans CJK SC" font-size="13" fill="#4A5568" text-anchor="middle" dominant-baseline="central" xml:space="preserve">HAL（按 HAL_*_MODULE_ENABLED 条件编译）· FreeRTOS · CubeMX 生成的句柄</text>
+<line x1="365" y1="132" x2="365" y2="160" stroke="#5F6A7D" stroke-width="1.4"/>
+<polygon points="365,160 359.5,150 370.5,150" fill="#5F6A7D"/>
+<text x="380" y="146" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">app_init() 调 board_init()</text>
+<line x1="365" y1="252" x2="365" y2="290" stroke="#5F6A7D" stroke-width="1.4"/>
+<polygon points="365,290 359.5,280 370.5,280" fill="#5F6A7D"/>
+<text x="380" y="271" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">设备实例在 board_cfg 构造</text>
+<line x1="365" y1="420" x2="365" y2="470" stroke="#5F6A7D" stroke-width="1.4"/>
+<polygon points="365,470 359.5,460 370.5,460" fill="#5F6A7D"/>
+<text x="380" y="440" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">注册 CAN 节点 · 挂状态树</text>
+<line x1="830" y1="420" x2="830" y2="470" stroke="#5F6A7D" stroke-width="1.4"/>
+<polygon points="830,470 824.5,460 835.5,460" fill="#5F6A7D"/>
+<text x="845" y="440" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">巡检 · 分发</text>
+<line x1="365" y1="600" x2="365" y2="650" stroke="#5F6A7D" stroke-width="1.4"/>
+<polygon points="365,650 359.5,640 370.5,640" fill="#5F6A7D"/>
+<text x="380" y="620" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="central" xml:space="preserve">收发都走 BspCanT / BspUartT / BspSpi</text>
+<line x1="545" y1="742" x2="545" y2="782" stroke="#5F6A7D" stroke-width="1.4"/>
+<polygon points="545,782 539.5,772 550.5,772" fill="#5F6A7D"/>
+<line x1="60.0" y1="206.0" x2="60.0" y2="210.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="213.0" x2="60.0" y2="217.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="220.0" x2="60.0" y2="224.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="227.0" x2="60.0" y2="231.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="234.0" x2="60.0" y2="238.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="241.0" x2="60.0" y2="245.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="248.0" x2="60.0" y2="252.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="255.0" x2="60.0" y2="259.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="262.0" x2="60.0" y2="266.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="269.0" x2="60.0" y2="273.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="276.0" x2="60.0" y2="280.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="283.0" x2="60.0" y2="287.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="290.0" x2="60.0" y2="294.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="297.0" x2="60.0" y2="301.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="304.0" x2="60.0" y2="308.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="311.0" x2="60.0" y2="315.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="318.0" x2="60.0" y2="322.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="325.0" x2="60.0" y2="329.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="332.0" x2="60.0" y2="336.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="339.0" x2="60.0" y2="343.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="346.0" x2="60.0" y2="350.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="353.0" x2="60.0" y2="357.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="360.0" x2="60.0" y2="364.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="367.0" x2="60.0" y2="371.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="374.0" x2="60.0" y2="378.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="381.0" x2="60.0" y2="385.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="388.0" x2="60.0" y2="392.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="395.0" x2="60.0" y2="399.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="402.0" x2="60.0" y2="406.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="409.0" x2="60.0" y2="413.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="416.0" x2="60.0" y2="420.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="423.0" x2="60.0" y2="427.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="430.0" x2="60.0" y2="434.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="437.0" x2="60.0" y2="441.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="444.0" x2="60.0" y2="448.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="451.0" x2="60.0" y2="455.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="458.0" x2="60.0" y2="462.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="465.0" x2="60.0" y2="469.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="472.0" x2="60.0" y2="476.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="479.0" x2="60.0" y2="483.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="486.0" x2="60.0" y2="490.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="493.0" x2="60.0" y2="497.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="500.0" x2="60.0" y2="504.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="507.0" x2="60.0" y2="511.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="514.0" x2="60.0" y2="518.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="521.0" x2="60.0" y2="525.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="528.0" x2="60.0" y2="532.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="535.0" x2="60.0" y2="539.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="542.0" x2="60.0" y2="546.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="549.0" x2="60.0" y2="553.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="556.0" x2="60.0" y2="560.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="563.0" x2="60.0" y2="567.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="570.0" x2="60.0" y2="574.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="577.0" x2="60.0" y2="581.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="584.0" x2="60.0" y2="588.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="591.0" x2="60.0" y2="595.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="598.0" x2="60.0" y2="602.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="605.0" x2="60.0" y2="609.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="612.0" x2="60.0" y2="616.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="619.0" x2="60.0" y2="623.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="626.0" x2="60.0" y2="630.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="633.0" x2="60.0" y2="637.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="640.0" x2="60.0" y2="644.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="647.0" x2="60.0" y2="651.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="654.0" x2="60.0" y2="658.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="661.0" x2="60.0" y2="665.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="668.0" x2="60.0" y2="672.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="675.0" x2="60.0" y2="679.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="682.0" x2="60.0" y2="686.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="689.0" x2="60.0" y2="693.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="696.0" x2="60.0" y2="696.0" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="60.0" y1="696.0" x2="64.2" y2="696.0" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="67.0" y1="696.0" x2="71.2" y2="696.0" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="74.0" y1="696.0" x2="78.2" y2="696.0" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="81.0" y1="696.0" x2="85.2" y2="696.0" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="88.0" y1="696.0" x2="90.0" y2="696.0" stroke="#C08A45" stroke-width="1.3"/>
+<text x="66" y="452" font-family="Noto Sans CJK SC" font-size="11" fill="#C08A45" text-anchor="start" dominant-baseline="central" xml:space="preserve">X-macro</text>
+<line x1="700.0" y1="252.0" x2="700.0" y2="256.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="700.0" y1="259.0" x2="700.0" y2="263.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="700.0" y1="266.0" x2="700.0" y2="270.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="700.0" y1="273.0" x2="700.0" y2="277.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="700.0" y1="280.0" x2="700.0" y2="284.2" stroke="#C08A45" stroke-width="1.3"/>
+<line x1="700.0" y1="287.0" x2="700.0" y2="290.0" stroke="#C08A45" stroke-width="1.3"/>
+<text x="708" y="264" font-family="Noto Sans CJK SC" font-size="11" fill="#C08A45" text-anchor="start" dominant-baseline="central" xml:space="preserve">X-macro</text>
+<rect x="1040" y="290" width="350" height="160" rx="10" ry="10" fill="#F3EEFB" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1215" y="314.0" font-family="Noto Sans CJK SC" font-size="13" font-weight="bold" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">algorithm/（只依赖 C++ 标准库）</text>
+<rect x="1058" y="338" width="38.180000000000064" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1077.09" y="359.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">pid</text>
+<rect x="1106.18" y="338" width="107.04874999999993" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1159.704375" y="359.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">quaternion_pid</text>
+<rect x="1223.22875" y="338" width="82.16000000000008" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1264.30875" y="359.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">quaternion</text>
+<rect x="1058" y="392" width="37.54250000000002" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1076.77125" y="413.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">vqf</text>
+<rect x="1105.5425" y="392" width="56.14249999999993" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1133.61375" y="413.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">matrix</text>
+<rect x="1171.685" y="392" width="33.680000000000064" height="42" rx="8" ry="8" fill="#FFFFFF" stroke="#7A5FB5" stroke-width="1.0"/>
+<text x="1188.5249999999999" y="413.0" font-family="Noto Sans CJK SC" font-size="12" fill="#24303F" text-anchor="middle" dominant-baseline="central" xml:space="preserve">rls</text>
+<line x1="640" y1="300" x2="650" y2="300" stroke="#7A5FB5" stroke-width="1.4"/>
+<line x1="650" y1="300" x2="650" y2="280" stroke="#7A5FB5" stroke-width="1.4"/>
+<line x1="650" y1="280" x2="1215" y2="280" stroke="#7A5FB5" stroke-width="1.4"/>
+<line x1="1215" y1="280" x2="1215" y2="290" stroke="#7A5FB5" stroke-width="1.4"/>
+<polygon points="1215,290 1209.5,280 1220.5,280" fill="#7A5FB5"/>
+<text x="1060" y="268" font-family="Noto Sans CJK SC" font-size="12" fill="#7A5FB5" text-anchor="start" dominant-baseline="central" xml:space="preserve">device 用</text>
+<line x1="1000" y1="535" x2="1215" y2="535" stroke="#7A5FB5" stroke-width="1.4"/>
+<line x1="1215" y1="535" x2="1215" y2="450" stroke="#7A5FB5" stroke-width="1.4"/>
+<polygon points="1215,450 1209.5,460 1220.5,460" fill="#7A5FB5"/>
+<text x="1228" y="500" font-family="Noto Sans CJK SC" font-size="12" fill="#7A5FB5" text-anchor="start" dominant-baseline="central" xml:space="preserve">service 用</text>
+<rect x="1040" y="580" width="350" height="272" rx="10" ry="10" fill="#FFFDF0" stroke="#C8B96B" stroke-width="1.0"/>
+<text x="1215" y="606.0" font-family="Noto Sans CJK SC" font-size="13" font-weight="bold" fill="#C8B96B" text-anchor="middle" dominant-baseline="central" xml:space="preserve">依赖只朝下（tools/check_layers.py 检查）</text>
+<text x="1058" y="640" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">algorithm、bsp：只用本层</text>
+<text x="1058" y="665" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">service：+ bsp、algorithm</text>
+<text x="1058" y="690" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">device：+ service、bsp、algorithm</text>
+<text x="1058" y="715" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">tasks：+ service、bsp（不用 device）</text>
+<text x="1058" y="740" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">各层都能包含：status_code.hpp、</text>
+<text x="1058" y="765" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">  config_check.hpp（读宿主配置的入口）</text>
+<text x="1058" y="790" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">反向只有 X-macro：bsp / tasks 包含</text>
+<text x="1058" y="815" font-family="Noto Sans CJK SC" font-size="11" fill="#4A5568" text-anchor="start" dominant-baseline="hanging" xml:space="preserve">  宿主 board_instances.hpp</text>
 </svg>

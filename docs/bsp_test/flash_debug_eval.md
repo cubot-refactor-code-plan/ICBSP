@@ -1,5 +1,7 @@
 # 烧写调试方式评估：EmberProbe skill vs 命令行（OpenOCD / GDB / CubeMX CLI）
 
+> 与库代码版本无关：烧录 / 调试工具（EmberProbe、OpenOCD、GDB、CubeMX CLI）的评估。
+
 环境：EmberProbe 0.8.6（VS Code 扩展，skill 装在 `.agents/skills/`，经 `.claude/skills` 软链接给 Claude Code）、
 OpenOCD 0.12.0+dev（`/usr/local/bin/openocd`，配置 `Flash/daplink.cfg`）、CMSIS-DAP（Horco，SN 5335231732）、
 STM32CubeMX 6.18.1、arm-none-eabi-gdb。本次测试共烧写 17 次（16 次 EmberProbe、1 次 OpenOCD 命令行），CubeMX 生成 2 次。

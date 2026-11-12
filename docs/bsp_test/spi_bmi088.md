@@ -1,5 +1,7 @@
 # SPI2 + 板载 BMI088 实机测试（2026-10-27 ~ 10-28）
 
+> 对应代码：旧库 STM32_BSP 工作区（2026-10-29 提交为 `be91caf` / `a79e1ae`）。API 名称是旧的；当前实现的 SPI / BMI088 回归见 `phase3_2026-11-06.md`。
+
 对库新增的 `bsp/bsp_spi`（`BspSpi` / `BspSpiDevice`）与 `device/device_bmi088`（`DeviceBmi088`，输出 `service/imu_definition.hpp` 的 `ImuData`）
 在 DM-MC02 上做基本功能、错误路径、故障注入、压力 / 浸泡测试，以及人工碰板 / 剧烈晃动对照。自动用例不需要跳线。测试代码 `app/test/test_spi_imu.cpp`，开关 `BSP_TEST_SUITE_SPI_IMU`。
 

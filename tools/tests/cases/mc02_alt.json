@@ -1,0 +1,128 @@
+{
+  "ioc": "mc02_h723.ioc",
+  "selection": {
+    "peripherals": {
+      "FDCAN2": {
+        "enabled": false
+      },
+      "FDCAN1": {
+        "params": {
+          "rx_depth": 32,
+          "tx_depth": 8
+        }
+      },
+      "USART2": {
+        "enabled": false
+      },
+      "USART3": {
+        "enabled": false
+      },
+      "UART4": {
+        "enabled": false
+      },
+      "UART7": {
+        "enabled": false
+      },
+      "UART9": {
+        "enabled": false
+      },
+      "USART10": {
+        "enabled": false
+      },
+      "SPI2": {
+        "enabled": false
+      },
+      "USART1": {
+        "params": {
+          "mode": "it",
+          "rx_size": 64,
+          "tx_size": 256
+        }
+      },
+      "UART5": {
+        "params": {
+          "dir": "RxOnly",
+          "baudrate": 100000
+        }
+      },
+      "TIM1_CH1": {
+        "enabled": true
+      },
+      "TIM2_CH3": {
+        "enabled": true
+      }
+    },
+    "devices": [
+      {
+        "type": "dji_motor",
+        "name": "gimbal_yaw",
+        "needs": {
+          "bus": "FDCAN1"
+        },
+        "params": {
+          "type": "GM6020",
+          "id": 2,
+          "control": "CURRENT"
+        }
+      },
+      {
+        "type": "dm_motor",
+        "name": "joint",
+        "needs": {
+          "bus": "FDCAN3"
+        },
+        "params": {
+          "model": "J8009P",
+          "can_id": 17,
+          "master_id": 33,
+          "mode": "POS_VEL"
+        }
+      },
+      {
+        "type": "servo",
+        "name": "hatch",
+        "needs": {
+          "pwm": "TIM1_CH1"
+        },
+        "params": {
+          "range_deg": 270,
+          "pulse_min_us": 500,
+          "pulse_max_us": 2500
+        }
+      },
+      {
+        "type": "buzzer",
+        "name": "beeper",
+        "needs": {
+          "pwm": "TIM2_CH3"
+        }
+      },
+      {
+        "type": "r9ds",
+        "name": "rc",
+        "needs": {
+          "bus": "UART5"
+        }
+      },
+      {
+        "type": "emmv5_group",
+        "name": "steppers",
+        "needs": {
+          "bus": "UART8"
+        },
+        "params": {
+          "addrs": [
+            1,
+            2,
+            3
+          ],
+          "checksum": "XOR"
+        }
+      }
+    ],
+    "switches": {
+      "ICBSP_UART_PATROL_ENABLE": 0
+    },
+    "debug_uart": "USART1"
+  }
+}

@@ -1,0 +1,65 @@
+/**
+ * @file imu_definition.hpp
+ * @author ChoseB
+ * @brief IMU 通用数据定义
+ * @version 0.1
+ * @date 2026-10-27
+ *
+ * @note 本文件只保存所有 IMU 都具有的可复制数据，不包含具体通信协议、寄存器、硬件所有权或在线检查。
+ *       协议原始值和器件配置由具体 IMU 类型自行定义（如 BMI088 的 Bmi088RawData）。
+ * @note 不同器件能填的字段不同：自带姿态解算的器件全部字段都填；只有原始传感器的器件由驱动自己解算
+ *       （BMI088 在自动刷新且 Config::attitude 时用 VQF 解算，否则只填 gyro / acc，欧拉角保持 0、四元数保持单位四元数，不代表实际姿态；
+ *       BMI088 用 is_attitude_ready() 区分）。
+ *       温度等并非所有器件都有的数据，放在具体器件自己的数据里。
+ */
+#ifndef __IMU_DEFINITION_HPP__
+#define __IMU_DEFINITION_HPP__
+
+#include "algorithm/math_constants.hpp" // IWYU pragma: export（ICBSP_PI / ICBSP_PI_F；原来的 PI 宏已删除，评审 I6）
+
+/**
+ * @brief 单个 IMU 的通用数据
+ *
+ * @note gyro / acc 的轴与器件坐标的对应关系由具体器件说明（器件驱动给芯片本体坐标，安装方向的旋转由上层处理）。
+ */
+struct ImuData
+{
+  /**
+   * @brief 角速度，单位：rad/s，**传感器本体系**（绕器件自己的 X / Y / Z 轴）
+   * @note 评审 I5：原来叫 yaw / pitch / roll，安装方向一旋转名字就和含义对不上；欧拉角速率请从姿态现算
+   */
+  struct Gyro
+  {
+    double x; ///< 绕本体 X 轴
+    double y; ///< 绕本体 Y 轴
+    double z; ///< 绕本体 Z 轴
+  } gyro;
+
+  struct Acceleration{
+    double x,y,z;
+  }acc; // 加速度，单位：m/s²
+
+  /**
+   * @brief 欧拉角，单位：度
+   */
+  struct EulerAngle
+  {
+    double yaw;   ///< 偏航角
+    double pitch; ///< 俯仰角
+    double roll;  ///< 横滚角
+  } euler_angle;
+
+  /**
+   * @brief 欧拉角，单位：rad
+   */
+  struct EulerRadian
+  {
+    double yaw;   ///< 偏航角
+    double pitch; ///< 俯仰角
+    double roll;  ///< 横滚角
+  } euler_radian;
+
+  double quaternion[4] = {1.0, 0.0, 0.0, 0.0}; ///< 姿态四元数，顺序 w / x / y / z；还没解算过时是单位四元数（F1：全 0 喂给四元数控制会算出 NaN）
+};
+
+#endif // __IMU_DEFINITION_HPP__

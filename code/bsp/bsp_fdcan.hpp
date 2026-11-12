@@ -8,26 +8,26 @@
  * @copyright Copyright (c) 2026
  *
  * @details 本层只做三件事：硬件收发、总线恢复、诊断计数。**只有头文件**（任意 `<RX_DEPTH, TX_DEPTH>` 都能用）；
- *          HAL 回调按 board_instances.hpp 的 BSP_CAN_INSTANCES 分发（bsp_can.cpp）。
+ *          HAL 回调按 board_instances.hpp 的 ICBSP_CAN_INSTANCES 分发（bsp_can.cpp）。
  *
  * @note 发送：send() 非阻塞，帧进软件发送缓冲后立即尝试写进硬件 TX FIFO；硬件满时由 TX-FIFO-EMPTY 中断续发
  *       （该中断只在软件缓冲有帧时打开）。sys_task 每 10 ms 调 tx_recover() 兜底。
  *       “软件缓冲 → 硬件 FIFO”只发生在临界区（任务侧）或 FDCAN 中断里，发送缓冲只有一个写者、读者之间不会交错。
  *       send() 用任务级临界区，**不能在中断里调用**。
  * @note 接收：FIFO0 中断把帧（只拷 DLC 个字节，其余为 0）投进原始接收缓冲。
- *       - CAN_RX_ENABLE = 1：can_rx_task 每 1 ms 取走并分发给接收节点，没有节点认领的帧进回退缓冲，
- *         receive() 只读回退缓冲（深度 CAN_RX_RETURN_FRAMES，0 = 不建回退缓冲，没人认领的帧只计数）；
- *       - CAN_RX_ENABLE = 0：没有 can_rx_task，receive() 直接读原始接收缓冲。
+ *       - ICBSP_CAN_RX_ENABLE = 1：can_rx_task 每 1 ms 取走并分发给接收节点，没有节点认领的帧进回退缓冲，
+ *         receive() 只读回退缓冲（深度 ICBSP_CAN_RX_RETURN_FRAMES，0 = 不建回退缓冲，没人认领的帧只计数）；
+ *       - ICBSP_CAN_RX_ENABLE = 0：没有 can_rx_task，receive() 直接读原始接收缓冲。
  *       同一条总线的 receive() **只允许一个任务调用**。
  * @note 远程帧由硬件拒收；DLC > 8 的帧（FD 帧或经典帧 DLC 9~15）丢弃并计入 rx_len_drop。
- * @note Bus-Off：sys_task 每 10 ms 调 service_recovery()，按 CAN_BUSOFF_RETRY_MS 限流清 CCCR.INIT，
+ * @note Bus-Off：sys_task 每 10 ms 调 service_recovery()，按 ICBSP_CAN_BUSOFF_RETRY_MS 限流清 CCCR.INIT，
  *       进入 Bus-Off 时取消硬件里未发出的旧帧并清空软件发送缓冲（避免恢复瞬间发出过期指令）。
  */
 
 #ifndef __BSP_FDCAN_HPP__
 #define __BSP_FDCAN_HPP__
 
-#include "bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
+#include "bsp/bsp_series.hpp" // IWYU pragma: keep（HAL 模块开关 / 系列桥接）
 
 // 宿主工程没在 CubeMX 里开 FDCAN（HAL_FDCAN_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_FDCAN_MODULE_ENABLED
@@ -36,19 +36,13 @@
 #include "message_buffer.h"
 #include "task.h" // IWYU pragma: keep
 
-#include "hardware_config.h" // CAN_RX_ENABLE、CAN_RX_RETURN_FRAMES、CAN_BUSOFF_RETRY_MS
-#include "status.hpp"
+#include "service/system/config_check.hpp" // ICBSP_CAN_RX_ENABLE、ICBSP_CAN_RX_RETURN_FRAMES、ICBSP_CAN_BUSOFF_RETRY_MS
+#include "service/system/status_code.hpp"
 
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-#ifndef CAN_RX_RETURN_FRAMES
-#  error "hardware_config.h 缺少 CAN_RX_RETURN_FRAMES（回退缓冲深度，0 = 不建回退缓冲），见 templates/user/board/hardware_config.h"
-#endif
-#ifndef CAN_BUSOFF_RETRY_MS
-#  error "hardware_config.h 缺少 CAN_BUSOFF_RETRY_MS，见 templates/user/board/hardware_config.h"
-#endif
 
 
 /* ==================== 帧结构 ==================== */
@@ -74,7 +68,7 @@ constexpr uint16_t CAN_DLC_MASK_8   = 1U << 8;  ///< 只接受 8 字节帧（默
 constexpr uint16_t CAN_DLC_MASK_ANY = 0x01FFU;  ///< 接受 0~8 任意长度
 
 /**
- * @brief 实例是否在 board_instances.hpp 的 BSP_CAN_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_can.cpp）
+ * @brief 实例是否在 board_instances.hpp 的 ICBSP_CAN_INSTANCES 里，且是清单里唯一绑这个句柄的实例（实现在 bsp_can.cpp）
  * @note HAL 回调与 can_rx / can_tx / sys_task 只认清单里的实例；init() 用它把“漏写清单 / 两个实例绑同一句柄”变成 BAD_ARG。
  */
 bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan);
@@ -82,7 +76,7 @@ bool bsp_can_is_listed(const void *self, const FDCAN_HandleTypeDef *hfdcan);
 /**
  * @brief 清单外 FDCAN 的回调转调（弱函数，默认什么也不做；实现在 bsp_can.cpp）
  * @note 库占用了 HAL_FDCAN_RxFifo0Callback / HAL_FDCAN_TxFifoEmptyCallback / HAL_FDCAN_ErrorStatusCallback，宿主不能再定义它们。
- *       不在 BSP_CAN_INSTANCES 里的 FDCAN 的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
+ *       不在 ICBSP_CAN_INSTANCES 里的 FDCAN 的这三个回调转到下面三个函数，宿主按需定义同名强函数即可。
  */
 extern "C"
 {
@@ -119,7 +113,7 @@ inline uint32_t dlc_to_len(uint32_t dlc_code)
  * @note 用法（实例写在 board_cfg.hpp）：
  *
  *   inline BspCanT<16, 16> bsp_can1({.hfdcan = &hfdcan1, .name = "CAN1"});
- *   // board_instances.hpp 的 BSP_CAN_INSTANCES 里加 X(bsp_can1)；board_init() 里 ICBSP_CHECK(bsp_can1.init() == Status::OK);
+ *   // board_instances.hpp 的 ICBSP_CAN_INSTANCES 里加 X(bsp_can1)；board_init() 里 ICBSP_CHECK(bsp_can1.init() == Status::OK);
  *
  *   uint8_t d[8] = {...};
  *   bsp_can1.send(0x200, d);                                   // 标准帧 8 字节
@@ -155,7 +149,7 @@ public:
     volatile uint32_t rx_dropped        = 0; ///< 原始接收缓冲满而丢弃的帧数
     volatile uint32_t rx_lost           = 0; ///< 硬件 RX FIFO0 溢出（RF0L）的次数
     volatile uint32_t rx_len_drop       = 0; ///< DLC > 8 而丢弃的帧数
-    volatile uint32_t rx_unclaimed      = 0; ///< 没有接收节点认领的帧数（CAN_RX_ENABLE = 1 时由 can_rx_task 计）
+    volatile uint32_t rx_unclaimed      = 0; ///< 没有接收节点认领的帧数（ICBSP_CAN_RX_ENABLE = 1 时由 can_rx_task 计）
     volatile uint32_t rx_return_dropped = 0; ///< 没人认领、回退缓冲又满而丢弃的帧数
     // 发送
     volatile uint32_t tx_dropped       = 0; ///< 写入硬件 TX FIFO 失败而丢弃的帧数
@@ -181,7 +175,7 @@ public:
 
   /**
    * @brief 停外设、关通知、清软件缓冲，再按 CubeMX 配置重新启动（可重复调用，失败回滚）
-   * @return OK；BAD_ARG=句柄为空、实例不在 BSP_CAN_INSTANCES 里或清单里另有实例绑了同一句柄；
+   * @return OK；BAD_ARG=句柄为空、实例不在 ICBSP_CAN_INSTANCES 里或清单里另有实例绑了同一句柄；
    *         IO_ERROR=资源创建或硬件启动失败
    * @note 初始化阶段调用（system_init() 之后、system_start() 之前）；运行中重新调用时不能有任务阻塞在本实例的 receive() 上。
    */
@@ -197,7 +191,7 @@ public:
   }
 
   /** @brief 底层句柄（供 HAL 回调分发） */
-  FDCAN_HandleTypeDef *handle() const
+  FDCAN_HandleTypeDef *get_handle() const
   {
     return _hfdcan;
   }
@@ -223,9 +217,9 @@ public:
   Status send_latest(uint32_t id, const uint8_t *data, uint8_t dlc = 8U, uint32_t id_type = FDCAN_STANDARD_ID);
 
   /**
-   * @brief 取一帧：CAN_RX_ENABLE = 1 时取没人认领的帧（回退缓冲），= 0 时取所有收到的帧
+   * @brief 取一帧：ICBSP_CAN_RX_ENABLE = 1 时取没人认领的帧（回退缓冲），= 0 时取所有收到的帧
    * @param timeout_ms 0=不等待，portMAX_DELAY=一直等
-   * @return OK；TIMEOUT=没有数据；BAD_ARG；NOT_INIT；NOT_SUPPORTED=回退缓冲被关掉（CAN_RX_RETURN_FRAMES = 0）
+   * @return OK；TIMEOUT=没有数据；BAD_ARG；NOT_INIT；NOT_SUPPORTED=回退缓冲被关掉（ICBSP_CAN_RX_RETURN_FRAMES = 0）
    */
   Status receive(CanRxMsg *msg, uint32_t timeout_ms = portMAX_DELAY);
 
@@ -267,12 +261,12 @@ private:
   /* ==================== 成员 ==================== */
 
   /** @brief 回退缓冲是否存在（有 can_rx_task 且深度非 0） */
-  static constexpr bool HAS_RETURN = (CAN_RX_ENABLE != 0) && (CAN_RX_RETURN_FRAMES > 0);
+  static constexpr bool HAS_RETURN = (ICBSP_CAN_RX_ENABLE != 0) && (ICBSP_CAN_RX_RETURN_FRAMES > 0);
 
   FDCAN_HandleTypeDef  *_hfdcan;
   const char           *_name;
   MessageBufferHandle_t _tx_message_buffer  = nullptr; ///< 写者：send()（临界区）；读者：临界区里的任务侧或 FDCAN 中断
-  MessageBufferHandle_t _rx_message_buffer  = nullptr; ///< 写者：FIFO0 中断；读者：can_rx_task（或 CAN_RX_ENABLE = 0 时的 receive()）
+  MessageBufferHandle_t _rx_message_buffer  = nullptr; ///< 写者：FIFO0 中断；读者：can_rx_task（或 ICBSP_CAN_RX_ENABLE = 0 时的 receive()）
   MessageBufferHandle_t _rx_return_buffer   = nullptr; ///< 写者：can_rx_task；读者：receive()
   TickType_t            _recovery_started   = 0U;
   TickType_t            _recovery_attempted = 0U;
@@ -435,7 +429,7 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::init()
   _tx_message_buffer = xMessageBufferCreate((sizeof(CanTxMsg) + 4U) * TX_DEPTH);
   if (HAS_RETURN)
   {
-    _rx_return_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4U) * static_cast<size_t>(CAN_RX_RETURN_FRAMES > 0 ? CAN_RX_RETURN_FRAMES : 1));
+    _rx_return_buffer = xMessageBufferCreate((sizeof(CanRxMsg) + 4U) * static_cast<size_t>(ICBSP_CAN_RX_RETURN_FRAMES > 0 ? ICBSP_CAN_RX_RETURN_FRAMES : 1));
   }
   if (_rx_message_buffer == nullptr || _tx_message_buffer == nullptr || (HAS_RETURN && _rx_return_buffer == nullptr))
   {
@@ -529,10 +523,10 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::receive(CanRxMsg *msg, uint32_t timeout_ms)
   {
     return Status::BAD_ARG;
   }
-#if CAN_RX_ENABLE
+#if ICBSP_CAN_RX_ENABLE
   if (!HAS_RETURN)
   {
-    return Status::NOT_SUPPORTED; // CAN_RX_RETURN_FRAMES = 0：没人认领的帧不保留
+    return Status::NOT_SUPPORTED; // ICBSP_CAN_RX_RETURN_FRAMES = 0：没人认领的帧不保留
   }
   MessageBufferHandle_t buf = _rx_return_buffer; // 只读回退缓冲：原始缓冲只归 can_rx_task（N21）
 #else
@@ -567,7 +561,7 @@ bool BspCanT<RX_DEPTH, TX_DEPTH>::return_frame(const CanRxMsg &msg)
   diagnostics.rx_unclaimed = diagnostics.rx_unclaimed + 1U;
   if (_rx_return_buffer == nullptr)
   {
-    return false; // 没有回退缓冲（CAN_RX_RETURN_FRAMES = 0）：只计数
+    return false; // 没有回退缓冲（ICBSP_CAN_RX_RETURN_FRAMES = 0）：只计数
   }
   if (xMessageBufferSend(_rx_return_buffer, &msg, sizeof(msg), 0) != sizeof(msg))
   {
@@ -607,7 +601,7 @@ Status BspCanT<RX_DEPTH, TX_DEPTH>::service_recovery()
   }
 
   const TickType_t now   = xTaskGetTickCount();
-  const TickType_t retry = pdMS_TO_TICKS(CAN_BUSOFF_RETRY_MS);
+  const TickType_t retry = pdMS_TO_TICKS(ICBSP_CAN_BUSOFF_RETRY_MS);
   taskENTER_CRITICAL();
   const bool bus_off = (_hfdcan->Instance->PSR & FDCAN_PSR_BO) != 0U;
   if (bus_off && !diagnostics.recovering)

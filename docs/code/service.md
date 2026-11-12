@@ -11,30 +11,37 @@
 
 | 文件 | 职责 | 关键符号 |
 | --- | --- | --- |
-| `system.hpp/.cpp` | 库入口 + 三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`sys_state` |
-| `status_code.hpp` | 状态码（纯定义，不依赖 RTOS，评审 A6） | `Status`、`status_bit()` |
-| `status.hpp/.cpp` | 事件状态树（包含 `status_code.hpp`） | `EventState` |
-| `online_check.hpp/.cpp` | 设备在线判定（内部单向链表） | `Online` |
-| `can_rx_node.hpp/.cpp` | 按 ID 分发 CAN 帧 | `CanRxNodeT<CanT>::regist/dispatch` |
-| `can_tx_node.hpp/.cpp` | 发送槽位聚合 + 保底心跳 | `CanTxNodeT<CanT>` |
-| `fault_record.hpp/.cpp` | 停机现场（assert / 栈溢出 / 分配失败 / 故障异常） | `FaultKind`、`FaultRecord`、`fault_on_*()`、`ICBSP_CHECK()` |
-| `newlib_lock.cpp` | newlib 堆的线程锁（弱符号，评审 A9） | `__malloc_lock` / `__malloc_unlock` |
-| `motor_definition.hpp` | 电机通用数据结构 | 供 device / app 共用 |
-| `imu_definition.hpp` | IMU 数据结构（`ImuData` 等） | 供 device / app 共用 |
+| `system/system.hpp/.cpp` | 库入口、`sys_state` / `bsp_dwt` 实例、sys_task 统计与报告回调、三个任务体声明；`.dma_buffer` 早期搬运 | `system_init()`、`system_start()`、`system_set_report_hook()`、`sys_task_stats` |
+| `system/config_check.hpp` | 库读宿主配置的唯一入口：缺宏 / 范围 / 依赖检查 | 包含 `hardware_config.h` |
+| `system/status_code.hpp` | 状态码（纯定义，不依赖 RTOS，评审 A6） | `Status`、`status_bit()` |
+| `system/status.hpp/.cpp` | 事件状态（包含 `status_code.hpp`） | `EventState` |
+| `system/state_tree.hpp/.cpp` | 默认树的总线层：每个清单实例一个节点，按诊断计数记错 | `bus_state()`、`state_tree_poll()` |
+| `system/fault_record.hpp/.cpp` | 停机现场（assert / 栈溢出 / 分配失败 / 故障异常） | `FaultKind`、`FaultRecord`、`fault_on_*()`、`ICBSP_CHECK()` |
+| `system/newlib_lock.cpp` | newlib 堆的线程锁（弱符号，评审 A9） | `__malloc_lock` / `__malloc_unlock` |
+| `monitor/online_check.hpp/.cpp` | 设备在线判定（内部单向链表；可关联设备的 EventState 节点） | `Online` |
+| `comm/can_rx_node.hpp` | 按 ID 分发 CAN 帧 | `CanRxNodeT<CanT>::regist/dispatch` |
+| `comm/can_tx_node.hpp` | 发送槽位聚合 + 保底心跳 | `CanTxNodeT<CanT>` |
+| `definition/motor_definition.hpp` | 电机通用数据结构 | 供 device / app 共用 |
+| `definition/imu_definition.hpp` | IMU 数据结构（`ImuData` 等） | 供 device / app 共用 |
 
 ---
 
 ## 2. 入口与生命周期
 
 ```cpp
-void system_init(void);   // 建 sys_state，创建 sys_task / can_rx_task（调度器未启动，任务不会跑）
+void system_init(void);   // bsp_dwt、sys_state、默认树总线节点，创建 sys_task / can_rx_task（调度器未启动，任务不会跑）
 void system_start(void);  // 有发送节点才建 can_tx_task；检查初始化错误；置运行位
 extern EventState sys_state;
+extern BspDwt     bsp_dwt;   // 库定义、system_init() 里 init()，宿主不要再定义
+
+void system_set_report_hook(SystemReportHook hook, uint32_t period_ms);  // 周期报告回调（默认没有，库不打印）
+extern volatile SysTaskStats sys_task_stats;                            // cycles / last_us / max_us / avg_us（µs）
 ```
 
 调用顺序见 [启动顺序](README.md#3-启动顺序)。要点：
 
-- `system_init()` 里所有失败都用 `configASSERT` 停机，不会「半初始化继续跑」
+- `system_init()` 里每一步都用 `ICBSP_CHECK` 检查，失败写 `fault_record` 停机，不会「半初始化继续跑」
+- sys_task 的耗时统计写在全局 `sys_task_stats`，调试器里直接读；要打印就用 `system_set_report_hook()` 接一个回调（跑在 sys_task 的栈上，回调里 `printf` 要留够 `ICBSP_SYS_TASK_STACK`）
 - `system_start()` 里 `sys_state.complete_init()` 会把 `board_init()` 阶段登记的 `init_error` 一次性检查
 - `system.cpp` 里还有 `.dma_buffer` 的早期搬运（`constructor(101)`），必须在全局构造之前完成
 
@@ -56,15 +63,36 @@ enum class Status : uint8_t { OK, BUSY, TIMEOUT, FULL, IO_ERROR, BAD_ARG, NOT_IN
 | `Status error(Status)` | 运行期错误：只记码，不动运行位，**向上传播**到父节点 |
 | `Status init_error(Status)` | 初始化失败：记码 + 置粘滞失败位 + 清运行位，向上传播。**只在初始化期有效**：本实例已在运行时降级成 `error()`，返回 `NOT_SUPPORTED`（运行期的错误不能让系统停摆） |
 | `Status clear_error(Status)` / `Status clear_errors()` | 清一个 / 全部错误码；只清本实例、**不传播**，不动失败位与运行位 |
-| `bool is_ready()` / `bool running()` | 阶段查询 |
-| `Status error_code()` | 未清的错误码里**枚举值最小**的那个（不是最近一次）；没有错误返回 `OK` |
-| `uint32_t error_bits()` | 未清的错误码位图（`status_bit()` 掩码） |
+| `bool is_ready()` / `bool is_running()` | 阶段查询 |
+| `Status get_error_code()` | 未清的错误码里**枚举值最小**的那个（不是最近一次）；没有错误返回 `OK` |
+| `uint32_t get_error_bits()` | 未清的错误码位图（`status_bit()` 掩码） |
 | `void wait_running()` | 阻塞到运行位；**初始化失败时删除当前任务** |
 
 父子关系只用于「错误向上传播」，**不聚合 running**：子系统 running 不代表父级 running。
 
 错误的生命周期：`error()` / `init_error()` 记下的码一直保留（粘滞），直到维护者调 `clear_error()`；
 清子节点不会清父节点（父节点上的同一个码可能还来自别的子节点）。初始化失败位永不清除。
+
+### 默认树（Q6）
+
+库默认建好三层，宿主不用写代码（`service/system/state_tree.hpp`）：
+
+```
+sys_state                     根（system_init() 建）
+├─ bus_state(&bsp_can1)       每个 ICBSP_CAN/UART/SPI_INSTANCES 实例一个（system_init() 建，system_start() 进入运行态）
+│   └─ DjiMotor::get_state()  设备在自己的 init() 里挂到所用总线下
+├─ bus_state(&bsp_uart1)
+└─ bus_state(&bsp_spi2)
+```
+
+| 谁记错 | 什么时候 | 记什么 |
+| --- | --- | --- |
+| sys_task（`state_tree_poll()`，10 ms） | 总线实例的诊断计数涨了 | CAN：Bus-Off → `IO_ERROR`，丢帧 / 缓冲满 → `FULL`，发送补救 → `TIMEOUT`；UART：线路 / 重建错误 → `IO_ERROR`，丢字节 → `FULL`，发送卡死恢复 → `TIMEOUT`；SPI：`IO_ERROR` / `TIMEOUT` / 等锁超时 `BUSY` |
+| `Online::update()` | 关联了设备节点的 Online 由在线变离线（构造后从没上线过的不算） | 设备节点 `TIMEOUT` |
+| 设备 `init()` | 初始化失败 | 设备节点 `init_error()`，一路传到根，`system_start()` 停机 |
+
+子节点出错只置父节点的错误位，**不清运行位**。查整机有没有出过错看 `sys_state.get_error_bits()`，查是哪条总线看
+`bus_state(&bsp_can1)->get_error_bits()`，查是哪个设备看设备的 `get_state()`。`ICBSP_SYS_TASK_ENABLE = 0` 时总线层不记运行期错误。
 
 业务任务的标准开头：
 
@@ -89,7 +117,7 @@ public:
   explicit Online(uint16_t timeout_gap = 30);  // 超过多少 ms 没刷新就判离线
   Status refresh_task();   // 任务上下文：收到有效数据时刷新
   Status refresh_isr();    // 中断上下文：同上，ISR 安全
-  Status is_online() const;// OK=在线，TIMEOUT=离线
+  bool is_online() const;   // true = 在线（2.7 起；之前返回 Status）
 };
 ```
 
@@ -116,23 +144,23 @@ static bool        dispatch(CanT &can, const CanRxMsg &rx);  // 有节点消费�
 - 在**初始化阶段**（`board_init()`）注册，同一 CAN + 帧类型 + ID 不允许重复
 - `dispatch()` 由 `can_rx_task` 调用，回调里要短、不能阻塞，`rx` 只在回调期间有效
 - `dlc_mask`：接受的数据长度位图（第 n 位 = DLC n），默认只收 8 字节帧，`CAN_DLC_MASK_ANY` 收 0~8；长度不符当作没人认领
-- 返回 `false` 表示没人认领：计入 `diagnostics.rx_unclaimed`，有回退缓冲（`CAN_RX_RETURN_FRAMES > 0`）就放进去，可通过 `BspCanT::receive()` 自己取
+- 返回 `false` 表示没人认领：计入 `diagnostics.rx_unclaimed`，有回退缓冲（`ICBSP_CAN_RX_RETURN_FRAMES > 0`）就放进去，可通过 `BspCanT::receive()` 自己取
 
 ### 发送：`CanTxNodeT<CanT>`
 
 ```cpp
 static CanTxNodeT *regist(CanT &can, uint32_t can_id, uint8_t division = 1, uint8_t slot = 0,
                           uint32_t id_type = FDCAN_STANDARD_ID);
-Status filldata(uint8_t data[], uint8_t slot = 0);  // 往聚合缓冲的某个槽位填 8 / division 字节
+Status fill_data(uint8_t data[], uint8_t slot = 0);  // 往聚合缓冲的某个槽位填 8 / division 字节
 Stats  get_stats() const;                          // sent / partial_sends / heartbeat_sends / expired
 ```
 
 `can_tx_task` 每 1 ms 检查一次，满足任一条件就把这一帧发出：
 - **凑齐即发**：所有“有效”槽位都重新填过（过期的、注册了却从没填过的槽位不算）；
-- **凑不齐时限**：有槽位填了新数据，等了 `CAN_TX_GATHER_MS` 还没凑齐（计入 `partial_sends`，大于 0 说明同帧设备的刷新节拍不一致）；
-- **保底心跳**：`CAN_TX_HEARTBEAT_MS` 内没发过（计入 `heartbeat_sends`）。
+- **凑不齐时限**：有槽位填了新数据，等了 `ICBSP_CAN_TX_GATHER_MS` 还没凑齐（计入 `partial_sends`，大于 0 说明同帧设备的刷新节拍不一致）；
+- **保底心跳**：`ICBSP_CAN_TX_HEARTBEAT_MS` 内没发过（计入 `heartbeat_sends`）。
 
-槽位 `CAN_CMD_EXPIRE_MS` 没被刷新就清零并标为过期；槽位全部注销的节点不再发送。
+槽位 `ICBSP_CAN_CMD_EXPIRE_MS` 没被刷新就清零并标为过期；槽位全部注销的节点不再发送。
 发送走 `send_latest()`：同 ID 的上一帧还没发出去时这一帧不入队、下个周期发最新内容，所以总线被占满时一个节点最多在驱动里占一帧。
 
 ---
