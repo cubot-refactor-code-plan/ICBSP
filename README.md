@@ -11,6 +11,21 @@
 - 许可证：MIT，见根目录 `LICENSE`（版权人 INVC & CUBOT）；例外见 [许可证](#许可证)
 - 宏前缀：`ICBSP_`（配置宏、功能开关、实例清单、系列宏），CMake 目标 `icbsp`
 
+## 已知限制与未验证项
+
+本节只列**代码 / 文档里明确标注尚未验证**的部分；清单之外的能力，以 `docs/bsp_test/` 的实板记录为准。
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `DmMotor`（达妙电机） | **未上板** | 只做编译验证（`device/motor/dm_motor.hpp` 自述），仓库里没有达妙电机可测 |
+| EmmV5 `Checksum::XOR` | **未实测** | 说明书只给了发送侧算法、回复侧未写；解析时 `0x6B` 与 XOR 都接受（`emmv5_protocol.hpp`） |
+| EmmV5 CRC-8 | **未实现** | 说明书没给多项式 / 初值 / 示例帧，不靠猜参数实现 |
+| `Rls` 的 Bierman（平方根 / UD 分解） | **未实现** | 只有标准形式；单精度下 λ→1、数十万步以上若频繁重置 P，需换数值稳定形式（`algorithm/rls.hpp`） |
+| STM32F4 的 CAN | **未接** | F4 只做了编译验证，`can_rx_task` / `can_tx_task` 的 F4 路径未接 |
+| SPI + BMI088（H750 等场景） | 部分未上板 | 见 `docs/bsp_test/spi_bmi088.md` 与 `changes.md` 里的标注 |
+
+> 新增“未验证 / 未实现”功能时，请同时更新本节与对应头文件的注释：README 是唯一汇总入口。
+
 ## 目录
 
 ```text
@@ -30,9 +45,9 @@ ICBSP/
 │  ├─ algorithm/    PID、QuaternionPID、Quaternion、VQF、Matrix、RLS
 │  └─ tasks/        sys_task、can_rx_task、can_tx_task
 ├─ templates/       宿主接入模板（user/board、user/app、链接脚本、FreeRTOS / 中断钩子、.vscode、Flash）
-├─ tools/           integrate.py（自动接入与生成）、manifest.json（生成清单）、web_ui/（图形界面）、check_layers.py、draw_diagrams.py
+├─ tools/           integrate.py（自动接入与生成）、manifest.json（生成清单）、web_ui/（图形界面）、check_layers.py、qspi_image.py
 ├─ tests/host/      algorithm/ 的主机侧单元测试（CI：.github/workflows/host-tests.yml）；接入引擎的测试在 tools/tests/
-├─ docs/            接入指南、常用接口、编码规范、代码层说明、架构图、实板测试记录、器件手册
+├─ docs/            接入指南、常用接口、编码规范、代码层说明、实板测试记录
 └─ CMakeLists.txt
 ```
 
@@ -115,7 +130,7 @@ node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs   # 浏览器打开 h
 | [templates/README.md](templates/README.md)  | 每个模板文件复制到宿主哪里；`.vscode` 与 `Flash/` 的占位符规则     |
 | [docs/bsp_test/](docs/bsp_test/)            | 实板测试记录（每份注明对应的代码版本；早期记录里的 API 名称是旧的） |
 | [docs/service_test/](docs/service_test/)    | EventState / Online 的实板测试记录（2026-11-01）                     |
-| [docs/sheet/](docs/sheet/README.md)         | 器件手册清单与获取方式（手册本身不随仓库分发）                       |
+
 | [undo.md](undo.md)                          | v1.0.0 路线与待办                                                    |
 | `stm32_bsp_review.md`、`stm32_framework_对比评估.md` | 评审与合并方案（代码注释里的 F / A / I / D / N / Q 编号出自这两份） |
 
@@ -160,4 +175,4 @@ MIT，见根目录 [`LICENSE`](LICENSE)。例外：
 
 - `code/algorithm/vqf.*`：第三方代码 VQF，MIT，版权 Daniel Laidig（文件头的 `SPDX-FileCopyrightText` / `SPDX-License-Identifier` 行，不要删）；保持上游原样（CMake 里单独关了 `-Wshadow`）。
 - `code/algorithm/matrix.*`：移植自 USTC-RoboWalker（yssickjgd/damiao_mc02_bsp）的代码，原作者许可在 RoboMaster 赛事范围内使用，**不适用本仓库的 MIT**；超出这个范围请自行征求原作者意见。文件头的出处说明要保留。
-- 器件手册：版权归各厂商，**不随本仓库分发**（2026-11-12 起已从仓库及其历史中移除）；清单与官方渠道见 [docs/sheet/README.md](docs/sheet/README.md)。
+- 器件手册：版权归各厂商，**不随本仓库分发**（2026-11-12 起已从仓库及其历史中移除）。

@@ -50,7 +50,7 @@ inline DjiMotor<DjiMotorType::M3508, decltype(bsp_can1)> chassis_lf(bsp_can1, 1U
 
 ### DmMotor（达妙电机）
 
-协议来自 J4310 / J4340P / J8009P 说明书的 CAN 通信一章（清单与获取方式见 [docs/sheet/README.md](../sheet/README.md)），三个系列逐项相同，所以**不按型号做模板**：
+协议来自 J4310 / J4340P / J8009P 说明书的 CAN 通信一章，三个系列逐项相同，所以**不按型号做模板**：
 型号经 `Config::model`（`DmModel::J4310` / `J4340P` / `J4340P_V11` / `J8009P`）查 `dm_model_info()`（减速比、额定 / 峰值扭矩、空载转速），
 MIT 前馈扭矩按峰值扭矩限幅。映射范围是驱动器里可改的寄存器，不能从型号推出：实测 J4340P 是 12.5 / 10 / 28，不是说明书的预设 12.5 / 30 / 10。
 
@@ -190,10 +190,10 @@ DeviceWt102T<decltype(bsp_uart7)> gyro_z(bsp_uart7);   // board_cfg.cpp；串口
 ```
 
 - `init()` 挂进默认树并兜底校验串口帧格式（不是 230400 8N1 返回 `BAD_ARG`）；可重复调用，会清掉数据和诊断计数
-- `update(timeout_ms)` 把串口里攒的字节全部解完；设备 500 Hz 发帧，**要在某个任务里周期调用**（不建任务、不注册 Online）
+- `update(timeout_ms)` 把串口里攒的字节全部解完；设备 500 Hz 发帧，**要在某个任务里周期调用**（不建任务；在线判定交给 `Online` 节点，见 §6）
 - `get_z_newest()` / `get_z_previous()` 取最近两帧的 Z 轴原始 int16（`acc_z` / `gyro_z` / `yaw`），单位换算：
   `wz = gyro_z / 32768 × 2000 °/s`、`yaw = yaw / 32768 × 180 °`、`az = acc_z / 32768 × 16 g`
-- `is_online()` 按 tick 现算（50 ms 没有校验通过的帧就离线）；`get_diag()` 区分“没字节 / 切不出帧 / 校验错”
+- `is_online()` 直接读 `Online` 节点（50 ms 没有校验通过的帧就离线；节点由 sys_task 每 10 ms 推进）；`get_diag()` 区分“没字节 / 切不出帧 / 校验错”
 - 不是线程安全的：`update()` 和读数据要在同一个任务里
 
 ---
@@ -250,11 +250,27 @@ buzzer.tone(1000, 50);    // 持续音，音量 50%
 | `DjiMotor` | CAN 总线节点 | 初始化失败；掉线（Online 由在线变离线）→ `TIMEOUT` |
 | `DmMotor` | CAN 总线节点 | 初始化失败；掉线 → `TIMEOUT`；反馈进入故障态 → `IO_ERROR` |
 | `DeviceEmmv5GroupT` | 串口总线节点 | 初始化失败；任一台电机掉线 → `TIMEOUT` |
-| `DeviceR9dsT` | 串口总线节点 | 初始化失败；`update()` 发现由在线变离线 → `TIMEOUT` |
-| `DeviceWt102T` | 串口总线节点 | 初始化失败；`update()` 发现由在线变离线 → `TIMEOUT` |
+| `DeviceR9dsT` | 串口总线节点 | 初始化失败；掉线 → `TIMEOUT`（判据在设备层：帧超时 + 失联位 + 连续丢帧，见下方约定） |
+| `DeviceWt102T` | 串口总线节点 | 初始化失败；掉线 → `TIMEOUT`（判据 = `Online` 节点） |
 | `DeviceBmi088` | SPI 总线节点 | 初始化失败；读帧失败 → 读帧返回的错误码 |
 
 `DeviceMotor`、`DeviceServo`、`DeviceBuzzer` 不在总线上（PWM / 编码器），没有节点。
+
+### 在线判定约定
+
+**`Online` 只负责“计时 + 记账”，判据归设备**。收到一帧有效数据就 `refresh_task()`，由 sys_task 每 10 ms 调 `Online::update()` 推进超时；`is_online()` 只是把结论读出来。
+
+| 判据来源 | 用在哪 | 为什么 |
+| --- | --- | --- |
+| **只用 `Online` 节点**（默认） | `DeviceWt102T`、`DjiMotor`、`DmMotor`、`DeviceEmmv5GroupT` | 链路一断就不再发字节，“静默超时”就是全部信息 |
+| **`Online` + 协议语义位**（例外） | `DeviceR9dsT` | 遥控器关机后**接收机仍持续发帧**，只把 flags 的失联 / 丢帧位置 1；只看静默永远判不出离线 |
+
+两条推论：
+
+- 默认只喂 `Online`，**不要把 tick 判定再写一遍**（会得到两份可能不一致的结论）；
+- 只能用第二种时，`is_online()` 的语义写清楚（哪几条同时成立），并在头文件里注明为什么不能只用 `Online`。
+
+> 依赖：`Online::update()` 由 sys_task 驱动，`ICBSP_SYS_TASK_ENABLE = 0` 时 `is_online()` 不再变化（构建期已量化提示）。
 
 ---
 

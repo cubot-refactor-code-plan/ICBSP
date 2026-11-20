@@ -34,8 +34,10 @@
  *
  * @warning 不是线程安全的：`update()` 只允许由一个任务调用（串口流缓冲区也是单读者）；
  *          查询接口返回实时值，读取期间不得并发执行 update()。
- * @warning 在线判定**不依赖 Online 节点**，由本类自己按 tick 算（见 is_online()）：所以它只在
- *          is_online() 被调用那一刻成立；默认树节点的掉线记录在 update() 里做，要稳定地调用 update()。
+ * @warning 在线判定走 `Online` 节点（唯一判据）：每解出一帧校验通过的帧就 `refresh_task()`，
+ *          由 sys_task 每 10 ms 调 `Online::update()` 推进离线计时。所以它依赖 sys_task 在跑
+ *          （`ICBSP_SYS_TASK_ENABLE = 1`），且结果最多滞后一个 10 ms 周期。判据为什么只有一条，
+ *          见 docs/code/device.md 「在线判定约定」。
  */
 
 #ifndef __DEVICE_WT102_HPP__
@@ -47,21 +49,20 @@
 #ifdef HAL_UART_MODULE_ENABLED
 
 
+#include "service/monitor/online_check.hpp" // Online：在线判定的唯一入口
 #include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
 #include "service/system/status.hpp"
 #include "service/system/system.hpp"     // sys_state
 #include <stddef.h>
 #include <stdint.h>
-#include "FreeRTOS.h"       // IWYU pragma: keep (pdMS_TO_TICKS)
 #include "bsp/bsp_uart.hpp" // IWYU pragma: keep（BspUartT 实例化与 UART 宏）
-#include "task.h"           // xTaskGetTickCount
 
 
 /**
  * @brief WT102 单轴陀螺仪设备
  *
- * @note 不拥有串口、不创建任务、不注册到 Online 链表（唯一的 RTOS 资源是 init() 建的默认树节点事件组）：
- *       只解析调用方喂进来的字节流，在线判定自己按 tick 算（与 DeviceR9dsT 同一套约定）。
+ * @note 不拥有串口、不创建任务：唯一的静态副作用是向 `Online` 链表注册一个节点、
+ *       init() 时建一个默认树事件组。只解析调用方喂进来的字节流。
  */
 template <typename Uart>
 class DeviceWt102T
@@ -89,7 +90,8 @@ public:
    * @brief 静默多久就判离线 (ms)
    *
    * @note 帧周期 2 ms（500 Hz），取 50 ms = 25 帧，足够抗偶发丢帧、又能在拔线后 50 ms 内报出。
-   * @note 计时在 is_online() 里按 tick 现算，不需要任何周期任务推进它。
+   * @note 这是喂给 `Online` 节点的 timeout_gap；计时由 sys_task 里的 `Online::update()` 推进（10 ms 一次），
+   *       所以实际判定最多晚 10 ms。
    */
   static constexpr uint16_t ONLINE_TIMEOUT_MS = 50U;
   /* ==================== */
@@ -172,7 +174,7 @@ public:
   /* ==================== */
   /* ==================== 查询接口 ==================== */
 
-  /** @brief 最近 ONLINE_TIMEOUT_MS 内有过一帧校验通过的帧（从没收到过帧 = 离线） */
+  /** @brief 在线状态：由 `Online` 节点给出（收到过有效帧 + 未超过 ONLINE_TIMEOUT_MS） */
   bool is_online(void) const;
 
   /**
@@ -214,8 +216,7 @@ private:
 
   Diag       _diag {};              ///< 诊断计数（frame_cnt 顺带当“收到过帧吗”的标志用）
   EventState _state;                ///< 默认树节点（Q6）
-  bool       _was_online = false;   ///< 上一次 update() 结束时是否在线（检测由在线变离线）
-  uint32_t   _last_frame_tick = 0U; ///< 最近一帧的 tick，is_online() 拿它算“静默了多久”
+  Online     _online{ONLINE_TIMEOUT_MS}; ///< 在线判定节点：收到有效帧 flush，sys_task 推进计时
   /* ==================== */
 };
 
@@ -256,8 +257,7 @@ Status DeviceWt102T<Uart>::init(void)
 
   _fill            = 0U;
   _diag            = Diag {};
-  _was_online      = false;
-  _last_frame_tick = 0U;
+  _online.set_state(&_state); // 掉线时由 Online::update() 在设备节点上记 TIMEOUT（Online 节点本身不能复位）
 
   for (uint32_t i = 0U; i < FRAME_SIZE; ++i)
   {
@@ -295,13 +295,7 @@ void DeviceWt102T<Uart>::update(uint32_t timeout_ms)
     // 首字节按调用方给的超时等；一旦开始解帧就一律 0，把已有数据排空
     if ((_uart.receive(&byte, 1U, wait_ms, &got) != Status::OK) || (got == 0U))
     {
-      // 这一拍的字节取完了：由在线变离线时在本节点记 TIMEOUT（从没上线过的不算）
-      const bool online = is_online();
-      if (_was_online && !online)
-      {
-        (void)_state.error(Status::TIMEOUT);
-      }
-      _was_online = online;
+      // 这一拍的字节取完了（在线/离线由 Online 节点在 sys_task 里推进，本函数不做判定）
       return;
     }
 
@@ -348,20 +342,14 @@ void DeviceWt102T<Uart>::update(uint32_t timeout_ms)
 /* ==================== 查询接口 ==================== */
 
 /**
- * @brief 在线判定：收到过帧，且最近一帧在 ONLINE_TIMEOUT_MS 之内
+ * @brief 在线判定：直接问 Online 节点
  *
- * @note 自己按 tick 现算（无符号差值，tick 回绕安全），不走 Online 节点、也不需要周期任务喂它；
- *       代价是结果只在调用这一刻成立。
+ * @note 节点由 sys_task 每 10 ms 推进一次，所以本函数只读最后一次计算结果（不自己算 tick）。
  */
 template <typename Uart>
 bool DeviceWt102T<Uart>::is_online(void) const
 {
-  if (_diag.frame_cnt == 0U)
-  {
-    return false; // 从没收到过帧
-  }
-
-  return (static_cast<uint32_t>(xTaskGetTickCount()) - _last_frame_tick) < pdMS_TO_TICKS(ONLINE_TIMEOUT_MS);
+  return _online.is_online();
 }
 
 /** @brief 最新一帧的三个 Z 轴原始值 */
@@ -426,7 +414,7 @@ void DeviceWt102T<Uart>::_parse_frame(const uint8_t *frame)
     ++_diag.other_cnt; // 没见过的帧型：不解析，只计数
   }
 
-  _last_frame_tick = static_cast<uint32_t>(xTaskGetTickCount());
+  (void)_online.refresh_task(); // 有效帧：刷一次在线计时（任务上下文）
 }
 /* ==================== */
 
