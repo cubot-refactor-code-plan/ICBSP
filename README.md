@@ -1,7 +1,7 @@
 # ICBSP
 
-![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP?include_prereleases)  [![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  ![CopyRight](https://img.shields.io/badge/CopyRight-INVC%20&%20CUBOT-blue.svg)    
-![](https://img.shields.io/badge/chip-STM32H7xx%20%7C%20STM32F4xx-blue.svg) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg)
+![GitHub Release](https://img.shields.io/github/v/release/cubot-refactor-code-plan/ICBSP?include_prereleases)  [![License](https://img.shields.io/github/license/cubot-refactor-code-plan/ICBSP.svg)](https://github.com/cubot-refactor-code-plan/ICBSP/blob/main/LICENSE)  ![CopyRight](<https://img.shields.io/badge/CopyRight-INVC%20&%20CUBOT-blue.svg>)
+![](<https://img.shields.io/badge/chip-STM32H7xx%20%7C%20STM32F4xx-blue.svg>) ![](https://img.shields.io/badge/RTOS-FreeRTOS_CMSIS_V2-green.svg) ![](https://img.shields.io/badge/language-C++20-blue.svg) ![](https://img.shields.io/badge/ToolChain-CMake-blue.svg)
 
 面向 **STM32H7 / STM32F4 + FreeRTOS（CMSIS-RTOS V2）+ CMake** 的板级库：BSP、Service、Device、Algorithm、Tasks 分层，宿主工程通过 git submodule 接入。
 
@@ -15,14 +15,14 @@
 
 本节只列**代码 / 文档里明确标注尚未验证**的部分；清单之外的能力，以 `docs/bsp_test/` 的实板记录为准。
 
-| 项 | 状态 | 说明 |
-| --- | --- | --- |
-| `DmMotor`（达妙电机） | **未上板** | 只做编译验证（`device/motor/dm_motor.hpp` 自述），仓库里没有达妙电机可测 |
-| EmmV5 `Checksum::XOR` | **未实测** | 说明书只给了发送侧算法、回复侧未写；解析时 `0x6B` 与 XOR 都接受（`emmv5_protocol.hpp`） |
-| EmmV5 CRC-8 | **未实现** | 说明书没给多项式 / 初值 / 示例帧，不靠猜参数实现 |
+| 项                                     | 状态             | 说明                                                                                              |
+| -------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| `DmMotor`（达妙电机）                | **未上板** | 只做编译验证（`device/motor/dm_motor.hpp` 自述），仓库里没有达妙电机可测                        |
+| EmmV5 `Checksum::XOR`                | **未实测** | 说明书只给了发送侧算法、回复侧未写；解析时 `0x6B` 与 XOR 都接受（`emmv5_protocol.hpp`）       |
+| EmmV5 CRC-8                            | **未实现** | 说明书没给多项式 / 初值 / 示例帧，不靠猜参数实现                                                  |
 | `Rls` 的 Bierman（平方根 / UD 分解） | **未实现** | 只有标准形式；单精度下 λ→1、数十万步以上若频繁重置 P，需换数值稳定形式（`algorithm/rls.hpp`） |
-| STM32F4 的 CAN | **未接** | F4 只做了编译验证，`can_rx_task` / `can_tx_task` 的 F4 路径未接 |
-| SPI + BMI088（H750 等场景） | 部分未上板 | 见 `docs/bsp_test/spi_bmi088.md` 与 `changes.md` 里的标注 |
+| STM32F4 的 CAN                         | **未接**   | F4 只做了编译验证，`can_rx_task` / `can_tx_task` 的 F4 路径未接                               |
+| SPI + BMI088（H750 等场景）            | 部分未上板       | 见 `docs/bsp_test/spi_bmi088.md` 与 `changes.md` 里的标注                                     |
 
 > 新增“未验证 / 未实现”功能时，请同时更新本节与对应头文件的注释：README 是唯一汇总入口。
 
@@ -57,6 +57,7 @@ ICBSP/
 下文的命令都假设库放在 `Middlewares/Third_Party/ICBSP`，放在别处时换成实际路径。
 
 若目的仅为使用，建议浅克隆`main`分支（在宿主工程根目录执行）：
+
 ```bash
 git submodule add --depth 1 git@github.com:cubot-refactor-code-plan/ICBSP.git Middlewares/Third_Party/ICBSP   # 浅克隆 main 最近一次提交
 git config -f .gitmodules submodule.Middlewares/Third_Party/ICBSP.shallow true                             # 别人 clone 宿主后 submodule update 也只拉最近一次提交
@@ -66,6 +67,7 @@ git config -f .gitmodules submodule.Middlewares/Third_Party/ICBSP.shallow true  
 > `--depth` 只对本次克隆生效，不写进 `.gitmodules`，所以要第二行的 `shallow = true` 才能让其他人也浅克隆。
 
 若希望克隆特定分支：
+
 ```bash
 git clone --depth <clone depth> -b <branch name> git@github.com:cubot-refactor-code-plan/ICBSP.git <local path>
 git submodule add -b <branch name> git@github.com:cubot-refactor-code-plan/ICBSP.git <local path>   # 把上一步的仓库登记为子模块
@@ -75,11 +77,11 @@ git submodule add -b <branch name> git@github.com:cubot-refactor-code-plan/ICBSP
 > 只浅克隆下默认分支，随后检出 `<branch name>` 失败（git 2.34.1 实测；分支恰好是 `main` 时才不出错）。
 > 不需要浅克隆时，直接 `git submodule add -b <branch name> <url> <local path>` 即可。
 
-
 ## 快速接入
 
 ### 直接使用python脚本
-![python_version](https://img.shields.io/badge/python-3.8+-blue.svg)   
+
+![python_version](https://img.shields.io/badge/python-3.8+-blue.svg)
 在宿主工程根目录：
 
 ```bash
@@ -92,7 +94,8 @@ python3 Middlewares/Third_Party/ICBSP/tools/integrate.py             # 执行
 改根 `CMakeLists.txt`、生成 `.vscode/*`、复制 `Flash/` 烧录脚本。
 
 ### Nodejs图形化界面
-![](https://img.shields.io/badge/Node-v14.14.0-green.svg)   
+
+![](https://img.shields.io/badge/Node-v14.14.0-green.svg)
 按 CubeMX 的 `.ioc` 生成外设实例和设备、校验并修改 `.ioc`，可以用图形界面（零依赖，不用 `npm install`）：
 
 ```bash
@@ -103,33 +106,33 @@ node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs   # 浏览器打开 h
 
 ## 接入要求
 
-| 项目     | 要求                                                                                       |
-| -------- | ------------------------------------------------------------------------------------------ |
-| 芯片     | STM32H7；STM32F4 只编译验证                                                    |
-| 工具链   | CubeMX → Project Manager → Toolchain = **CMake**；C++20                                    |
+| 项目     | 要求                                                                                                                             |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 芯片     | STM32H7；STM32F4 只编译验证                                                                                                      |
+| 工具链   | CubeMX → Project Manager → Toolchain = **CMake**；C++20                                                                  |
 | RTOS     | FreeRTOS，**CMSIS_V2**，tick **1 kHz**，`configCHECK_FOR_STACK_OVERFLOW = 2`、`configUSE_MALLOC_FAILED_HOOK = 1` |
-| HAL 时基 | 不用 SysTick；优先级没有要求（CubeMX 默认 15 即可，1.4 起实测）                              |
-| D-Cache  | 保持关闭（库不做 Cache 维护）                                                               |
-| FDCAN    | 经典 CAN，RX FIFO0，开 FDCAN 中断                                                          |
-| UART     | RX / TX DMA + 全局中断（RX DMA 由库改成循环模式，用 IDLE / 半满 / 写满事件投递）；或中断模式 |
-| SPI      | 全双工主机、软件 NSS、`MasterKeepIOState = ENABLE`                                          |
-| 链接脚本 | 必须有**可加载**的 `.dma_buffer`（`>RAM_D1 AT> FLASH`）与 `.noinit`；CMake 配置阶段检查   |
+| HAL 时基 | 不用 SysTick；优先级没有要求（CubeMX 默认 15 即可，1.4 起实测）                                                                  |
+| D-Cache  | 保持关闭（库不做 Cache 维护）                                                                                                    |
+| FDCAN    | 经典 CAN，RX FIFO0，开 FDCAN 中断                                                                                                |
+| UART     | RX / TX DMA + 全局中断（RX DMA 由库改成循环模式，用 IDLE / 半满 / 写满事件投递）；或中断模式                                     |
+| SPI      | 全双工主机、软件 NSS、`MasterKeepIOState = ENABLE`                                                                             |
+| 链接脚本 | 必须有**可加载**的 `.dma_buffer`（`>RAM_D1 AT> FLASH`）与 `.noinit`；CMake 配置阶段检查                              |
 
 库按 `HAL_FDCAN_MODULE_ENABLED` / `HAL_UART_MODULE_ENABLED` / `HAL_SPI_MODULE_ENABLED` / `HAL_TIM_MODULE_ENABLED` 条件编译：
 没开的外设不会生成对应驱动和任务。每项要求的原因、CubeMX 里怎么勾、接完怎么自查，见 **[docs/接入指南.md](docs/接入指南.md)**。
 
 ## 文档
 
-| 文档                                       | 内容                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------- |
-| [docs/接入指南.md](docs/接入指南.md)        | 硬性要求逐条解释、CubeMX 设置、自动 / 手动接入、自查清单、常见问题  |
-| [docs/code/](docs/code/)                    | 代码层索引：分层依赖图、启动顺序图、依赖矩阵、五层文档               |
-| [docs/常用接口.md](docs/常用接口.md)        | UART / CAN / 电机 / PID / 系统状态的使用示例                        |
-| [docs/编码规范.md](docs/编码规范.md)        | 命名、分层、注释格式、C++20 规则                                     |
-| [docs/编辑器配置.md](docs/编辑器配置.md)    | `.vscode/settings.json` 各项作用；outline++ 分区正则逐段拆解        |
-| [templates/README.md](templates/README.md)  | 每个模板文件复制到宿主哪里；`.vscode` 与 `Flash/` 的占位符规则     |
-| [docs/bsp_test/](docs/bsp_test/)            | 实板测试记录（每份注明对应的代码版本；早期记录里的 API 名称是旧的） |
-| [docs/service_test/](docs/service_test/)    | EventState / Online 的实板测试记录（2026-11-01）                     |
+| 文档                                      | 内容                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| [docs/接入指南.md](docs/接入指南.md)       | 硬性要求逐条解释、CubeMX 设置、自动 / 手动接入、自查清单、常见问题  |
+| [docs/code/](docs/code/)                   | 代码层索引：分层依赖图、启动顺序图、依赖矩阵、五层文档              |
+| [docs/常用接口.md](docs/常用接口.md)       | UART / CAN / 电机 / PID / 系统状态的使用示例                        |
+| [docs/编码规范.md](docs/编码规范.md)       | 命名、分层、注释格式、C++20 规则                                    |
+| [docs/编辑器配置.md](docs/编辑器配置.md)   | `.vscode/settings.json` 各项作用；outline++ 分区正则逐段拆解      |
+| [templates/README.md](templates/README.md) | 每个模板文件复制到宿主哪里；`.vscode` 与 `Flash/` 的占位符规则  |
+| [docs/bsp_test/](docs/bsp_test/)           | 实板测试记录（每份注明对应的代码版本；早期记录里的 API 名称是旧的） |
+| [docs/service_test/](docs/service_test/)   | EventState / Online 的实板测试记录（2026-11-01）                    |
 
 | [undo.md](undo.md)                          | v1.0.0 路线与待办                                                    |
 | `stm32_bsp_review.md`、`stm32_framework_对比评估.md` | 评审与合并方案（代码注释里的 F / A / I / D / N / Q 编号出自这两份） |
@@ -164,9 +167,11 @@ node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs   # 浏览器打开 h
 - STM32F4：只编译验证；sys / can 任务与 CAN 节点目前只在 H7（FDCAN）下编译。
 
 ## 相关插件
+
 本仓库中部分编码规范来源于以下vscode插件。它们不是必要，但是建议你搭配上它们以获得本仓库的完整开发适配
-* `Task Buttons`  本仓库的自动接入脚本会自动生成烧写脚本，并生成对应的`Task Buttons`设置。若你在工作区启用了该拓展，可以在底部看到相关功能按钮  
-* `Outline++ (Regions & Colors)`  本仓库的段落注释遵循该插件的规范，且自动脚本在生成配置时也会添加该插件的相关配置。若你在工作区启用了该拓展，可以在该插件的界面中看到各文件的段落分隔，提高可读性  
+
+* `Task Buttons`  本仓库的自动接入脚本会自动生成烧写脚本，并生成对应的`Task Buttons`设置。若你在工作区启用了该拓展，可以在底部看到相关功能按钮
+* `Outline++ (Regions & Colors)`  本仓库的段落注释遵循该插件的规范，且自动脚本在生成配置时也会添加该插件的相关配置。若你在工作区启用了该拓展，可以在该插件的界面中看到各文件的段落分隔，提高可读性
 * `EmberProbe`  本仓库的自动脚本在生成`.gitignore`时会附带对该插件的`Agent Skills`的忽略规则。该插件带来了现代的嵌入式开发体验，推荐使用该插件进行嵌入式开发
 
 ## 许可证

@@ -99,6 +99,9 @@ void test_pid_nan()
   CHECK(std::isfinite(o5) && o5 > o1);
 }
 
+/* ==================== */
+
+
 /* ==================== 四元数 ==================== */
 
 /** @brief F1：默认 / 零模长 / NaN 都退回单位四元数，不产生 NaN */
@@ -148,6 +151,9 @@ void test_quat_rotation()
   CHECK(near(Quaternion::slerp(a, b, 0.5).rotation_vector().y, 0.5, 1e-9));
 }
 
+/* ==================== */
+
+
 /* ==================== Matrix ==================== */
 
 void test_matrix()
@@ -172,6 +178,9 @@ void test_matrix()
   const float vd[3] = {3, 4, 0};
   CHECK(near(MatrixF32<3, 1>::from_array(vd).norm(), 5.0, 1e-6));
 }
+
+/* ==================== */
+
 
 /* ==================== RLS ==================== */
 
@@ -213,7 +222,10 @@ void test_rls()
   CHECK(forget.get_trace_limit_count() > 0U);
   CHECK(std::isfinite(forget.omega()[0][0]));
 }
+
+/* ==================== */
 } // namespace
+
 
 int main()
 {
