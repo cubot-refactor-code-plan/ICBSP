@@ -87,6 +87,15 @@ public:
      */
     float deadband_cm_s = 0.4f;
 
+    /**
+     * @brief 速度反馈一阶低通截止频率 (Hz)，0 = 不过滤
+     *
+     * @note 编码器量化噪声在低速时很大（1 ms 一拍 1 计数 ≈ 0.34 cm/s），低通能把它压下去；
+     *       代价是相位滞后，截止频率越低闭环带宽越低。1 kHz 采样下 100 Hz 的等效时间常数约 1.6 ms。
+     * @note 滤波后的值同时用于 PID 反馈和 get_speed_cm_s()，首拍直接取原值（不从 0 缓慢爬升）。
+     */
+    float speed_lpf_hz = 0.0f;
+
     PID::Config pid {}; ///< 速度环参数（默认全 0，靠实机标定）
   };
 
@@ -169,7 +178,7 @@ public:
   /** @brief 换算结果：每厘米多少个计数（由机械参数算出） */
   float get_counts_per_cm() const { return _counts_per_cm; }
 
-  /** @brief 最近一拍实测速度 (cm/s) */
+  /** @brief 最近一拍实测速度 (cm/s)，已过速度低通（见 Config::speed_lpf_hz） */
   float get_speed_cm_s() const { return _speed_cm_s; }
 
   /** @brief 最近一拍占空比（带符号，%）：正 = pwm_a 出力，负 = pwm_b 出力 */
@@ -203,6 +212,7 @@ private:
   float      _remaining_s   = 0.0f; ///< 速度+时间模式的剩余时间 (s)
   Mode       _mode          = Mode::STOP;
   bool       _initialized   = false;
+  bool       _speed_filt_valid = false; ///< 速度低通是否已用第一拍初始化（避免从 0 爬升）
   bool       _idle          = false; ///< 是否已在零速死区内（只在进入时清一次积分）
 
   /* ==================== */

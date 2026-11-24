@@ -5,6 +5,7 @@
 
 #include "device/motor/device_motor.hpp"
 
+#include <math.h> // expf（速度低通的系数）
 #include <string.h>
 
 namespace
@@ -59,6 +60,7 @@ Status DeviceMotor::init()
   _remaining_s = 0.0f;
   _mode        = Mode::STOP;
   _idle        = false;
+  _speed_filt_valid = false; // 低通从下一拍重新起算
   _pid.reset();
 
   _initialized = true;
@@ -108,17 +110,37 @@ bool DeviceMotor::update(float dt_s)
     return false;
 
   // 1. 本拍增量 → 实测速度 (cm/s)：计数 / (计数每 cm) / 秒
-  const int32_t delta = _config.encoder->read_delta();
-  _speed_cm_s         = static_cast<float>(delta) / _counts_per_cm / dt_s;
+  const int32_t delta     = _config.encoder->read_delta();
+  const float   raw_speed = static_cast<float>(delta) / _counts_per_cm / dt_s;
 
-  // 2. 停止模式：保持刹车，不跑 PID
+  // 2. 速度低通（一阶 IIR，截止 speed_lpf_hz，0 = 关）：alpha = 1 - e^(-2π·fc·dt)
+  //    首拍直接取原值，避免上电时从 0 缓慢爬升（看起来像“起步慢了半拍”）
+  if (_config.speed_lpf_hz > 0.0f)
+  {
+    if (!_speed_filt_valid)
+    {
+      _speed_cm_s       = raw_speed;
+      _speed_filt_valid = true;
+    }
+    else
+    {
+      const float alpha = 1.0f - expf(-(2.0f * PI_F) * _config.speed_lpf_hz * dt_s);
+      _speed_cm_s += alpha * (raw_speed - _speed_cm_s);
+    }
+  }
+  else
+  {
+    _speed_cm_s = raw_speed;
+  }
+
+  // 3. 停止模式：保持刹车，不跑 PID
   if (_mode == Mode::STOP)
   {
     _brake();
     return false;
   }
 
-  // 3. 速度+时间模式：先扣时间，到点立刻停并报告「刚刚完成」
+  // 4. 速度+时间模式：先扣时间，到点立刻停并报告「刚刚完成」
   if (_mode == Mode::SPEED_TIME)
   {
     _remaining_s -= dt_s;
