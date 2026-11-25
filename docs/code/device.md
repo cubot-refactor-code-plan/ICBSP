@@ -21,6 +21,7 @@
 | `sensor/device_bmi088.hpp/.cpp` | BMI088 IMU + VQF 姿态 | `BspSpiDevice`、`VQF` | `DeviceBmi088`、`Bmi088RawData` |
 | `sensor/device_wt102.hpp` | WT102 单轴陀螺仪（Z 轴加速度 / 角速度 / 航向角） | `BspUartT` | `DeviceWt102T<Uart>` |
 | `remote/device_r9ds.hpp` | R9DS 遥控接收机（SBUS） | `BspUartT` | `DeviceR9dsT<Uart>` |
+| `remote/device_et08.hpp` | 天地飞 ET08 遥控器（RF206S 接收机 W.BUS 口，兼容 SBUS） | `BspUartT` | `DeviceEt08T<Uart>` |
 | `actuator/device_servo.hpp/.cpp` | 舵机（脉宽控制） | `BspPwm` | `DeviceServo` |
 | `actuator/device_buzzer.hpp/.cpp` | 无源蜂鸣器 | `BspPwm` | `DeviceBuzzer` |
 
@@ -211,6 +212,19 @@ inline DeviceR9dsT<decltype(bsp_uart3)> rc(bsp_uart3);
 - `is_online()` 同时看三条：帧超时、失控保护位、连续丢帧，失控保护时怎么处置由上层决定；单看 `is_frame_lost()` / `is_failsafe()` 也可以
 - `update()` 在别的任务里跑时用 `snapshot(Rc &, uint16_t *raw)` 读（评审 F5）；诊断计数 `byte_cnt` / `frame_cnt` 是 `uint32_t`（N34）
 
+### DeviceEt08T&lt;Uart&gt;
+
+```cpp
+inline DeviceEt08T<decltype(bsp_uart3)> rc(bsp_uart3);
+```
+
+接口与 `DeviceR9dsT` 完全相同（`init()` / `update()` / `is_online()` / `get_rc()` / `get_raw_channels()` / `snapshot()` / `get_diag()` / `get_state()`），区别只在数值和通道：
+
+- 接收机 RF206S 的**最后一个端口**要切到 W.BUS 模式（发射机【通信设置】→【PPM/W.BUS】，接收机 LED 绿色常亮）；串口 100000 bit/s、8E1 或 8E2 都放行（旧工程用 8E1），反相要求同 R9DS
+- 原始值：一端满 353、中位 1024、另一端满 1694；`get_rc()` 的连续通道 `ch1` ~ `ch5` 按 `(raw − 1024) × 100 / 671` 换算（与旧工程 `ch − 1024` 同号），中位 ±30 内为 0
+- 通道分配沿用旧工程（Sentry2026）的发射机设置：CH1 ~ CH4 摇杆、CH6 = SA（两挡）、CH7 = SB（三挡）、CH8 = SC（三挡）；挡位 `UP` = 353 一端，对应旧工程的 `s = 1`（`MID` ↔ 3、`DOWN` ↔ 2），SA 的 `UP` = 旧工程 `sA = 1`（解锁）
+- **只编译验证**：RF206S 是否置 flags 的失控 / 丢帧位没实测；不置的话 `is_online()` 只剩帧超时一条，遥控器关机仍判在线，需要在发射机【失控保护】给某通道设 F/S 预设值、由上层判（旧工程判 SA 解锁）
+
 ---
 
 ## 5. actuator/ — 执行器
@@ -251,6 +265,7 @@ buzzer.tone(1000, 50);    // 持续音，音量 50%
 | `DmMotor` | CAN 总线节点 | 初始化失败；掉线 → `TIMEOUT`；反馈进入故障态 → `IO_ERROR` |
 | `DeviceEmmv5GroupT` | 串口总线节点 | 初始化失败；任一台电机掉线 → `TIMEOUT` |
 | `DeviceR9dsT` | 串口总线节点 | 初始化失败；掉线 → `TIMEOUT`（判据在设备层：帧超时 + 失联位 + 连续丢帧，见下方约定） |
+| `DeviceEt08T` | 串口总线节点 | 同 `DeviceR9dsT` |
 | `DeviceWt102T` | 串口总线节点 | 初始化失败；掉线 → `TIMEOUT`（判据 = `Online` 节点） |
 | `DeviceBmi088` | SPI 总线节点 | 初始化失败；读帧失败 → 读帧返回的错误码 |
 
@@ -263,7 +278,7 @@ buzzer.tone(1000, 50);    // 持续音，音量 50%
 | 判据来源 | 用在哪 | 为什么 |
 | --- | --- | --- |
 | **只用 `Online` 节点**（默认） | `DeviceWt102T`、`DjiMotor`、`DmMotor`、`DeviceEmmv5GroupT` | 链路一断就不再发字节，“静默超时”就是全部信息 |
-| **`Online` + 协议语义位**（例外） | `DeviceR9dsT` | 遥控器关机后**接收机仍持续发帧**，只把 flags 的失联 / 丢帧位置 1；只看静默永远判不出离线 |
+| **`Online` + 协议语义位**（例外） | `DeviceR9dsT`、`DeviceEt08T` | 遥控器关机后**接收机仍持续发帧**，只把 flags 的失联 / 丢帧位置 1；只看静默永远判不出离线 |
 
 两条推论：
 

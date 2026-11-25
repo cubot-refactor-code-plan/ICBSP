@@ -40,7 +40,7 @@ ICBSP/
 │  ├─ device/
 │  │  ├─ motor/       DjiMotor、DmMotor、DeviceMotor、Emm_V5（含 emmv5_protocol 帧编解码）
 │  │  ├─ sensor/      BMI088、WT102
-│  │  ├─ remote/      R9DS
+│  │  ├─ remote/      R9DS、ET08
 │  │  └─ actuator/    Servo、Buzzer
 │  ├─ algorithm/    PID、QuaternionPID、Quaternion、VQF、Matrix、RLS
 │  └─ tasks/        sys_task、can_rx_task、can_tx_task
@@ -133,8 +133,7 @@ node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs   # 浏览器打开 h
 | [templates/README.md](templates/README.md) | 每个模板文件复制到宿主哪里；`.vscode` 与 `Flash/` 的占位符规则  |
 | [docs/bsp_test/](docs/bsp_test/)           | 实板测试记录（每份注明对应的代码版本；早期记录里的 API 名称是旧的） |
 | [docs/service_test/](docs/service_test/)   | EventState / Online 的实板测试记录（2026-11-01）                    |
-
-| [undo.md](undo.md)                          | v1.0.0 路线与待办                                                    |
+| [undo.md](undo.md)| v1.0.0 路线与待办|
 | `stm32_bsp_review.md`、`stm32_framework_对比评估.md` | 评审与合并方案（代码注释里的 F / A / I / D / N / Q 编号出自这两份） |
 
 ## 配置

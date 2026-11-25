@@ -199,6 +199,19 @@
       "extern": ["extern DeviceR9dsT<decltype({bus})> {name};"],
       "init": ["ICBSP_CHECK({name}.init() == Status::OK);"]
     },
+    "et08": {
+      "title": "天地飞 ET08 遥控器（RF206S W.BUS，兼容 SBUS）",
+      "status": "compile_only",
+      "status_note": "RF206S 是否置 SBUS flags 的失控 / 丢帧位未实测",
+      "include": "device/remote/device_et08.hpp",
+      "needs": [{ "key": "bus", "kind": "uart", "title": "SBUS 串口（100000 bit/s、8E1 或 8E2、反相）" }],
+      "switches": [],
+      "params": [],
+      "define": ["DeviceEt08T<decltype({bus})> {name}({bus});"],
+      "extern": ["extern DeviceEt08T<decltype({bus})> {name};"],
+      "init": ["ICBSP_CHECK({name}.init() == Status::OK);"],
+      "notes": ["只解析不建任务：要在某个任务里周期调用 update()（建议 ≤ 10 ms 一次）；接收机最后一个端口要切到 W.BUS 模式（LED 绿色常亮）"]
+    },
     "emmv5_group": {
       "title": "张大头 Emm_V5 步进闭环（一路串口多地址）",
       "status": "compile_only",
