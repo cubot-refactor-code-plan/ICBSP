@@ -33,13 +33,13 @@
 // 宿主工程没在 CubeMX 里开 TIM（HAL_TIM_MODULE_ENABLED 未定义）时，本模块整体不参与编译
 #ifdef HAL_TIM_MODULE_ENABLED
 
-#include "bsp/bsp_encoder.hpp" // 测速反馈
-#include "bsp/bsp_pwm.hpp"     // H 桥两路输出
-#include "algorithm/pid.hpp"         // 速度环
-#include "service/system/status.hpp"      // 统一状态码
+#  include "algorithm/pid.hpp"         // 速度环
+#  include "bsp/bsp_encoder.hpp"       // 测速反馈
+#  include "bsp/bsp_pwm.hpp"           // H 桥两路输出
+#  include "service/system/status.hpp" // 统一状态码
 
-#include <stddef.h>
-#include <stdint.h>
+#  include <stddef.h>
+#  include <stdint.h>
 
 /**
  * @brief 电机设备类
@@ -218,18 +218,18 @@ private:
   /* ==================== */
   /* ==================== 成员变量 ==================== */
 
-  Config     _config;             ///< 绑定与机械参数
-  PID        _pid;                ///< 速度环
-  float      _counts_per_cm = 0.0f; ///< 计数 → cm（init() 算一次）
-  float      _target_cm_s   = 0.0f; ///< 目标速度
-  float      _speed_cm_s    = 0.0f; ///< 实测速度
-  float      _output_pct    = 0.0f; ///< 最近一拍占空比（带符号）
-  float      _remaining_s   = 0.0f; ///< 速度+时间模式的剩余时间 (s)
-  float      _open_pct     = 0.0f; ///< 开环模式的目标占空比（带符号，%）
-  Mode       _mode          = Mode::STOP;
-  bool       _initialized   = false;
-  bool       _speed_filt_valid = false; ///< 速度低通是否已用第一拍初始化（避免从 0 爬升）
-  bool       _idle          = false; ///< 是否已在零速死区内（只在进入时清一次积分）
+  Config _config;                  ///< 绑定与机械参数
+  PID    _pid;                     ///< 速度环
+  float  _counts_per_cm    = 0.0f; ///< 计数 → cm（init() 算一次）
+  float  _target_cm_s      = 0.0f; ///< 目标速度
+  float  _speed_cm_s       = 0.0f; ///< 实测速度
+  float  _output_pct       = 0.0f; ///< 最近一拍占空比（带符号）
+  float  _remaining_s      = 0.0f; ///< 速度+时间模式的剩余时间 (s)
+  float  _open_pct         = 0.0f; ///< 开环模式的目标占空比（带符号，%）
+  Mode   _mode             = Mode::STOP;
+  bool   _initialized      = false;
+  bool   _speed_filt_valid = false; ///< 速度低通是否已用第一拍初始化（避免从 0 爬升）
+  bool   _idle             = false; ///< 是否已在零速死区内（只在进入时清一次积分）
 
   /* ==================== */
 };
