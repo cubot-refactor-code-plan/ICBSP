@@ -23,6 +23,7 @@
 | `remote/device_r9ds.hpp` | R9DS 遥控接收机（SBUS） | `BspUartT` | `DeviceR9dsT<Uart>` |
 | `actuator/device_servo.hpp/.cpp` | 舵机（脉宽控制） | `BspPwm` | `DeviceServo` |
 | `actuator/device_buzzer.hpp/.cpp` | 无源蜂鸣器 | `BspPwm` | `DeviceBuzzer` |
+| `screen/iic_oled.hpp/.cpp` | I²C OLED 显示屏（SSD1306，常见 0.96 寸 128×64） | 宿主 CubeMX 的 `I2C_HandleTypeDef` | `IicOled` |
 
 设备类的构造都不是 constexpr（构造时就要绑外设、查参数）：实例推荐定义在宿主 `board_cfg.cpp`、头文件里 `extern`；下面示例里写成 `inline` 的也能用（动态初始化，只初始化一次）。`init()` 在 `board_init()` 里逐个 `ICBSP_CHECK`。
 
@@ -238,6 +239,38 @@ inline DeviceBuzzer buzzer(bsp_pwm_buzzer);
 buzzer.beep(2000, 100);   // 2 kHz 响 100 ms
 buzzer.tone(1000, 50);    // 持续音，音量 50%
 ```
+
+---
+
+## 5.5 screen/ — 显示屏（`screen/iic_oled`）
+
+**I²C OLED，SSD1306 控制器；只支持 128×64（0.96 寸单色模块，地址 0x3C，部分模块 0x3D）。**
+128×32 / 64×48 等变体不支持：初始化序列里 `0xA8/0x3F`（1/64 duty）、`0xD3/0x00`、
+8 页刷新、16 列 × 4 行字符网格都是写死的。
+
+```cpp
+// 实例定义在 board_cfg.cpp（含 1152 B 显存），board_init() 里已尝试 init，失败静默继续
+IicOled oled;                                   // board_cfg.hpp 里 extern
+extern IicOled oled;
+
+// 使用（建议 5 Hz，单帧阻塞约 24~26 ms）
+if (oled.is_ready()) {
+  oled.set_font_flip(IicOled::FontFlip::V);     // 字形与面板方向不一致时修这里
+  oled.clear();                                 // 只清显存
+  oled.show_string(0, 0, "M1  12.3");           // 16 列 × 4 行，8×16 字模
+  (void)oled.refresh();                         // 整屏上屏，返回是否全部成功
+}
+```
+
+- 依赖：`HAL_I2C_MODULE_ENABLED`；本类**不经 BspI2c**，直接调 `HAL_I2C_Master_Transmit`，
+  使用前宿主必须已 `MX_I2Cx_Init()`。
+- 刷新是**阻塞**的：一帧约 1080 B，400 kHz 下 24~26 ms → 建议 ≤ 5 Hz，放在最低优先级任务里。
+- 命令/数据发送失败会 `HAL_I2C_DeInit + HAL_I2C_Init` 后重试一次（总线错误可自恢复；
+  从机一直拉低 SDA 时无效，那需要 GPIO 手动打时钟）。
+- `init()` 失败时内部解绑（`is_ready() == false`），宿主可据此低频重试。
+- 显存 `_gram[144][8]`（列寻址，实际只用 0~127 列 / 0~7 页），`set_pixel()` 越界会自动丢弃。
+- 方向不对用 `init(..., Rotation::ROT_180/MIRROR_X/MIRROR_Y)`；单个字形反了用 `set_font_flip()`。
+- 字模 `font_8x16[95][16]` 在 `fort.h`（ASCII 32~126）。
 
 ---
 
