@@ -5,6 +5,7 @@
 
 #include "device/motor/device_motor.hpp"
 
+#include <math.h> // expf（速度低通的系数）
 #include <string.h>
 
 namespace
@@ -57,8 +58,10 @@ Status DeviceMotor::init()
   _speed_cm_s  = 0.0f;
   _output_pct  = 0.0f;
   _remaining_s = 0.0f;
+  _open_pct    = 0.0f;
   _mode        = Mode::STOP;
   _idle        = false;
+  _speed_filt_valid = false; // 低通从下一拍重新起算
   _pid.reset();
 
   _initialized = true;
@@ -71,6 +74,13 @@ void DeviceMotor::set_speed(float cm_s)
 {
   _mode        = Mode::SPEED;
   _target_cm_s = cm_s;
+}
+
+/** @brief 开环：直接给带符号占空比 (%)，不走 PID（只用于排查驱动不对称） */
+void DeviceMotor::set_duty_open(float pct)
+{
+  _mode     = Mode::OPEN;
+  _open_pct = pct;
 }
 
 /** @brief 速度+时间模式：remaining 用秒记，按 update() 传入的 dt 递减（不依赖 tick 精度） */
@@ -108,17 +118,44 @@ bool DeviceMotor::update(float dt_s)
     return false;
 
   // 1. 本拍增量 → 实测速度 (cm/s)：计数 / (计数每 cm) / 秒
-  const int32_t delta = _config.encoder->read_delta();
-  _speed_cm_s         = static_cast<float>(delta) / _counts_per_cm / dt_s;
+  const int32_t delta     = _config.encoder->read_delta();
+  const float   raw_speed = static_cast<float>(delta) / _counts_per_cm / dt_s;
 
-  // 2. 停止模式：保持刹车，不跑 PID
+  // 2. 速度低通（一阶 IIR，截止 speed_lpf_hz，0 = 关）：alpha = 1 - e^(-2π·fc·dt)
+  //    首拍直接取原值，避免上电时从 0 缓慢爬升（看起来像“起步慢了半拍”）
+  if (_config.speed_lpf_hz > 0.0f)
+  {
+    if (!_speed_filt_valid)
+    {
+      _speed_cm_s       = raw_speed;
+      _speed_filt_valid = true;
+    }
+    else
+    {
+      const float alpha = 1.0f - expf(-(2.0f * PI_F) * _config.speed_lpf_hz * dt_s);
+      _speed_cm_s += alpha * (raw_speed - _speed_cm_s);
+    }
+  }
+  else
+  {
+    _speed_cm_s = raw_speed;
+  }
+
+  // 3. 停止模式：保持刹车，不跑 PID
   if (_mode == Mode::STOP)
   {
     _brake();
     return false;
   }
 
-  // 3. 速度+时间模式：先扣时间，到点立刻停并报告「刚刚完成」
+  // 3.5 开环：直接输出指定占空比（不跑 PID），速度仍照常测量
+  if (_mode == Mode::OPEN)
+  {
+    _apply_output(_open_pct);
+    return false;
+  }
+
+  // 4. 速度+时间模式：先扣时间，到点立刻停并报告「刚刚完成」
   if (_mode == Mode::SPEED_TIME)
   {
     _remaining_s -= dt_s;
@@ -154,7 +191,7 @@ bool DeviceMotor::update(float dt_s)
   return false;
 }
 
-/** @brief JustFloat 组帧：按 fields 选择 1~3 个 PID 量，帧尾固定 00 00 80 7F */
+/** @brief JustFloat 组帧：按 fields 选择 1~4 路数据，帧尾固定 00 00 80 7F */
 size_t DeviceMotor::get_pid_frame(uint8_t *buf, uint8_t fields) const
 {
   fields &= PID_ALL;
@@ -162,14 +199,23 @@ size_t DeviceMotor::get_pid_frame(uint8_t *buf, uint8_t fields) const
     return 0U;
 
   const PID::Data d = _pid.get();
-  float values[3];
+  // 开环模式没有 PID 数据：目标/输出报当前开环占空比，反馈仍是实测速度
+  const float target   = (_mode == Mode::OPEN) ? _open_pct : d.target;
+  const float feedback = (_mode == Mode::OPEN) ? _speed_cm_s : d.feedback;
+  const float output   = (_mode == Mode::OPEN) ? _open_pct : d.output;
+  // 编码器原始计数：16 位定时器会在 ±32768 回绕（诊断用，不做多圈展开）
+  const float encoder  = (_config.encoder != nullptr) ? static_cast<float>(_config.encoder->read_raw()) : 0.0f;
+
+  float values[4];
   size_t n = 0U;
   if ((fields & PID_TARGET) != 0U)
-    values[n++] = d.target;
+    values[n++] = target;
   if ((fields & PID_FEEDBACK) != 0U)
-    values[n++] = d.feedback;
+    values[n++] = feedback;
   if ((fields & PID_OUTPUT) != 0U)
-    values[n++] = d.output;
+    values[n++] = output;
+  if ((fields & PID_ENCODER) != 0U)
+    values[n++] = encoder;
 
   memcpy(buf, values, n * sizeof(float));
   uint8_t *tail = buf + n * sizeof(float);

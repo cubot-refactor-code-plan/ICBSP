@@ -20,7 +20,9 @@
  *       但 pid 的 ki / kd 是**每拍量纲**，改频率会改变 I、D 的等效强度，换频率要重新标定。
  *
  * @warning 双 PWM 互斥：任何时刻最多只有一路非 0，否则 H 桥直通。本类在切换方向时先写 0 再写有效路。
- * @warning 非线程安全：set_*() 只写目标值，update() 是唯一的 PWM 写入者，需与调用方同任务。
+ * @warning 并发约定：`update()` 只能有一个调用者（本工程是 1 kHz 的 motor_task），它是唯一的 PWM 写入者；
+ *          `set_speed()` / `set_duty_open()` / `stop()` 可以在其他任务里调用（只写 float / 枚举，天然原子），
+ *          效果从下一拍 update() 生效。不要在多处同时写目标（会互相覆盖）。
  */
 
 #ifndef __DEVICE_MOTOR_HPP__
@@ -56,6 +58,7 @@ public:
     STOP = 0,   ///< 刹车：两路 PWM 都给满占空比（绕组短路），不再跑 PID
     SPEED,      ///< 纯速度：一直跑，直到被 stop() 或改目标
     SPEED_TIME, ///< 速度 + 时间：跑满指定时长后自动停止
+    OPEN,       ///< 开环：直接输出指定占空比，不跑 PID（仅供驱动/不对称排查）
   };
 
   /**
@@ -86,6 +89,16 @@ public:
      * @note 默认 0.4：即 ±0.4 cm/s 内都当作 0；代价是小于该阈值的目标不会输出。
      */
     float deadband_cm_s = 0.4f;
+
+    /**
+     * @brief 速度反馈**一阶**低通截止频率 (Hz)，0 = 不过滤
+     *
+     * @note 编码器量化噪声在低速时很大（1 ms 一拍 1 计数 ≈ 0.34 cm/s），低通能把它压下去；
+     *       代价是相位滞后，截止频率越低闭环带宽越低。1 kHz 采样下 100 Hz 的等效时间常数约 1.6 ms。
+     * @note 滤波后的值同时用于 PID 反馈和 get_speed_cm_s()，首拍直接取原值（不从 0 缓慢爬升）。
+     * @note 运行中可直接改写（调试器 / EmberProbe）试探不同截止频率，下一拍生效。
+     */
+    float speed_lpf_hz = 0.0f;
 
     PID::Config pid {}; ///< 速度环参数（默认全 0，靠实机标定）
   };
@@ -119,6 +132,14 @@ public:
   void set_speed_time(float cm_s, uint32_t duration_ms);
 
   /**
+   * @brief 开环：直接给带符号占空比 (%)，不跑 PID
+   *
+   * @note 只用于排查驱动不对称（同占空比下正反向的实测速度/纹波）。
+   *       update() 仍会测速并过低通，反馈照常可读；`set_speed()` / `stop()` 会退出开环。
+   */
+  void set_duty_open(float pct);
+
+  /**
    * @brief 立即停止（刹车）
    *
    * @note 两路 PWM 同时给满占空比，把电机绕组短路；不跑 PID、清积分。
@@ -143,17 +164,20 @@ public:
     PID_TARGET   = 1U << 0, ///< 目标值
     PID_FEEDBACK = 1U << 1, ///< 反馈值
     PID_OUTPUT   = 1U << 2, ///< PID 原始输出
-    PID_ALL      = PID_TARGET | PID_FEEDBACK | PID_OUTPUT,
+    PID_ENCODER  = 1U << 3, ///< 编码器原始计数（read_raw()，int32 转 float）
+    PID_ALL      = PID_TARGET | PID_FEEDBACK | PID_OUTPUT | PID_ENCODER,
   };
 
   /**
-   * @brief 按 JustFloat 协议组帧，返回实际长度
+   * @brief 按 JustFloat 协议组帧，返回实际长度（PID_ALL = 4 通道 = 20 B）
    *
-   * @param buf    输出缓冲，至少 16 字节
-   * @param fields 要拼的数据：PID_TARGET / PID_FEEDBACK / PID_OUTPUT 任意组合
+   * @param buf    输出缓冲，至少 20 字节（4 通道满配）
+   * @param fields 要拼的数据：PID_TARGET / PID_FEEDBACK / PID_OUTPUT / PID_ENCODER 任意组合
    * @return 实际字节数（4 × 数据个数 + 4）；buf 为空或 fields 无效返回 0
    *
+   * @note 通道顺序固定：目标 / 反馈 / 输出 / 编码器计数（与 PID_ALL 的位顺序一致）。
    * @note 帧尾固定 00 00 80 7F；本函数只组帧，发送由调用方负责。
+   * @note 开环模式（set_duty_open）没有 PID 数据：目标/输出报当前开环占空比，反馈仍是实测速度。
    */
   size_t get_pid_frame(uint8_t *buf, uint8_t fields = PID_ALL) const;
 
@@ -169,7 +193,7 @@ public:
   /** @brief 换算结果：每厘米多少个计数（由机械参数算出） */
   float get_counts_per_cm() const { return _counts_per_cm; }
 
-  /** @brief 最近一拍实测速度 (cm/s) */
+  /** @brief 最近一拍实测速度 (cm/s)，已过速度低通（见 Config::speed_lpf_hz） */
   float get_speed_cm_s() const { return _speed_cm_s; }
 
   /** @brief 最近一拍占空比（带符号，%）：正 = pwm_a 出力，负 = pwm_b 出力 */
@@ -201,8 +225,10 @@ private:
   float      _speed_cm_s    = 0.0f; ///< 实测速度
   float      _output_pct    = 0.0f; ///< 最近一拍占空比（带符号）
   float      _remaining_s   = 0.0f; ///< 速度+时间模式的剩余时间 (s)
+  float      _open_pct     = 0.0f; ///< 开环模式的目标占空比（带符号，%）
   Mode       _mode          = Mode::STOP;
   bool       _initialized   = false;
+  bool       _speed_filt_valid = false; ///< 速度低通是否已用第一拍初始化（避免从 0 爬升）
   bool       _idle          = false; ///< 是否已在零速死区内（只在进入时清一次积分）
 
   /* ==================== */
