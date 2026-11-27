@@ -69,9 +69,13 @@ float PID::apply_limits_and_output()
   _term.p_term = _config.kp * _input.error;
 
   // 积分分离：误差小于阈值（或阈值未设置）时累加，否则清零（注意：是清零而非冻结）
-  _term.i_term = (fabsf(_input.error) < _config.i_sep || _config.i_sep == 0.0f)
-                   ? _term.i_term + _config.ki * _input.error
-                   : 0.0f;
+  // 积分暂停（set_integral_hold(true)）时积分项保持原值，既不累加也不清零
+  if (!_integral_hold)
+  {
+    _term.i_term = (fabsf(_input.error) < _config.i_sep || _config.i_sep == 0.0f)
+                     ? _term.i_term + _config.ki * _input.error
+                     : 0.0f;
+  }
 
   // 积分项累加后立即钳位，防止积分无限累积（即使后续总输出有限幅）；i_max 为 0 时跟随 out_max（F4）
   const float i_max = (_config.i_max == 0.0f) ? _config.out_max : _config.i_max;

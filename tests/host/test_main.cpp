@@ -99,6 +99,23 @@ void test_pid_nan()
   CHECK(std::isfinite(o5) && o5 > o1);
 }
 
+/** @brief 积分暂停：暂停期间积分项不变（也不被积分分离清零），恢复后继续累加 */
+void test_pid_integral_hold()
+{
+  PID p(PID::Config(0.0f, 1.0f, 0.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5.0f)); // 纯 I，积分分离阈值 5
+  const float o1 = p.calc(2.0f, 0.0f);                                        // 积分 2
+  CHECK(near(o1, 2.0f, 1e-6) && !p.is_integral_held());
+  p.set_integral_hold(true);
+  CHECK(p.is_integral_held());
+  CHECK(near(p.calc(2.0f, 0.0f), 2.0f, 1e-6));  // 不累加
+  CHECK(near(p.calc(10.0f, 0.0f), 2.0f, 1e-6)); // 误差超过分离阈值也不清零
+  p.reset();
+  CHECK(p.is_integral_held()); // reset() 不改变暂停状态
+  p.set_integral_hold(false);
+  p.calc(2.0f, 0.0f);
+  CHECK(near(p.calc(2.0f, 0.0f), 4.0f, 1e-6)); // 恢复累加
+}
+
 /* ==================== */
 
 
@@ -232,6 +249,7 @@ int main()
   test_pid_basic();
   test_pid_f4();
   test_pid_nan();
+  test_pid_integral_hold();
   test_quat_f1();
   test_quat_rotation();
   test_matrix();

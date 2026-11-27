@@ -267,6 +267,17 @@ public:
    */
   void reset();
 
+  /**
+   * @brief 暂停 / 恢复积分累加（条件积分，用于抗积分饱和）
+   * @param hold true=之后的 calc() 不再改变积分项（既不累加，也不因积分分离清零），积分项按当前值继续参与输出；false=恢复正常累加
+   * @note 典型用法：输出被外部环节（如功率限幅）截小时暂停，避免限幅解除后积分项导致超调。
+   *       状态一直保持到下次调用本函数；reset() 只清零积分项，不改变暂停状态。
+   */
+  void set_integral_hold(bool hold) { _integral_hold = hold; }
+
+  /** @brief 积分累加当前是否被暂停 */
+  bool is_integral_held() const { return _integral_hold; }
+
   /** @brief PID 最近一拍的输入与原始输出（供波形 / 调试读取） */
   struct Data
   {
@@ -312,6 +323,7 @@ private:
   DiffMode  _diff_mode = DiffMode::DIFF_FEEDBACK; ///< 微分计算模式
   bool      _has_last  = false;                   ///< 是否有上一帧输入（首次调用 / reset() 后为 false，该帧微分为 0）
   uint32_t  _nonfinite_count = 0U;                ///< 丢弃的非有限输入次数（F1）
+  bool      _integral_hold   = false;             ///< 积分累加是否暂停（set_integral_hold()）
 };
 
   /* ==================== */
