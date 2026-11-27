@@ -12,7 +12,7 @@
  *          与 DjiMotor 一样，读数存在对象内部并由库自动刷新：Config::auto_update = true（默认）时，init() 建一个内部任务，
  *          每次陀螺仪数据就绪就刷新一帧；用户直接读 snapshot() / get_data()（IMU 通用数据 ImuData，imu_definition.hpp）、
  *          get_raw_data()（寄存器原始值）、get_temperature()（芯片温度）。
- *          Config::attitude = true（默认）时，内部任务每帧再用 VQF（algorithm/vqf.hpp，六轴：陀螺仪 + 加速度计，带陀螺仪零偏估计）
+ *          Config::attitude = true（默认）时，内部任务每帧再用 VQF（algorithm/observer/vqf.hpp，六轴：陀螺仪 + 加速度计，带陀螺仪零偏估计）
  *          解算姿态，和 gyro / acc 一起写进 ImuData 的 quaternion / euler_angle / euler_radian。
  *          安装方向旋转、温控不在这里（属于上层）。
  *
@@ -57,7 +57,7 @@
  * @note 姿态（Config::attitude）：
  *       - 坐标系：VQF 的六轴姿态，参考系 z 轴竖直向上、航向（yaw 零点）为上电时任意值；没有磁力计，yaw 会随零偏估计残差慢慢漂。
  *         quaternion 为“芯片本体 → 参考系”的旋转（w / x / y / z），欧拉角按 Z-Y-X（yaw → pitch → roll）分解，与 gyro.z / y / x 同轴。
- *         注意 pitch 是绕芯片 Y 轴的右手转角：芯片 X 轴朝上抬时为负。pitch = ±90° 处 yaw / roll 万向节锁，控制请用四元数（algorithm/quaternion.hpp）。
+ *         注意 pitch 是绕芯片 Y 轴的右手转角：芯片 X 轴朝上抬时为负。pitch = ±90° 处 yaw / roll 万向节锁，控制请用四元数（algorithm/math/quaternion.hpp）。
  *       - 节奏：VQF 按陀螺仪 ODR 的周期积分，所以只在陀螺仪数据就绪中断唤醒的那一帧解算；没有中断（没开 drdy_int、宿主没转调 EXTI）
  *         时内部任务每 10 ms 超时刷新一次读数，但姿态不更新。两次刷新之间漏掉的数据就绪按最新一帧补积分，漏帧数见 get_attitude_skip_count()。
  *       - 收敛：上电后倾角约在 tauAcc（3 s）量级内收敛；陀螺仪零偏在静止约 1.5 s 后开始快速估计，静止上电最稳。
@@ -87,7 +87,7 @@
 #include "service/definition/imu_definition.hpp" // IMU 通用数据
 #include "service/system/status.hpp"         // 统一状态码、EventState
 
-class VQF; // algorithm/vqf.hpp：姿态解算，只在 .cpp 里用
+class VQF; // algorithm/observer/vqf.hpp：姿态解算，只在 .cpp 里用
 
 
 /**

@@ -6,10 +6,10 @@
  *          构建与运行见同目录 CMakeLists.txt（`cmake -S tests/host -B build/host && cmake --build build/host && ctest --test-dir build/host`）。
  */
 
-#include "algorithm/matrix.hpp"
+#include "algorithm/math/matrix.hpp"
 #include "algorithm/pid.hpp"
-#include "algorithm/quaternion.hpp"
-#include "algorithm/rls.hpp"
+#include "algorithm/math/quaternion.hpp"
+#include "algorithm/observer/rls.hpp"
 
 #include <cmath>
 #include <cstdio>

@@ -12,8 +12,8 @@
 #include "service/system/state_tree.hpp" // bus_state()：默认树的总线节点
 #include "service/system/config_check.hpp" // 宿主配置（经检查）
 
-#include "algorithm/quaternion.hpp"
-#include "algorithm/vqf.hpp"
+#include "algorithm/math/quaternion.hpp"
+#include "algorithm/observer/vqf.hpp"
 
 
 /* ==================== 寄存器表（BMI088 数据手册 BST-BMI088-DS001） ==================== */

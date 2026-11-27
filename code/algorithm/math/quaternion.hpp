@@ -43,7 +43,7 @@
 #ifndef __QUATERNION_HPP__
 #define __QUATERNION_HPP__
 
-#include "algorithm/math_constants.hpp" // IWYU pragma: export（ICBSP_PI，原 PI_D）
+#include "algorithm/math/math_constants.hpp" // IWYU pragma: export（ICBSP_PI，原 PI_D）
 
 /**
  * @brief 三维向量（聚合类型，可 {x, y, z} 初始化）

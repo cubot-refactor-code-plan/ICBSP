@@ -146,4 +146,4 @@ target_compile_options(icbsp PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wshadow>
 )
 # 第三方源码（VQF，MIT）保持上游原样，不为 -Wshadow 改它
-set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/code/algorithm/vqf.cpp PROPERTIES COMPILE_OPTIONS "-Wno-shadow")
+set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/code/algorithm/observer/vqf.cpp PROPERTIES COMPILE_OPTIONS "-Wno-shadow")

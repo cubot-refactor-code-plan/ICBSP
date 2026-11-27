@@ -11,7 +11,7 @@
 #ifndef __MOTOR_DEFINITION_HPP__
 #define __MOTOR_DEFINITION_HPP__
 
-#include "algorithm/math_constants.hpp" // IWYU pragma: export（ICBSP_PI / ICBSP_PI_F；原来的 PI 宏已删除，评审 I6）
+#include "algorithm/math/math_constants.hpp" // IWYU pragma: export（ICBSP_PI / ICBSP_PI_F；原来的 PI 宏已删除，评审 I6）
 
 /**
  * @brief 单个电机经过机械传动换算后的通用运动学数据

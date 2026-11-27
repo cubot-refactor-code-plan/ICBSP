@@ -15,9 +15,9 @@ set(ICBSP_CODE ${CMAKE_CURRENT_SOURCE_DIR}/../../code)
 add_executable(icbsp_host_tests
     test_main.cpp
     ${ICBSP_CODE}/algorithm/pid.cpp
-    ${ICBSP_CODE}/algorithm/quaternion.cpp
+    ${ICBSP_CODE}/algorithm/math/quaternion.cpp
     ${ICBSP_CODE}/algorithm/quaternion_pid.cpp
-    ${ICBSP_CODE}/algorithm/matrix.cpp
+    ${ICBSP_CODE}/algorithm/math/matrix.cpp
 )
 target_include_directories(icbsp_host_tests PRIVATE ${ICBSP_CODE})
 target_compile_options(icbsp_host_tests PRIVATE -Wall -Wextra -Wshadow -Werror)

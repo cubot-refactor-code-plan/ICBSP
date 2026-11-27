@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #include "algorithm/pid.hpp"
-#include "algorithm/quaternion.hpp"
+#include "algorithm/math/quaternion.hpp"
 
 
 /**

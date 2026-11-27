@@ -49,7 +49,7 @@
 #include <math.h>
 #include <stdint.h>
 
-#include "algorithm/matrix.hpp"
+#include "algorithm/math/matrix.hpp"
 #include "service/system/status_code.hpp" // 统一状态码（不依赖 RTOS，A6）
 
 /**

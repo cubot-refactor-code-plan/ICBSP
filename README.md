@@ -20,7 +20,7 @@
 | `DmMotor`（达妙电机）                | **未上板** | 只做编译验证（`device/motor/dm_motor.hpp` 自述），仓库里没有达妙电机可测                        |
 | EmmV5 `Checksum::XOR`                | **未实测** | 说明书只给了发送侧算法、回复侧未写；解析时 `0x6B` 与 XOR 都接受（`emmv5_protocol.hpp`）       |
 | EmmV5 CRC-8                            | **未实现** | 说明书没给多项式 / 初值 / 示例帧，不靠猜参数实现                                                  |
-| `Rls` 的 Bierman（平方根 / UD 分解） | **未实现** | 只有标准形式；单精度下 λ→1、数十万步以上若频繁重置 P，需换数值稳定形式（`algorithm/rls.hpp`） |
+| `Rls` 的 Bierman（平方根 / UD 分解） | **未实现** | 只有标准形式；单精度下 λ→1、数十万步以上若频繁重置 P，需换数值稳定形式（`algorithm/observer/rls.hpp`） |
 | STM32F4 的 CAN                         | **未接**   | F4 只做了编译验证，`can_rx_task` / `can_tx_task` 的 F4 路径未接                               |
 | SPI + BMI088（H750 等场景）            | 部分未上板       | 见 `docs/bsp_test/spi_bmi088.md` 与 `changes.md` 里的标注                                     |
 
@@ -177,6 +177,6 @@ node Middlewares/Third_Party/ICBSP/tools/web_ui/server.mjs   # 浏览器打开 h
 
 MIT，见根目录 [`LICENSE`](LICENSE)。例外：
 
-- `code/algorithm/vqf.*`：第三方代码 VQF，MIT，版权 Daniel Laidig（文件头的 `SPDX-FileCopyrightText` / `SPDX-License-Identifier` 行，不要删）；保持上游原样（CMake 里单独关了 `-Wshadow`）。
-- `code/algorithm/matrix.*`：移植自 USTC-RoboWalker（yssickjgd/damiao_mc02_bsp）的代码，原作者许可在 RoboMaster 赛事范围内使用，**不适用本仓库的 MIT**；超出这个范围请自行征求原作者意见。文件头的出处说明要保留。
+- `code/algorithm/observer/vqf.*`：第三方代码 VQF，MIT，版权 Daniel Laidig（文件头的 `SPDX-FileCopyrightText` / `SPDX-License-Identifier` 行，不要删）；保持上游原样（CMake 里单独关了 `-Wshadow`）。
+- `code/algorithm/math/matrix.*`、`code/algorithm/observer/filter_kalman.*`、`code/algorithm/observer/filter_ekf.*`：移植自 USTC-RoboWalker（yssickjgd/damiao_mc02_bsp）的代码，原作者许可在 RoboMaster 赛事范围内使用，**不适用本仓库的 MIT**；超出这个范围请自行征求原作者意见。文件头的出处说明要保留。
 - 器件手册：版权归各厂商，**不随本仓库分发**（2026-11-12 起已从仓库及其历史中移除）。
