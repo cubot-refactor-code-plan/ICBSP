@@ -313,6 +313,16 @@ void test_ekf_linearized()
   CHECK(no_h.update(z, ekf_h(no_h.get_state(), 0.0f), ekf_dh_dx(no_h.get_state(), 0.0f), MatrixF32<1, 1>::constant(1.0f)) == Status::OK);
   FilterEkf<2, 2, 1> part_h({.f = ekf_f, .df_dx = ekf_df_dx, .df_dw = ekf_df_dw, .h = ekf_h});
   CHECK(part_h.init() == Status::BAD_ARG);
+
+  // init(x0, p0)：用给定的协方差重新开始；p0 非有限时拒绝
+  const float x0d[2] = {3.0f, -1.0f};
+  const float p1d[4] = {0.2f, 0.0f, 0.0f, 0.05f};
+  CHECK(lin.init(MatrixF32<2, 1>::from_array(x0d), MatrixF32<2, 2>::from_array(p1d)) == Status::OK);
+  CHECK((lin.get_state() == MatrixF32<2, 1>::from_array(x0d)));
+  CHECK((lin.get_covariance() == MatrixF32<2, 2>::from_array(p1d)));
+  const float pnan[4] = {NaN, 0.0f, 0.0f, 1.0f};
+  CHECK(lin.init(MatrixF32<2, 1>::from_array(x0d), MatrixF32<2, 2>::from_array(pnan)) == Status::BAD_ARG);
+  CHECK(!lin.is_initialized());
 }
 
 /* ==================== */

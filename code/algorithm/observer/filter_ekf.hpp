@@ -141,6 +141,15 @@ public:
    */
   Status init(const MatrixF32<X_DIM, 1> &x0 = MatrixF32<X_DIM, 1>());
 
+  /**
+   * @brief 同 init(x0)，但初始协方差用 p0 而不是 Config::p0
+   * @param x0 初始状态
+   * @param p0 初始误差协方差（应对称半正定）
+   * @return 同 init(x0)；p0 含 NaN / inf 时 BAD_ARG
+   * @note 用于重新开始滤波时保留部分状态的不确定度，例如只重置速度、保留已经收敛的零偏及其协方差。
+   */
+  Status init(const MatrixF32<X_DIM, 1> &x0, const MatrixF32<X_DIM, X_DIM> &p0);
+
   /** @brief init() 是否成功过 */
   bool is_initialized() const
   {
@@ -313,6 +322,22 @@ Status FilterEkf<X_DIM, U_DIM, Z_DIM>::init(const MatrixF32<X_DIM, 1> &x0)
   _reject_cnt = 0U;
   _init       = true;
   return Status::OK;
+}
+
+template <uint32_t X_DIM, uint32_t U_DIM, uint32_t Z_DIM>
+Status FilterEkf<X_DIM, U_DIM, Z_DIM>::init(const MatrixF32<X_DIM, 1> &x0, const MatrixF32<X_DIM, X_DIM> &p0)
+{
+  if (!all_finite(p0))
+  {
+    _init = false;
+    return Status::BAD_ARG;
+  }
+  const Status statu = init(x0);
+  if (statu == Status::OK)
+  {
+    _p = p0;
+  }
+  return statu;
 }
 
 template <uint32_t X_DIM, uint32_t U_DIM, uint32_t Z_DIM>
