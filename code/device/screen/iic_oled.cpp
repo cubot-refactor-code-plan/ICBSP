@@ -108,6 +108,7 @@ bool IicOled::init(I2C_HandleTypeDef *i2c, uint8_t dev_addr, Rotation rot)
   return true;
 }
 
+/* ==================== */
 
 /* ==================== 命令/数据 ==================== */
 
@@ -151,6 +152,7 @@ bool IicOled::write_cmd(uint8_t cmd)
   return send(buf, 2U);
 }
 
+/* ==================== */
 
 /* ==================== 显示控制 ==================== */
 
@@ -188,6 +190,7 @@ void IicOled::display_turn(bool enable)
   }
 }
 
+/* ==================== */
 
 /* ==================== 显存操作 ==================== */
 
@@ -284,5 +287,7 @@ void IicOled::show_string(uint8_t x, uint8_t y, const char *str)
     j++;
   }
 }
+
+/* ==================== */
 
 #endif // HAL_I2C_MODULE_ENABLED

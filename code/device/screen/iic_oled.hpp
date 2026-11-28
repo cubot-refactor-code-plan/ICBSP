@@ -85,6 +85,8 @@ public:
   void color_turn(bool enable);   ///< true = 反色显示
   void display_turn(bool enable); ///< true = 屏幕旋转 180°（A1 + C8），false = 正常（A0 + C0）
 
+  /* ==================== */
+
   /* ==================== 显存操作 ==================== */
 
   /** @brief 只清显存，**不上屏**（需要再调 refresh()） */
@@ -122,6 +124,8 @@ public:
 
   /** @brief 取显存指针（列寻址，144×8） */
   uint8_t (*get_gram())[8] { return _gram; }
+
+  /* ==================== */
 
 private:
   /** @brief 发送一段数据，失败时重初始化 I²C 外设并重试一次
