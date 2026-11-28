@@ -30,9 +30,12 @@
  *          - update() 在当前状态（即 predict() 写入的先验）处线性化，两次 predict() 之间连续 update() 是依次融合多次测量（原作后一次会覆盖前一次）；
  *          - 新息协方差 S 奇异时放弃本次测量、返回 BAD_ARG（原作求逆失败静默得到单位矩阵）；
  *            输入、测量或结果（含模型函数的返回值）含 NaN / inf 时丢弃本步、状态不变；
- *          - 每步把 P 对称化，抵消单精度舍入；去掉常量单位 / 零矩阵成员。
+ *          - 每步把 P 对称化，抵消单精度舍入；去掉常量单位 / 零矩阵成员；
+ *          - 增加 update(z, hx, H, R, freeze)：由调用方给出线性化结果，用于不同维度的多组测量依次融合，可冻结部分状态；
+ *            增加 calc_nis()：归一化新息平方，用于新息检验。
  *
- * @note 纯计算，不依赖硬件与 RTOS；矩阵在栈上按值运算，适合 X_DIM ≤ 6 左右的小模型。
+ * @note 纯计算，不依赖硬件与 RTOS；矩阵在栈上按值运算，适合 X_DIM ≤ 10 左右的小模型。
+ *       栈用量随维度平方增长：9 维状态、4 维测量的 update() 实测约 4.6 KB，predict() 约 4 KB（-O0），开优化后会小很多；调用任务要留足栈。
  *       模型函数在 predict() / update() 里同步调用，运行在调用者的上下文，不要在里面阻塞。
  *
  * @note 用法：
@@ -113,9 +116,9 @@ public:
     StateFunc               f     = nullptr;                             ///< 状态方程，必填
     StateJacobianX          df_dx = nullptr;                             ///< ∂f/∂x，必填
     StateJacobianW          df_dw = nullptr;                             ///< ∂f/∂w，必填
-    MeasureFunc             h     = nullptr;                             ///< 测量方程，必填
-    MeasureJacobianX        dh_dx = nullptr;                             ///< ∂h/∂x，必填
-    MeasureJacobianV        dh_dv = nullptr;                             ///< ∂h/∂v，必填（噪声直接相加时返回单位矩阵）
+    MeasureFunc             h     = nullptr;                             ///< 测量方程；h、dh_dx、dh_dv 要么都给，要么都为空（只用 update(z, hx, H, R) 时）
+    MeasureJacobianX        dh_dx = nullptr;                             ///< ∂h/∂x
+    MeasureJacobianV        dh_dv = nullptr;                             ///< ∂h/∂v（噪声直接相加时返回单位矩阵）
     MatrixF32<U_DIM, U_DIM> q     = {};                                  ///< 过程噪声协方差 Q（对称半正定）；越大越信任测量
     MatrixF32<Z_DIM, Z_DIM> r     = {};                                  ///< 测量噪声协方差 R（对称正定）；越大越信任模型
     MatrixF32<X_DIM, X_DIM> p0    = MatrixF32<X_DIM, X_DIM>::identity(); ///< 初始误差协方差 P0；对初值越没把握取得越大
@@ -133,7 +136,7 @@ public:
   /**
    * @brief 检查配置，置 x = x0、P = P0，清空计数
    * @param x0 初始状态，默认全 0
-   * @return OK=成功；BAD_ARG=有模型函数为空、dt ≤ 0、配置或 x0 含 NaN / inf
+   * @return OK=成功；BAD_ARG=f、df_dx、df_dw 有空的，h、dh_dx、dh_dv 只给了一部分，dt ≤ 0，配置或 x0 含 NaN / inf
    * @note 可重复调用，重新开始滤波。
    */
   Status init(const MatrixF32<X_DIM, 1> &x0 = MatrixF32<X_DIM, 1>());
@@ -158,10 +161,39 @@ public:
   /**
    * @brief 用一次测量修正状态
    * @param z 测量值
-   * @return OK=已更新；NOT_INIT=init() 没成功过；BAD_ARG=z 或结果含 NaN / inf、或新息协方差 S 奇异，本次测量被丢弃、状态不变
+   * @return OK=已更新；NOT_INIT=init() 没成功过；NOT_SUPPORTED=Config 没给测量模型；BAD_ARG=z 或结果含 NaN / inf、或新息协方差 S 奇异，本次测量被丢弃、状态不变
    * @note 有新测量时在 predict() 之后调用；两次 predict() 之间可以调用多次，依次融合。
    */
   Status update(const MatrixF32<Z_DIM, 1> &z);
+
+  /**
+   * @brief 用调用方算好的线性化测量修正状态（测量维度 M 可与 Z_DIM 不同）
+   * @tparam M 测量维度
+   * @param z      测量值
+   * @param hx     预测测量 h(x)，在当前状态（predict() 写入的先验，或上一组测量修正后的状态）处求值
+   * @param h_x    测量雅可比 H = ∂h/∂x，在同一点求值
+   * @param r      测量空间的噪声协方差（即 V·R·Vᵀ，对称正定）
+   * @param freeze 长 X_DIM 的标志数组，为 true 的状态分量本次不修正（K 的对应行置零）；nullptr = 全部修正
+   * @return OK=已更新；NOT_INIT=init() 没成功过；BAD_ARG=输入或结果含 NaN / inf、或新息协方差 S 奇异，本次测量被丢弃、状态不变
+   * @note 多传感器依次融合时用：Config 里的模型函数只能描述一组 Z_DIM 维测量，其余各组的 h、H、R 由调用方算好传入。
+   *       各组测量噪声相互独立时，依次更新与把各组叠成一次更新等价。
+   * @note 冻结分量相当于 Schmidt（consider）滤波：P 仍按 Joseph 形式更新，它对任意增益都给出正确的协方差。
+   *       典型用法是某些状态在当前测量下不可区分（如滞空时加速度与加速度计零偏）时冻结其中之一，避免被带偏。
+   * @note 不写 get_gain()（尺寸不同）。是否接受本次测量可先用 calc_nis() 检验。
+   */
+  template <uint32_t M>
+  Status update(const MatrixF32<M, 1> &z, const MatrixF32<M, 1> &hx, const MatrixF32<M, X_DIM> &h_x, const MatrixF32<M, M> &r,
+                const bool *freeze = nullptr);
+
+  /**
+   * @brief 计算一组测量的归一化新息平方 ε = νᵀ·S⁻¹·ν（ν = z − h(x)，S = H·P·Hᵀ + R），不改变状态
+   * @tparam M 测量维度
+   * @return ε（≥ 0）；未初始化、输入含 NaN / inf 或 S 奇异时返回 -1
+   * @note 测量与模型一致时 ε ~ χ²(M)，可与 χ² 分布的分位数比较，剔除野值或检测模型失配（打滑、碰撞等）。
+   *       M = 1、2、3、4 的 99% 分位数分别约为 6.63、9.21、11.34、13.28。
+   */
+  template <uint32_t M>
+  float calc_nis(const MatrixF32<M, 1> &z, const MatrixF32<M, 1> &hx, const MatrixF32<M, X_DIM> &h_x, const MatrixF32<M, M> &r) const;
 
   /* ==================== */
   /* ==================== 参数接口 ==================== */
@@ -254,7 +286,13 @@ Status FilterEkf<X_DIM, U_DIM, Z_DIM>::init(const MatrixF32<X_DIM, 1> &x0)
 {
   _init = false;
 
-  if (_config.f == nullptr || _config.df_dx == nullptr || _config.df_dw == nullptr || _config.h == nullptr || _config.dh_dx == nullptr || _config.dh_dv == nullptr)
+  if (_config.f == nullptr || _config.df_dx == nullptr || _config.df_dw == nullptr)
+  {
+    return Status::BAD_ARG;
+  }
+  // 测量模型三个函数要么都给、要么都不给（都不给时只能用 update(z, hx, H, R)）
+  const uint8_t measure_cnt = static_cast<uint8_t>((_config.h != nullptr) + (_config.dh_dx != nullptr) + (_config.dh_dv != nullptr));
+  if (measure_cnt != 0U && measure_cnt != 3U)
   {
     return Status::BAD_ARG;
   }
@@ -317,6 +355,10 @@ Status FilterEkf<X_DIM, U_DIM, Z_DIM>::update(const MatrixF32<Z_DIM, 1> &z)
   {
     return Status::NOT_INIT;
   }
+  if (_config.h == nullptr)
+  {
+    return Status::NOT_SUPPORTED; // 没配测量模型，只能用 update(z, hx, H, R)
+  }
   if (!all_finite(z))
   {
     ++_reject_cnt;
@@ -357,6 +399,83 @@ Status FilterEkf<X_DIM, U_DIM, Z_DIM>::update(const MatrixF32<Z_DIM, 1> &z)
   _k = k;
   ++_update_cnt;
   return Status::OK;
+}
+
+template <uint32_t X_DIM, uint32_t U_DIM, uint32_t Z_DIM>
+template <uint32_t M>
+Status FilterEkf<X_DIM, U_DIM, Z_DIM>::update(const MatrixF32<M, 1> &z, const MatrixF32<M, 1> &hx, const MatrixF32<M, X_DIM> &h_x,
+                                              const MatrixF32<M, M> &r, const bool *freeze)
+{
+  if (!_init)
+  {
+    return Status::NOT_INIT;
+  }
+  if (!all_finite(z) || !all_finite(hx) || !all_finite(h_x) || !all_finite(r))
+  {
+    ++_reject_cnt;
+    return Status::BAD_ARG;
+  }
+
+  const MatrixF32<X_DIM, M> pht = _p * h_x.transpose();
+  const MatrixF32<M, M>     s   = h_x * pht + r;
+  MatrixF32<M, M>           s_inv;
+  if (!s.inverse(s_inv))
+  {
+    ++_reject_cnt;
+    return Status::BAD_ARG;
+  }
+
+  MatrixF32<X_DIM, M> k = pht * s_inv;
+  if (freeze != nullptr)
+  {
+    for (uint32_t i = 0U; i < X_DIM; ++i)
+    {
+      if (freeze[i])
+      {
+        for (uint32_t j = 0U; j < M; ++j)
+        {
+          k[i][j] = 0.0f;
+        }
+      }
+    }
+  }
+  const MatrixF32<X_DIM, 1> x = _x + k * (z - hx);
+
+  // Joseph 形式对任意 K 都成立（冻结时的 K 不是最优增益，不能用 (I − K·H)·P 的简化式）
+  const MatrixF32<X_DIM, X_DIM> i_kh = MatrixF32<X_DIM, X_DIM>::identity() - k * h_x;
+  MatrixF32<X_DIM, X_DIM>       p    = i_kh * _p * i_kh.transpose() + k * r * k.transpose();
+  p                                  = (p + p.transpose()) * 0.5f;
+
+  if (!all_finite(x) || !all_finite(p))
+  {
+    ++_reject_cnt;
+    return Status::BAD_ARG;
+  }
+
+  _x = x;
+  _p = p;
+  ++_update_cnt;
+  return Status::OK;
+}
+
+template <uint32_t X_DIM, uint32_t U_DIM, uint32_t Z_DIM>
+template <uint32_t M>
+float FilterEkf<X_DIM, U_DIM, Z_DIM>::calc_nis(const MatrixF32<M, 1> &z, const MatrixF32<M, 1> &hx, const MatrixF32<M, X_DIM> &h_x,
+                                               const MatrixF32<M, M> &r) const
+{
+  if (!_init || !all_finite(z) || !all_finite(hx) || !all_finite(h_x) || !all_finite(r))
+  {
+    return -1.0f;
+  }
+  const MatrixF32<M, M> s = h_x * _p * h_x.transpose() + r;
+  MatrixF32<M, M>       s_inv;
+  if (!s.inverse(s_inv))
+  {
+    return -1.0f;
+  }
+  const MatrixF32<M, 1> nu  = z - hx;
+  const float           nis = (nu.transpose() * s_inv * nu)[0][0];
+  return isfinite(nis) ? nis : -1.0f;
 }
 
 template <uint32_t X_DIM, uint32_t U_DIM, uint32_t Z_DIM>

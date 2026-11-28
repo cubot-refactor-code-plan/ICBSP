@@ -93,6 +93,12 @@ public:
    */
   Status init(const MatrixF32<X_DIM, Y_DIM> &omega0 = MatrixF32<X_DIM, Y_DIM>());
 
+  /** @brief init() 是否成功过 */
+  bool is_initialized() const
+  {
+    return _init;
+  }
+
   /* ==================== */
   /* ==================== 计算接口 ==================== */
 

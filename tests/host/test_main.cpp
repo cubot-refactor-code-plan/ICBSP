@@ -1,6 +1,6 @@
 /**
  * @file test_main.cpp
- * @brief algorithm/ 的主机侧单元测试（阶段 3）：PID（F4、NaN）、四元数（F1、零模长）、Matrix、RLS
+ * @brief algorithm/ 的主机侧单元测试（阶段 3）：PID（F4、NaN）、四元数（F1、零模长）、Matrix、RLS、EKF
  *
  * @details 不依赖硬件、RTOS 和第三方测试框架：每条判据失败时打印文件 / 行号，进程返回失败条数。
  *          构建与运行见同目录 CMakeLists.txt（`cmake -S tests/host -B build/host && cmake --build build/host && ctest --test-dir build/host`）。
@@ -10,6 +10,7 @@
 #include "algorithm/pid.hpp"
 #include "algorithm/math/quaternion.hpp"
 #include "algorithm/observer/rls.hpp"
+#include "algorithm/observer/filter_ekf.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -240,6 +241,80 @@ void test_rls()
   CHECK(std::isfinite(forget.omega()[0][0]));
 }
 
+/* ==================== EKF ==================== */
+
+// 二维常值模型 x_k = x_{k-1}，测量 z = x0（与线性化接口的结果对比）
+MatrixF32<2, 1> ekf_f(const MatrixF32<2, 1> &x, const MatrixF32<2, 1> &, float) { return x; }
+MatrixF32<2, 2> ekf_df_dx(const MatrixF32<2, 1> &, const MatrixF32<2, 1> &, float) { return MatrixF32<2, 2>::identity(); }
+MatrixF32<2, 2> ekf_df_dw(const MatrixF32<2, 1> &, const MatrixF32<2, 1> &, float) { return MatrixF32<2, 2>::identity(); }
+MatrixF32<1, 1> ekf_h(const MatrixF32<2, 1> &x, float) { return MatrixF32<1, 1>::constant(x[0][0]); }
+MatrixF32<1, 2> ekf_dh_dx(const MatrixF32<2, 1> &, float)
+{
+  const float d[2] = {1.0f, 0.0f};
+  return MatrixF32<1, 2>::from_array(d);
+}
+MatrixF32<1, 1> ekf_dh_dv(const MatrixF32<2, 1> &, float) { return MatrixF32<1, 1>::identity(); }
+
+void test_ekf_linearized()
+{
+  // P0 带相关项，测量 x0 时 x1 也会被修正
+  const float p0d[4] = {1.0f, 0.5f, 0.5f, 1.0f};
+  const FilterEkf<2, 2, 1>::Config cfg{.f     = ekf_f,
+                                       .df_dx = ekf_df_dx,
+                                       .df_dw = ekf_df_dw,
+                                       .h     = ekf_h,
+                                       .dh_dx = ekf_dh_dx,
+                                       .dh_dv = ekf_dh_dv,
+                                       .q     = MatrixF32<2, 2>(),
+                                       .r     = MatrixF32<1, 1>::constant(1.0f),
+                                       .p0    = MatrixF32<2, 2>::from_array(p0d),
+                                       .dt    = 0.001f};
+  FilterEkf<2, 2, 1> native(cfg);
+  FilterEkf<2, 2, 1> lin(cfg);
+  CHECK(native.init() == Status::OK);
+  CHECK(lin.init() == Status::OK);
+
+  const MatrixF32<1, 1> z = MatrixF32<1, 1>::constant(2.0f);
+  // ν = 2，S = 1 + 1 = 2，ε = 4 / 2 = 2
+  CHECK(near(lin.calc_nis(z, ekf_h(lin.get_state(), 0.0f), ekf_dh_dx(lin.get_state(), 0.0f), MatrixF32<1, 1>::constant(1.0f)), 2.0, 1e-6));
+
+  CHECK(native.update(z) == Status::OK);
+  CHECK(lin.update(z, ekf_h(lin.get_state(), 0.0f), ekf_dh_dx(lin.get_state(), 0.0f), MatrixF32<1, 1>::constant(1.0f)) == Status::OK);
+  CHECK(near(lin.get_state()[0][0], native.get_state()[0][0], 1e-6)); // K = [0.5; 0.25]
+  CHECK(near(lin.get_state()[1][0], native.get_state()[1][0], 1e-6));
+  CHECK(near(lin.get_state()[1][0], 0.5, 1e-6));
+  CHECK(near(lin.get_covariance()[1][1], native.get_covariance()[1][1], 1e-6));
+
+  // 冻结 x1：x1 不变，P 仍对称且 x1 的方差不减小
+  FilterEkf<2, 2, 1> frz(cfg);
+  CHECK(frz.init() == Status::OK);
+  const bool freeze[2] = {false, true};
+  CHECK(frz.update(z, ekf_h(frz.get_state(), 0.0f), ekf_dh_dx(frz.get_state(), 0.0f), MatrixF32<1, 1>::constant(1.0f), freeze) == Status::OK);
+  CHECK(frz.get_state()[1][0] == 0.0f);
+  CHECK(near(frz.get_state()[0][0], 1.0, 1e-6));
+  CHECK(frz.get_covariance()[0][1] == frz.get_covariance()[1][0]);
+  CHECK(frz.get_covariance()[1][1] >= 1.0f - 1e-6f);
+
+  // 不同维度：一次 2 维测量（两个分量各测一次）
+  const float h2d[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+  const float z2d[2] = {1.0f, -1.0f};
+  CHECK(lin.update(MatrixF32<2, 1>::from_array(z2d), lin.get_state(), MatrixF32<2, 2>::from_array(h2d), MatrixF32<2, 2>::identity()) == Status::OK);
+  // 非有限输入：丢弃、状态不变
+  const MatrixF32<2, 1> before = lin.get_state();
+  const float nan2[2]          = {NaN, 0.0f};
+  CHECK(lin.update(MatrixF32<2, 1>::from_array(nan2), lin.get_state(), MatrixF32<2, 2>::from_array(h2d), MatrixF32<2, 2>::identity()) == Status::BAD_ARG);
+  CHECK(lin.get_state() == before);
+  CHECK(lin.calc_nis(MatrixF32<2, 1>::from_array(nan2), lin.get_state(), MatrixF32<2, 2>::from_array(h2d), MatrixF32<2, 2>::identity()) < 0.0f);
+
+  // 不给测量模型：init() 可以成功，只能用线性化接口；只给一部分则 init() 失败
+  FilterEkf<2, 2, 1> no_h({.f = ekf_f, .df_dx = ekf_df_dx, .df_dw = ekf_df_dw});
+  CHECK(no_h.init() == Status::OK);
+  CHECK(no_h.update(z) == Status::NOT_SUPPORTED);
+  CHECK(no_h.update(z, ekf_h(no_h.get_state(), 0.0f), ekf_dh_dx(no_h.get_state(), 0.0f), MatrixF32<1, 1>::constant(1.0f)) == Status::OK);
+  FilterEkf<2, 2, 1> part_h({.f = ekf_f, .df_dx = ekf_df_dx, .df_dw = ekf_df_dw, .h = ekf_h});
+  CHECK(part_h.init() == Status::BAD_ARG);
+}
+
 /* ==================== */
 } // namespace
 
@@ -254,6 +329,7 @@ int main()
   test_quat_rotation();
   test_matrix();
   test_rls();
+  test_ekf_linearized();
   std::printf("%d checks, %d failed\n", g_check, g_fail);
   return g_fail == 0 ? 0 : 1;
 }
